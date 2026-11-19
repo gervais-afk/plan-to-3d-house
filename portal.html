@@ -10,9 +10,10 @@
 </head>
 <body>
   <main>
+    <div class="portal-brand"><span class="brand-mark" aria-hidden="true">P</span><span>Plan to 3D</span><span class="security-badge">Espace privé</span></div>
     <header>
-      <span class="eyebrow">PLAN TO 3D · ESPACE PRIVÉ</span>
-      <h1>Accès à la visite</h1>
+      <span class="eyebrow">VISITES ARCHITECTURALES</span>
+      <h1 id="portal-heading">Accès à la visite</h1>
       <p id="portal-status" role="status" aria-live="polite">Vérification de votre accès…</p>
     </header>
     <section id="portal-invite" class="panel" hidden>
@@ -42,12 +43,12 @@
         <button type="submit">Créer le lien d’invitation</button>
         <div id="portal-new-link" class="new-link" hidden>
           <label>Lien à transmettre <input id="portal-link" type="url" readonly></label>
-          <button id="portal-copy" class="secondary" type="button">Copier</button>
+          <button id="portal-copy" class="secondary" type="button">Copier le lien</button>
           <p>Copiez ce lien maintenant. Le jeton n’est pas conservé en clair.</p>
         </div>
       </form>
       <section class="panel">
-        <h2>Invitations créées</h2>
+        <div class="section-heading"><div><h2>Invitations créées</h2><p id="portal-count" class="muted"></p></div><button type="button" id="portal-refresh" class="secondary">Actualiser</button></div>
         <ul id="portal-list"></ul>
       </section>
     </section>

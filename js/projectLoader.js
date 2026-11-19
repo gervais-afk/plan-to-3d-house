@@ -330,7 +330,8 @@ window.HouseAuto = HouseAuto;
   if (typeof HOUSE_DATA === 'undefined') return;
   const params = new URLSearchParams(location.search);
   const requested = params.get('project');
-  const stored = window.PORTAL_CONTEXT?.project || localStorage.getItem('lastProject');
+  let stored = window.PORTAL_CONTEXT?.project;
+  try { stored ||= localStorage.getItem('lastProject'); } catch { /* stockage facultatif */ }
   let name = requested || (stored && /^[a-z0-9-]{1,60}$/.test(stored) ? stored : 'villa-serena');
   window.ACTIVE_PROJECT_SLUG = /^[a-z0-9-]{1,60}$/.test(name) ? name : 'villa-serena';
   if (!/^[a-z0-9-]{1,60}$/.test(name)) { console.warn('Nom de projet invalide :', name); return; }
@@ -351,8 +352,16 @@ window.HouseAuto = HouseAuto;
     return;
   }
 
-  localStorage.setItem('lastProject', name);
-  const p = JSON.parse(xhr.responseText);
+  let p;
+  try {
+    p = JSON.parse(xhr.responseText);
+    if (!Array.isArray(p?.walls) || !Array.isArray(p?.rooms)) throw new Error('Murs ou pièces manquants');
+  } catch (error) {
+    window.PROJECT_DATA_INVALID = true;
+    console.warn('Impossible de lire le projet :', error.message);
+    return;
+  }
+  try { localStorage.setItem('lastProject', name); } catch { /* stockage facultatif */ }
   if (window.PORTAL_CONTEXT?.role && globalThis.crypto?.subtle) {
     const bytes = new TextEncoder().encode(xhr.responseText);
     window.PROJECT_MODEL_HASH = crypto.subtle.digest('SHA-256', bytes)
@@ -369,8 +378,14 @@ window.HouseAuto = HouseAuto;
   HOUSE_DATA.assets = p.assets || baseAssets;
   HOUSE_DATA.meta = Object.assign({ name: name.toUpperCase(), slug: name }, p.meta || {});
 
-  normalizeHouseData(HOUSE_DATA);
-  HouseAuto.complete(HOUSE_DATA);
+  try {
+    normalizeHouseData(HOUSE_DATA);
+    HouseAuto.complete(HOUSE_DATA);
+  } catch (error) {
+    window.PROJECT_DATA_INVALID = true;
+    console.warn('Géométrie du projet invalide :', error.message);
+    return;
+  }
 
   // index.html?project=…#wp=3 : ouvre directement le parcours sur l'étape 3 (aperçu depuis l'éditeur)
   window.addEventListener('load', () => {

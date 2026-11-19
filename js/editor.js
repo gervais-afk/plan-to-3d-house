@@ -106,8 +106,12 @@
     // après un changement de niveau sur les tableaux d'un autre étage.
     S.undo = []; S.redo = [];
     S.sel = null; S.draft = null; S.drag = null;
-    document.querySelectorAll('.ed-level-tabs [data-level]').forEach(b => b.classList.toggle('active', Number(b.dataset.level) === level));
-    if (markDirty) { S.dirty = true; }
+    document.querySelectorAll('.ed-level-tabs [data-level]').forEach(b => {
+      const active = Number(b.dataset.level) === level;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-pressed', String(active));
+    });
+    if (markDirty) { S.dirty = true; setSaveState('Modifications non enregistrées'); }
     refreshPanel(); draw();
   }
   function allLevelItems(key) {
@@ -197,6 +201,7 @@
   // ---------------------------------------------------------------------------
   function snapshot() { return JSON.stringify(S.p); }
   function commit() {
+    setSaveState('Modifications non enregistrées');
     S.undo.push(snapshot());
     if (S.undo.length > 120) S.undo.shift();
     S.redo = [];
@@ -272,7 +277,12 @@
     S.activeLevel = 0;
     LEVEL_ARRAYS.forEach(key => { S.p[key] = S.levelData[0][key]; });
     S.undo = []; S.redo = []; S.sel = null; S.draft = null; S.dirty = false;
-    document.querySelectorAll('.ed-level-tabs [data-level]').forEach(b => b.classList.toggle('active', Number(b.dataset.level) === 0));
+    setSaveState('');
+    document.querySelectorAll('.ed-level-tabs [data-level]').forEach(b => {
+      const active = Number(b.dataset.level) === 0;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-pressed', String(active));
+    });
     S.planDataUrl = null;
     loadPlanImage(p.config.planImage && p.config.planImage.url);
     fitView();
@@ -1192,12 +1202,13 @@
   const TOOL_KEYS = { KeyV: 'select', KeyK: 'calibrate', KeyM: 'wall-ext', KeyC: 'wall-int', KeyD: 'door', KeyF: 'window', KeyB: 'open', KeyA: 'room', KeyW: 'room-auto', KeyP: 'room-poly', KeyO: 'column', KeyU: 'slab', KeyG: 'pergola', KeyE: 'furniture', KeyT: 'camera' };
 
   window.addEventListener('keydown', e => {
-    const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+    if (e.defaultPrevented || document.querySelector('dialog[open]')) return;
+    const typing = e.target.closest?.('input, select, textarea, [contenteditable]');
     if ((e.ctrlKey || e.metaKey) && e.code === 'KeyS') { e.preventDefault(); save(); return; }
     if (typing) return;
     if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if ((e.ctrlKey || e.metaKey) && e.code === 'KeyY') { e.preventDefault(); redo(); return; }
-    if (e.code === 'Space') { S.space = true; canvas.style.cursor = 'grab'; e.preventDefault(); return; }
+    if (e.code === 'Space' && !e.target.closest?.('button, a, summary, label')) { S.space = true; canvas.style.cursor = 'grab'; e.preventDefault(); return; }
     if (e.code === 'Enter' && closePolyDraft()) return;
     if (e.code === 'Escape') { if (S.draft) S.draft = null; else select(null); draw(); return; }
     if (e.code === 'Delete' || e.code === 'Backspace') { deleteSelection(); return; }
@@ -1218,7 +1229,11 @@
   function setTool(t) {
     S.tool = t;
     S.draft = null;
-    document.querySelectorAll('#ed-tools button').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
+    document.querySelectorAll('#ed-tools button').forEach(b => {
+      const active = b.dataset.tool === t;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-pressed', String(active));
+    });
     $('ed-hint').textContent = HINTS[t] || '';
     $('ed-library').classList.toggle('hidden', t !== 'furniture');
     if (t === 'camera') { ensureCameras(); if (!S.sel || S.sel.kind !== 'camera') { S.sel = null; } refreshPanel(); }
@@ -1387,6 +1402,7 @@
     const slug = await save();
     if (slug && win) win.location = `index.html?project=${slug}#wp=${i}`;
     else if (win) win.close();
+    else if (slug) location.assign(`index.html?project=${slug}`);
   }
 
   // Ajuste une pièce aux faces intérieures des murs qui l'entourent (centre des murs)
@@ -1488,7 +1504,7 @@
   // ---------------------------------------------------------------------------
   // EXPORT & ENREGISTREMENT
   // ---------------------------------------------------------------------------
-  function toProjectJson() {
+  function toProjectJson(updated = new Date().toISOString()) {
     const p = JSON.parse(JSON.stringify(S.p));
     const walls = JSON.parse(JSON.stringify(allLevelItems('walls')));
     const rooms = JSON.parse(JSON.stringify(allLevelItems('rooms')));
@@ -1497,7 +1513,7 @@
     const furniture = JSON.parse(JSON.stringify(allLevelItems('furniture')));
     const stairwells = JSON.parse(JSON.stringify(allLevelItems('stairwells')));
     const out = {
-      meta: { name: p.meta.name, slug: p.meta.slug, subtitle: p.meta.subtitle || '', client: p.meta.client || '', updated: new Date().toISOString() },
+      meta: { name: p.meta.name, slug: p.meta.slug, subtitle: p.meta.subtitle || '', client: p.meta.client || '', updated },
       config: { wallHeight: p.config.wallHeight, floorHeight: p.config.floorHeight || 3 },
       levels: [levelMeta(0), levelMeta(1)],
       walls: walls.map(w => ({ from: w.from, to: w.to, thick: w.thick, type: w.type, level: Number(w.level) || 0,
@@ -1529,62 +1545,109 @@
     return out;
   }
 
+  let saving = false;
+  function setSaveState(message, error = false) {
+    const state = $('ed-save-state');
+    state.textContent = message;
+    state.classList.toggle('is-error', error);
+  }
+
+  function downloadProject() {
+    const blob = new Blob([JSON.stringify(toProjectJson(), null, 2)], { type: 'application/json' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = 'project.json';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('project.json exporté. Le fichier image du plan n’est pas inclus.');
+  }
+
   async function save() {
-    if (!S.p.walls.length) { toast('Rien à enregistrer : tracez au moins un mur', true); return null; }
+    if (saving) return null;
+    if (!allLevelItems('walls').length) { setSaveState('Tracez au moins un mur avant d’enregistrer.', true); return null; }
     const slug = slugify(S.p.meta.slug || S.p.meta.name);
     S.p.meta.slug = slug;
-    // Le moteur 3D attend une maison centrée sur l'origine (ombres, plan de présentation, caméras)
     const shift = centerProject();
     if (shift.dx || shift.dz) { S.keepExtras = false; draw(); }
+    const project = toProjectJson();
+    const submitted = JSON.stringify(project);
+    const planImage = S.planDataUrl;
+    saving = true;
+    const locks = ['btn-save', 'btn-preview', 'btn-new', 'btn-open', 'btn-import-villa'];
+    locks.forEach(id => { $(id).disabled = true; });
+    setSaveState('Enregistrement…');
     try {
       const res = await fetch('api/save-project', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, project: toProjectJson(), planImage: S.planDataUrl })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug, project, planImage })
       });
-      if (!res.ok) throw new Error(await res.text());
-      const r = await res.json();
-      if (r.planImage && r.planImage.url) { S.p.config.planImage.url = r.planImage.url; S.planDataUrl = null; }
-      localStorage.setItem('lastProject', slug);
-      S.dirty = false;
-      refreshPanel();
-      toast(`Enregistré dans projects/${slug}/project.json`);
+      const result = await res.json().catch(() => null);
+      if (!res.ok || !result?.ok) {
+        if (res.status === 401 || res.status === 403) throw new Error('Session non autorisée. Reconnectez-vous dans l’espace privé.');
+        if ([404, 405, 501].includes(res.status)) throw new Error('Enregistrement serveur indisponible. Utilisez « Exporter le JSON ».');
+        throw new Error(result?.error || `Impossible d’enregistrer le projet (${res.status}).`);
+      }
+      const newerEdits = submitted !== JSON.stringify(toProjectJson(project.meta.updated)) || planImage !== S.planDataUrl;
+      if (result.planImage?.url && planImage && planImage === S.planDataUrl && S.p.config.planImage) {
+        S.p.config.planImage.url = result.planImage.url;
+        S.planDataUrl = null;
+      }
+      try { localStorage.setItem('lastProject', slug); } catch { /* stockage facultatif */ }
+      S.dirty = newerEdits;
+      setSaveState(newerEdits ? 'Version enregistrée · nouvelles modifications en attente' : 'Projet enregistré');
       return slug;
-    } catch (e) {
-      // Serveur absent : téléchargement du fichier
-      const blob = new Blob([JSON.stringify(toProjectJson(), null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'project.json';
-      a.click();
-      toast('Serveur local indisponible : project.json téléchargé (à placer dans projects/' + slug + '/)', true);
+    } catch (error) {
+      setSaveState(error instanceof TypeError ? 'Connexion au serveur perdue. Réessayez ou exportez le JSON.' : error.message, true);
+      S.dirty = true;
       return null;
+    } finally {
+      saving = false;
+      locks.forEach(id => { $(id).disabled = false; });
+      $('ed-project-name').textContent = S.p.meta.name + (S.dirty ? ' •' : '');
     }
   }
 
   async function openDialog() {
+    if (saving) return;
     const dlg = $('dlg-open');
     const list = $('dlg-open-list');
-    list.innerHTML = '<p class="ed-note">Chargement…</p>';
+    const status = $('dlg-open-status');
+    list.replaceChildren();
+    status.textContent = 'Chargement des projets…';
     dlg.showModal();
     try {
-      const items = await (await fetch('api/projects')).json();
-      list.innerHTML = items.length ? '' : '<p class="ed-note">Aucun projet enregistré pour l\'instant.</p>';
+      const response = await fetch('api/projects', { cache: 'no-store' });
+      if (!response.ok) throw new Error();
+      const items = await response.json();
+      status.textContent = items.length ? '' : 'Aucun projet enregistré pour l’instant.';
       items.forEach(it => {
-        const b = document.createElement('button');
-        b.innerHTML = `<span>${it.name}</span><small>${it.slug} · ${new Date(it.updated).toLocaleDateString('fr-FR')}</small>`;
-        b.onclick = async () => {
-          const data = await (await fetch(`projects/${it.slug}/project.json?t=${Date.now()}`)).json();
-          data.meta = Object.assign({ slug: it.slug, slugLocked: true }, data.meta);
-          loadProject(data, { keepExtras: true });
-          localStorage.setItem('lastProject', it.slug);
-          dlg.close();
-          toast('Projet ouvert : ' + it.name);
+        const button = document.createElement('button');
+        const title = document.createElement('span');
+        title.textContent = it.name;
+        const details = document.createElement('small');
+        details.textContent = `${it.slug} · ${new Date(it.updated).toLocaleDateString('fr-FR')}`;
+        button.append(title, details);
+        button.onclick = async () => {
+          if (!confirmLose() || list.getAttribute('aria-busy') === 'true') return;
+          list.setAttribute('aria-busy', 'true');
+          status.textContent = 'Ouverture du projet…';
+          try {
+            const reply = await fetch(`projects/${encodeURIComponent(it.slug)}/project.json`, { cache: 'no-store' });
+            if (!reply.ok) throw new Error();
+            const data = await reply.json();
+            if (!dlg.open || !list.contains(button)) return;
+            data.meta = { ...data.meta, slug: it.slug, slugLocked: true };
+            loadProject(data, { keepExtras: true });
+            try { localStorage.setItem('lastProject', it.slug); } catch { /* stockage facultatif */ }
+            dlg.close();
+            toast('Projet ouvert : ' + it.name);
+          } catch { status.textContent = 'Impossible d’ouvrir ce projet. Réessayez ou importez un fichier.'; }
+          finally { list.removeAttribute('aria-busy'); }
         };
-        list.appendChild(b);
+        list.appendChild(button);
       });
-    } catch (e) {
-      list.innerHTML = '<p class="ed-note warn">Serveur local indisponible : lancez start.bat ou importez un fichier project.json.</p>';
+    } catch {
+      status.textContent = 'Liste indisponible. Réessayez ou importez un fichier project.json.';
     }
   }
 
@@ -1640,18 +1703,26 @@
   });
   $('file-json').onchange = e => {
     const f = e.target.files[0];
-    if (!f) return;
-    f.text().then(t => { loadProject(JSON.parse(t), { keepExtras: true }); $('dlg-open').close(); toast('Projet importé'); });
     e.target.value = '';
+    if (!f || !confirmLose()) return;
+    f.text().then(t => {
+      const data = JSON.parse(t);
+      if (!data || !Array.isArray(data.walls) || !Array.isArray(data.rooms)) throw new Error();
+      loadProject(data, { keepExtras: true });
+      $('dlg-open').close();
+      toast('Projet importé');
+    }).catch(() => { $('dlg-open-status').textContent = 'Ce fichier ne contient pas un projet valide.'; });
   };
   $('btn-undo').onclick = undo;
   $('btn-redo').onclick = redo;
   $('btn-save').onclick = save;
+  $('btn-export-json').onclick = downloadProject;
   $('btn-preview').onclick = async () => {
     const win = window.open('about:blank', '_blank');
     const slug = await save();
     if (slug && win) win.location = `index.html?project=${slug}`;
     else if (win) win.close();
+    else if (slug) location.assign(`index.html?project=${slug}`);
   };
   window.addEventListener('beforeunload', e => { if (S.dirty) { e.preventDefault(); e.returnValue = ''; } });
 

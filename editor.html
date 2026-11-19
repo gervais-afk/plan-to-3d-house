@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+  <meta name="referrer" content="no-referrer">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Éditeur de plan — Plan 2D vers visite 3D</title>
@@ -15,17 +16,19 @@
       <span class="ed-dot"></span>
       <strong>ÉDITEUR DE PLAN</strong>
       <span id="ed-project-name" class="ed-muted">Nouveau projet</span>
+      <span id="ed-save-state" class="ed-save-state" role="status"></span>
     </div>
-    <div class="ed-actions">
+    <div class="ed-actions" role="group" aria-label="Actions du projet">
       <button id="btn-new" title="Nouveau projet">Nouveau</button>
       <button id="btn-open" title="Ouvrir un projet enregistré">Ouvrir…</button>
       <button id="btn-import-villa" title="Charger la Villa Serena (js/data.js) comme exemple">Exemple Villa Serena</button>
       <label class="ed-btn-file" title="Importer une image ou un PDF de plan">Plan PDF / image…<input id="file-plan" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,.png,.jpg,.jpeg"></label>
       <button id="btn-ai-read" title="Lecture automatique du plan par IA (OpenRouter)">✨ Lecture IA</button>
-      <button id="btn-undo" title="Annuler (Ctrl+Z)">↶</button>
-      <button id="btn-redo" title="Rétablir (Ctrl+Y)">↷</button>
+      <button id="btn-undo" aria-label="Annuler" title="Annuler (Ctrl+Z)">↶</button>
+      <button id="btn-redo" aria-label="Rétablir" title="Rétablir (Ctrl+Y)">↷</button>
       <button id="btn-save" class="ed-primary" title="Enregistrer dans projects/ (Ctrl+S)">Enregistrer</button>
-      <button id="btn-preview" class="ed-primary" title="Enregistrer puis ouvrir la visite 3D de ce projet">👁 Lancer la visite 3D</button>
+      <button id="btn-export-json" type="button">Exporter le JSON</button>
+      <button id="btn-preview" title="Enregistrer puis ouvrir la visite 3D de ce projet">👁 Lancer la visite 3D</button>
     </div>
   </header>
 
@@ -74,8 +77,9 @@
     </section>
   </aside>
 
-  <dialog id="dlg-open" class="ed-dialog">
-    <h3>Ouvrir un projet</h3>
+  <dialog id="dlg-open" class="ed-dialog" aria-labelledby="dlg-open-title">
+    <h3 id="dlg-open-title">Ouvrir un projet</h3>
+    <p id="dlg-open-status" class="ed-note" role="status"></p>
     <div id="dlg-open-list" class="ed-list"></div>
     <div class="ed-dialog-actions">
       <label class="ed-btn-file">Importer un project.json…<input id="file-json" type="file" accept="application/json,.json"></label>
@@ -83,24 +87,24 @@
     </div>
   </dialog>
 
-  <dialog id="dlg-ai" class="ed-dialog">
-    <h3>✨ Lecture automatique du plan</h3>
+  <dialog id="dlg-ai" class="ed-dialog" aria-labelledby="dlg-ai-title">
+    <h3 id="dlg-ai-title">✨ Lecture automatique du plan</h3>
     <p class="ed-note">L'image du plan est envoyée au modèle choisi via OpenRouter. Il renvoie murs, portes, fenêtres, pièces et mobilier, que vous corrigez ensuite dans l'éditeur.</p>
-    <div class="ed-field"><label>Modèle</label><select id="ai-model"></select></div>
+    <div class="ed-field"><label for="ai-model">Modèle</label><select id="ai-model"></select></div>
     <p id="ai-cost-estimate" class="ed-note" aria-live="polite"></p>
-    <div class="ed-field"><label>Tracé existant</label>
+    <div class="ed-field"><label for="ai-mode">Tracé existant</label>
       <select id="ai-mode"><option value="replace">Remplacer</option><option value="merge">Ajouter</option></select></div>
-    <div class="ed-field"><label>Échelle</label>
+    <div class="ed-field"><label for="ai-scale">Échelle</label>
       <select id="ai-scale"><option value="ai">Détectée par l'IA (cotes du plan)</option><option value="calibrated">Celle que j'ai calibrée (K)</option></select></div>
-    <div class="ed-field"><label>Mobilier</label><input type="checkbox" id="ai-furniture" checked></div>
-    <p id="ai-status" class="ed-note"></p>
+    <div class="ed-field"><label for="ai-furniture">Mobilier</label><input type="checkbox" id="ai-furniture" checked></div>
+    <p id="ai-status" class="ed-note" role="status"></p>
     <div class="ed-dialog-actions">
       <button id="ai-cancel">Fermer</button>
       <button id="ai-run" class="ed-primary">Lancer la lecture</button>
     </div>
   </dialog>
 
-  <div id="ed-toast" class="ed-toast"></div>
+  <div id="ed-toast" class="ed-toast" role="status"></div>
 
   <script src="js/houseDataCore.js"></script>
   <script src="js/data.js"></script>

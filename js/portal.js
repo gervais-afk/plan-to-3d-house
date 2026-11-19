@@ -5,6 +5,8 @@
   const hash = new URLSearchParams(location.hash.slice(1));
   const invite = hash.get('invite');
   const params = new URLSearchParams(location.search);
+  let currentLinkId;
+  let listRequest = 0;
   const roleLabel = role => role === 'comment' ? 'Lecture et commentaires' : 'Lecture seule';
   const visit = project => project ? `index.html?project=${encodeURIComponent(project)}` : 'index.html';
 
@@ -19,9 +21,11 @@
 
   const api = (endpoint, body) => request(`api/portal/${endpoint}`, body);
   async function run(button, task) {
+    if (!button || button.disabled) return;
     button.disabled = true;
+    status.classList.remove('is-error');
     try { await task(); }
-    catch (error) { status.textContent = error.message; }
+    catch (error) { status.classList.add('is-error'); status.textContent = error.message; }
     finally { button.disabled = false; }
   }
 
@@ -37,37 +41,65 @@
   }
 
   async function listInvitations() {
-    const { invitations } = await api('invitations');
+    const requestId = ++listRequest;
     const list = el('list');
-    list.replaceChildren();
-    if (!invitations.length) {
-      const row = document.createElement('li');
-      row.textContent = 'Aucune invitation créée.';
-      list.append(row);
-    }
-    for (const item of invitations) {
-      const row = document.createElement('li'), title = document.createElement('span');
-      const expired = item.expiresAt <= Date.now();
-      const detail = item.revokedAt ? 'Révoquée' : expired ? 'Expirée' : `Valide jusqu’au ${new Date(item.expiresAt).toLocaleString('fr-FR')}`;
-      title.textContent = [item.label, item.project, roleLabel(item.role), detail].filter(Boolean).join(' · ');
-      row.append(title);
-      if (!expired && !item.revokedAt) {
-        const button = document.createElement('button');
-        button.type = 'button'; button.className = 'secondary'; button.textContent = 'Révoquer';
-        button.addEventListener('click', () => {
-          if (!confirm('Révoquer ce lien et fermer les sessions invitées correspondantes ?')) return;
-          void run(button, async () => {
-            await api('revoke', { id: item.id });
-            el('new-link').hidden = true;
-            el('link').value = '';
-            status.textContent = 'Invitation révoquée. Les sessions liées ne peuvent plus accéder au projet.';
-            await listInvitations();
-          });
-        });
-        row.append(button);
+    list.setAttribute('aria-busy', 'true');
+    try {
+      const { invitations } = await api('invitations');
+      if (requestId !== listRequest) return;
+      const now = Date.now();
+      const count = invitations.filter(item => !item.revokedAt && item.expiresAt > now).length;
+      el('count').textContent = `${count} accès actif${count > 1 ? 's' : ''} · ${invitations.length} au total`;
+      list.replaceChildren();
+      if (!invitations.length) {
+        const row = document.createElement('li');
+        row.textContent = 'Aucune invitation créée. Créez votre premier lien pour partager une visite.';
+        list.append(row);
       }
-      list.append(row);
-    }
+      for (const item of invitations) {
+        const row = document.createElement('li');
+        const details = document.createElement('div');
+        const title = document.createElement('strong');
+        title.textContent = item.label || item.project;
+        const project = document.createElement('div');
+        project.className = 'muted';
+        project.textContent = [item.label && item.project, roleLabel(item.role)].filter(Boolean).join(' · ');
+        const date = document.createElement('span');
+        date.className = 'muted';
+        const format = timestamp => new Date(timestamp).toLocaleString('fr-FR');
+        date.textContent = item.revokedAt ? `Révoquée le ${format(item.revokedAt)}` : `Expire le ${format(item.expiresAt)}`;
+        details.append(title, project, date);
+        const actions = document.createElement('div');
+        actions.className = 'invite-actions';
+        const badge = document.createElement('span');
+        const active = !item.revokedAt && item.expiresAt > now;
+        badge.className = `invite-status ${active ? 'is-active' : ''}`;
+        badge.textContent = item.revokedAt ? 'Révoquée' : active ? 'Active' : 'Expirée';
+        actions.append(badge);
+        if (active) {
+          const button = document.createElement('button');
+          button.type = 'button'; button.className = 'secondary danger'; button.textContent = 'Révoquer';
+          button.setAttribute('aria-label', `Révoquer : ${title.textContent}`);
+          button.addEventListener('click', () => {
+            if (!confirm('Révoquer ce lien et fermer les sessions invitées correspondantes ?')) return;
+            void run(button, async () => {
+              await api('revoke', { id: item.id });
+              if (currentLinkId === item.id) {
+                el('new-link').hidden = true;
+                el('link').value = '';
+                currentLinkId = null;
+              }
+              status.textContent = 'Invitation révoquée. Les sessions liées ne peuvent plus accéder au projet.';
+              await listInvitations();
+              el('refresh').focus();
+            });
+          });
+          actions.append(button);
+        }
+        row.append(details, actions);
+        list.append(row);
+      }
+    } finally { if (requestId === listRequest) list.removeAttribute('aria-busy'); }
   }
 
   async function display(session) {
@@ -81,15 +113,19 @@
     const architect = session.role === 'architect';
     el('login').hidden = true;
     el('active').hidden = false;
+    el('heading').textContent = architect ? 'Gestion des accès' : 'Votre visite privée';
     el('active-title').textContent = architect ? 'Session architecte' : `${session.project} · ${roleLabel(session.role)}`;
     el('visit').href = visit(session.project);
     el('editor').hidden = !architect;
     status.textContent = architect ? 'Gérez les accès projet par projet.' : 'Votre accès est limité à ce projet.';
     if (architect) {
       el('manage').hidden = false;
+      const submit = el('create').querySelector('button[type=submit]');
+      submit.disabled = true;
       const projects = await request('api/projects');
       el('project').replaceChildren(...projects.map(project => new Option(project.name, project.slug)));
-      if (projects[0]) el('visit').href = visit(projects[0].slug);
+      if (projects[0]) { el('visit').href = visit(projects[0].slug); submit.disabled = false; }
+      else status.textContent = 'Aucun projet disponible. Créez d’abord un projet dans l’éditeur.';
       await listInvitations();
     }
   }
@@ -116,15 +152,20 @@
   el('create').addEventListener('submit', event => {
     event.preventDefault();
     void run(event.submitter, async () => {
-      const { token } = await api('invitations', { project: el('project').value, role: el('role').value,
+      const { token, invitation } = await api('invitations', { project: el('project').value, role: el('role').value,
         validHours: el('duration').valueAsNumber, label: el('label').value });
       const href = new URL('portal.html', location.href);
       href.hash = new URLSearchParams({ invite: token }).toString();
+      currentLinkId = invitation.id;
       el('link').value = href.href;
       el('new-link').hidden = false;
-      status.textContent = 'Invitation créée.';
+      status.textContent = 'Invitation créée. Vous pouvez copier le lien.';
+      el('copy').focus();
       await listInvitations();
     });
+  });
+  el('refresh').addEventListener('click', event => {
+    void run(event.currentTarget, async () => { await listInvitations(); status.textContent = 'Invitations actualisées.'; });
   });
   el('copy').addEventListener('click', async () => {
     const link = el('link');
@@ -132,6 +173,7 @@
     catch { link.focus(); link.select(); status.textContent = 'Copiez le lien sélectionné.'; }
   });
   api('session').then(display).catch(error => {
+    status.classList.add('is-error');
     status.textContent = error.message;
     if (error.status === 404) { el('demo').hidden = false; el('invite').hidden = true; }
   });

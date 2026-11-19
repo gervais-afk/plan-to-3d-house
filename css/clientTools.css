@@ -95,3 +95,68 @@
 #decision-section p { margin: 0; }
 #feedback-list form { display: grid; gap: .4rem; padding-block: .4rem; }
 #feedback-list textarea { width: 100%; font: inherit; }
+
+/* Les commandes encadrent la maquette plutôt que de la recouvrir. */
+:where(button, a, input, select, textarea, summary):focus-visible { outline: 3px solid #18786a; outline-offset: 3px; }
+.render-gallery :focus-visible { outline-color: #94f1d2; }
+.ui-layer { height: 100dvh; padding: clamp(12px, 2.2vw, 32px); }
+.ui-layer[hidden], .guided-controls[hidden], .viewer-error[hidden] { display: none; }
+.top-bar { gap: 10px; }
+.architect-header { min-width: 0; overflow-wrap: anywhere; border-radius: 16px; background: #fbfcf7; border-color: #d5e0d8; }
+.technical-stamp { gap: 5px; align-items: stretch; max-width: 100%; }
+.viewer-primary, .client-panel-tabs { background: #f8fbf6; padding: 4px; border: 1px solid #d5e0d8; border-radius: 14px; align-items: center; gap: 4px; }
+.viewer-primary .mode-badge { margin-inline: 5px auto; background: transparent; color: #375751; font-size: .68rem; padding: 0; }
+.technical-stamp .btn-toggle, .guided-controls .btn-toggle { backdrop-filter: none; border: 1px solid #cad8d0; border-radius: 9px; font-size: .8rem; padding: .45rem .65rem; min-height: 38px; }
+.client-panel-tabs > details > summary { border-color: transparent; }
+.client-panel-tabs > details[open] > summary { background: #e1eee7; border-color: #a6c4b5; color: #183d35; }
+.viewer-options-fields .btn-row { justify-content: flex-start; }
+.viewer-options-fields .project-picker { max-width: none; font-size: inherit; }
+.client-tool-fields { width: min(405px, calc(100vw - 24px)); font-size: .88rem; overscroll-behavior: contain; box-shadow: 0 18px 40px #162d3040; }
+.client-tool-fields :is(input,textarea) { user-select: text; }
+.bottom-bar { align-items: end; }
+.room-card, .minimap-card, .guided-controls { background: #fbfcf7; border: 1px solid #d5e0d8; border-radius: 16px; }
+.guided-controls { order: 2; margin-left: auto; padding: .7rem; display: grid; gap: .5rem; min-width: min(220px, 100%); }
+.guided-context { display: grid; gap: .08rem; font-size: .83rem; font-weight: 650; }
+.guided-kicker { color: #47675e; font-size: .67rem; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+.guided-actions { display: flex; gap: .35rem; }
+.guided-actions button:disabled { opacity: .45; cursor: default; }
+.guided-controls .guided-next { flex: 1; justify-content: center; color: white; background: #174d42; border-color: #174d42; }
+.guided-controls .guided-next:hover { background: #103c33; }
+.viewer-error { position: fixed; z-index: 30; top: 28%; left: 50%; transform: translateX(-50%); background: #fbfcf7; border: 1px solid #9fb5a8; border-radius: 14px; padding: 1.5rem; width: min(480px, 90vw); }
+.render-gallery, .rg-lightbox { width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; border: 0; }
+.render-gallery:not([open]), .rg-lightbox:not([open]) { display: none; }
+.render-gallery::backdrop, .rg-lightbox::backdrop { background: #080c11; }
+.rg-grid { grid-template-columns: repeat(auto-fill, minmax(min(290px, 100%), 1fr)); }
+.rg-lightbox { overflow: auto; justify-content: safe center; }
+.rg-lightbox .rg-media-view { max-height: 60dvh; }
+.rg-lightbox .rg-compare-panel img { max-height: 27dvh; }
+@media (max-width: 720px) {
+  .ui-layer { padding: 10px; }
+  .top-bar { flex-direction: column; gap: 6px; }
+  .architect-header .project-title { font-size: clamp(.98rem, 4vw, 1.2rem); }
+  .viewer-primary, .client-panel-tabs { justify-content: flex-start; }
+  .client-panel-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .client-panel-tabs > details > summary { display: flex; justify-content: center; padding-inline: .15rem; }
+  .client-tools summary::after { margin-left: 0; }
+  .technical-stamp .btn-toggle, .guided-controls .btn-toggle { min-height: 44px; }
+  .client-tool-fields { max-height: min(48dvh, 480px); width: 100%; }
+  .bottom-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+  .guided-controls { grid-column: 1 / -1; width: 100%; padding: 4px 7px; display: flex; align-items: center; justify-content: space-between; }
+  .guided-context { min-width: 0; overflow-wrap: anywhere; margin-left: .25rem; }
+  .guided-actions { flex: none; }
+  .guided-controls .btn-toggle { font-size: clamp(.69rem, 3.2vw, .8rem); }
+  .minimap-card { display: none; }
+  .room-card { width: fit-content; }
+  .render-gallery { padding: 14px; }
+  .rg-actions { flex-wrap: wrap; }
+  .rg-lightbox { padding: 12px; }
+}
+@media (max-height: 460px) and (orientation: landscape) {
+  .room-card, .minimap-card { display: none; }
+  .client-tool-fields { max-height: 43dvh; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-toggle, .rg-card, .rg-card img, .photo-mode-overlay, .mode-badge { transition: none; }
+}
+#guided-select { min-width: 0; width: 100%; font: inherit; padding: .45rem; border: 1px solid #a7bab0; border-radius: 6px; background: white; }
+@media (max-width: 360px) { .client-tools summary::after { display: none; } }

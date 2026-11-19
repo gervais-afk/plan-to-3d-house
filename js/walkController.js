@@ -40,6 +40,7 @@ class WalkController {
     // Clavier
     window.addEventListener('keydown', (e) => this.onKeyDown(e));
     window.addEventListener('keyup', (e) => this.onKeyUp(e));
+    window.addEventListener('blur', () => this.clearMovement());
 
     // Souris
     document.addEventListener('mousemove', (e) => this.onMouseMove(e));
@@ -50,7 +51,7 @@ class WalkController {
     // Clic pour activer le pointer lock
     this.houseScene.renderer.domElement.addEventListener('click', () => {
       if (this.enabled && !this.isPointerLocked && !this.houseScene.measureActive && !this.houseScene.feedbackActive) {
-        this.houseScene.renderer.domElement.requestPointerLock();
+        try { this.houseScene.renderer.domElement.requestPointerLock?.()?.catch?.(() => {}); } catch { /* navigateur sans verrouillage pointeur */ }
       }
     });
   }
@@ -81,20 +82,23 @@ class WalkController {
     this.lastTime = performance.now();
     this.updateCameraRotation();
 
-    // Inviter l'utilisateur au verrouillage souris
-    if (!this.houseScene.measureActive && !this.houseScene.feedbackActive) this.houseScene.renderer.domElement.requestPointerLock();
+  }
+
+  clearMovement() {
+    this.moveForward = this.moveBackward = this.moveLeft = this.moveRight = false;
   }
 
   stop() {
     this.enabled = false;
+    this.clearMovement();
     if (document.exitPointerLock) {
       document.exitPointerLock();
     }
   }
 
   onKeyDown(e) {
-    if (!this.enabled || e.target.closest?.('button, input, select, textarea, summary, [contenteditable]')) return;
-    if (e.code === 'Escape' && (this.houseScene.measureActive || this.houseScene.feedbackActive)) return;
+    if (!this.enabled || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.target.closest?.('button, a, input, select, textarea, summary, [contenteditable]')) return;
+    if (/^Arrow(Up|Down|Left|Right)$/.test(e.code)) e.preventDefault();
 
     switch (e.code) {
       case 'KeyW':
@@ -114,9 +118,6 @@ class WalkController {
       case 'KeyD':
       case 'ArrowRight':
         this.moveRight = true;
-        break;
-      case 'Escape':
-        this.stop();
         break;
     }
   }

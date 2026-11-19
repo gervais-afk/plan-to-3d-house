@@ -2,6 +2,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { randomUUID } = require('node:crypto');
 const feedbackStore = require('./feedbackStore');
 const decisionStore = require('./decisionStore');
 const { createPortal, safePath } = require('./privatePortal');
@@ -264,14 +265,31 @@ function galleryMedia(res, url) {
 
 function readBody(req, res, limit, cb) {
   let size = 0;
+  let overloaded = false;
   const chunks = [];
-  req.on('data', c => {
-    size += c.length;
-    if (size > limit) { res.writeHead(413); res.end(); req.destroy(); } else chunks.push(c);
+  function rejectSize() {
+    overloaded = true;
+    chunks.length = 0;
+    res.setHeader('Connection', 'close');
+    sendJson(res, 413, { error: 'Le contenu envoyé dépasse la taille autorisée.' });
+  }
+  if (Number(req.headers['content-length']) > limit) rejectSize();
+  req.on('data', chunk => {
+    if (overloaded) return;
+    size += chunk.length;
+    if (size > limit) rejectSize();
+    else chunks.push(chunk);
   });
-  req.on('end', () => {
-    try { cb(JSON.parse(Buffer.concat(chunks).toString())); }
-    catch (e) { res.writeHead(400); res.end(String(e.message)); }
+  req.on('end', async () => {
+    if (overloaded) return;
+    let value;
+    try { value = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+    catch { return sendJson(res, 400, { error: 'Le corps de la requête doit être un JSON valide.' }); }
+    try { await cb(value); }
+    catch (error) {
+      console.error('Erreur de traitement de la requête', error);
+      sendJson(res, 500, { error: 'Le serveur n’a pas pu terminer la demande.' });
+    }
   });
 }
 
@@ -280,7 +298,6 @@ function listProjects(res, only) {
   const items = fs.readdirSync(PROJECTS, { withFileTypes: true })
     .filter(d => (!only || d.name === only) && d.isDirectory() && /^[a-z0-9-]{1,60}$/i.test(d.name) && fs.existsSync(path.join(PROJECTS, d.name, 'project.json')))
     .map(d => {
-      ensureProjectMedia(d.name);
       let name = d.name;
       try { name = JSON.parse(fs.readFileSync(path.join(PROJECTS, d.name, 'project.json'), 'utf8')).meta.name || d.name; } catch (e) { /* nom par défaut */ }
       return { slug: d.name, name, updated: fs.statSync(path.join(PROJECTS, d.name, 'project.json')).mtimeMs };
@@ -290,23 +307,77 @@ function listProjects(res, only) {
   res.end(JSON.stringify(items));
 }
 
+const isRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+const coordinate = value => Number.isFinite(value) && Math.abs(value) <= 10000;
+const point2D = p => Array.isArray(p) && p.length === 2 && p.every(coordinate);
+
+function projectProblem(project) {
+  if (!isRecord(project) || !isRecord(project.meta) || typeof project.meta.name !== 'string' || !project.meta.name.trim() || !isRecord(project.config)) {
+    return 'Le projet doit avoir un nom et une configuration.';
+  }
+  const { elevationEnd, wallHeight, floorHeight } = project.config;
+  if ((elevationEnd !== undefined && (!Number.isFinite(elevationEnd) || elevationEnd <= 0 || elevationEnd > 1)) ||
+      [wallHeight, floorHeight].some(value => value !== undefined && (!Number.isFinite(value) || value <= 0))) {
+    return 'Vérifiez les hauteurs et le seuil d’élévation du projet.';
+  }
+  if (project.tourWaypoints !== undefined && (!Array.isArray(project.tourWaypoints) || project.tourWaypoints.length < 2 ||
+    !project.tourWaypoints.every(waypoint => isRecord(waypoint) && [waypoint.pos, waypoint.look].every(v => Array.isArray(v) && v.length === 3 && v.every(coordinate)) &&
+      Number.isFinite(waypoint.fov) && waypoint.fov > 0 && waypoint.fov < 180))) return 'Vérifiez les étapes de caméra du projet.';
+  if (!Array.isArray(project.walls) || !project.walls.length || !project.walls.every(w => isRecord(w) && point2D(w.from) && point2D(w.to) &&
+      (w.from[0] !== w.to[0] || w.from[1] !== w.to[1]) && (w.openings === undefined || (Array.isArray(w.openings) && w.openings.every(isRecord))))) {
+    return 'Tracez au moins un mur et vérifiez les extrémités de chaque mur.';
+  }
+  if (!Array.isArray(project.rooms) || !project.rooms.every(room => {
+    if (!isRecord(room)) return false;
+    if (Array.isArray(room.poly) && room.poly.length >= 3) return room.poly.every(point2D);
+    const bounds = room.bounds;
+    return isRecord(bounds) && [bounds.xMin, bounds.xMax, bounds.zMin, bounds.zMax].every(coordinate) && bounds.xMin < bounds.xMax && bounds.zMin < bounds.zMax;
+  })) return 'Vérifiez les contours des pièces du projet.';
+  for (const key of ['furniture', 'columns', 'canopies', 'stairwells']) {
+    if (project[key] !== undefined && (!Array.isArray(project[key]) || !project[key].every(isRecord))) return `La liste « ${key} » est invalide.`;
+  }
+  return null;
+}
+
+function atomicFile(file, data) {
+  const temp = path.join(path.dirname(file), `.${randomUUID()}.tmp`);
+  try {
+    fs.writeFileSync(temp, data, { flag: 'wx' });
+    fs.renameSync(temp, file);
+  } finally {
+    fs.rmSync(temp, { force: true });
+  }
+}
+
 function saveProject(req, res) {
-  readBody(req, res, 40 * 1024 * 1024, ({ slug, project, planImage }) => {
-    if (!/^[a-z0-9-]{1,60}$/.test(slug || '') || !project || typeof project !== 'object') throw new Error('requête invalide');
+  if (req.headers['content-type']?.split(';')[0].trim().toLowerCase() !== 'application/json') {
+    return sendJson(res, 415, { error: 'Envoyez le projet au format JSON.' });
+  }
+  return readBody(req, res, 40 * 1024 * 1024, data => {
+    if (portal.enabled && portal.roleForProject(req) !== 'architect') return sendJson(res, 403, { error: 'Votre session architecte n’est plus active.' });
+    const { slug, project, planImage } = data || {};
+    if (typeof slug !== 'string' || !/^[a-z0-9-]{1,60}$/.test(slug)) return sendJson(res, 422, { error: 'Choisissez un identifiant de projet valide.' });
+    const problem = projectProblem(project);
+    if (problem) return sendJson(res, 422, { error: problem });
     const dir = path.join(PROJECTS, slug);
+    let imageFile, image;
+    if (planImage != null) {
+      const match = typeof planImage === 'string' && /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/.exec(planImage);
+      if (match) {
+        image = Buffer.from(match[2], 'base64');
+        const png = match[1] === 'png';
+        const signature = png ? '89504e470d0a1a0a' : 'ffd8ff';
+        if (!image.toString('hex', 0, signature.length / 2).startsWith(signature)) image = null;
+        imageFile = png ? 'plan.png' : 'plan.jpg';
+      }
+      if (!image) return sendJson(res, 422, { error: 'Importez une image de plan PNG ou JPEG valide.' });
+      project.config.planImage = { ...project.config.planImage, url: `projects/${slug}/${imageFile}` };
+    }
     fs.mkdirSync(dir, { recursive: true });
     ensureProjectMedia(slug);
-    if (planImage) {
-      const m = /^data:image\/(png|jpeg);base64,(.+)$/.exec(planImage);
-      if (!m) throw new Error('image invalide');
-      const file = 'plan.' + (m[1] === 'png' ? 'png' : 'jpg');
-      fs.writeFileSync(path.join(dir, file), Buffer.from(m[2], 'base64'));
-      project.config = project.config || {};
-      project.config.planImage = Object.assign({}, project.config.planImage, { url: `projects/${slug}/${file}` });
-    }
-    fs.writeFileSync(path.join(dir, 'project.json'), JSON.stringify(project, null, 2));
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, slug, planImage: project.config && project.config.planImage }));
+    if (image) atomicFile(path.join(dir, imageFile), image);
+    atomicFile(path.join(dir, 'project.json'), JSON.stringify(project, null, 2));
+    return sendJson(res, 200, { ok: true, slug, planImage: project.config.planImage });
   });
 }
 
