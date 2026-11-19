@@ -12,6 +12,20 @@ const { createPortal } = require('../privatePortal');
 const source = path.resolve(__dirname, '..');
 const temp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'portail-test-'));
 
+// Windows verrouille le dossier courant d’un processus : on arrête les serveurs avant d’effacer leur racine.
+function workspace(t) {
+  const root = temp();
+  const servers = [];
+  t.after(async () => {
+    try {
+      for (const server of servers.reverse()) await server.close();
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    }
+  });
+  return { root, track: server => (servers.push(server), server) };
+}
+
 async function port() {
   const sock = net.createServer();
   await new Promise(resolve => sock.listen(0, '127.0.0.1', resolve));
@@ -64,12 +78,10 @@ function actor(origin) {
 }
 
 test('Mode démo conservé sans exposer les fichiers cachés', async t => {
-  const root = temp();
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const { root, track } = workspace(t);
   fixture(root);
   fs.writeFileSync(path.join(root, '.env'), 'TEST=NON_PUBLIC');
-  const server = await serve(root);
-  t.after(server.close);
+  const server = track(await serve(root));
   assert.match(await (await server.request('/')).text(), /id="home-cover"/);
   assert.match(await (await server.request('/?project=plan-a')).text(), /id="webgl-container"/);
   assert.equal((await server.request('/index.html')).status, 200);
@@ -91,8 +103,7 @@ test('Une installation privée ne revient pas en démo et refuse HTTP hors boucl
 });
 
 test('Invitations : portée projet, rôles, accès direct, expiration et révocation active', async t => {
-  const root = temp();
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const { root, track } = workspace(t);
   fixture(root);
   const password = randomBytes(24).toString('hex');
   const expiredToken = randomBytes(32).toString('base64url');
@@ -100,8 +111,7 @@ test('Invitations : portée projet, rôles, accès direct, expiration et révoca
   fs.mkdirSync(store);
   fs.writeFileSync(path.join(store, 'invitations.json'), JSON.stringify([{ id: 'expired', project: 'plan-a', role: 'read',
     expiresAt: Date.now() - 5000, secretHash: createHash('sha256').update(expiredToken).digest('hex') }]));
-  const server = await serve(root, { PRIVATE_PORTAL: '1', PORTAL_INSECURE_LOCAL: '1', PORTAL_PASSWORD: password });
-  t.after(server.close);
+  const server = track(await serve(root, { PRIVATE_PORTAL: '1', PORTAL_INSECURE_LOCAL: '1', PORTAL_PASSWORD: password }));
   const guest = actor(server.origin), architect = actor(server.origin), reader = actor(server.origin), commenter = actor(server.origin);
   const a = '/projects/plan-a', b = '/projects/plan-b';
   const render = '/generated/renders/facade.jpg';
