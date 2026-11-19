@@ -45,6 +45,18 @@ Ce projet transforme un **plan d'architecte 2D en noir et blanc** (fond papier c
    - Le scroll déroule le phasage de construction : fondation, murs, menuiseries, dalle/sols, mobilier puis auvent ou toiture.
    - **B** bascule le plan de présentation et le plan en encre ; **P** affiche/masque l'image source calée sur le plan.
 
+### Expérience client : finitions, lumière et brochure
+
+Ouvrez **🎨 Finitions & outils** dans la visite. Les choix restent locaux à la visite et ne modifient pas `project.json`.
+
+- **Finitions PBR** : testez le chêne clair, le carrelage anthracite ou le béton ciré au sol, puis le crépi blanc, le bardage bois ou la pierre sur la façade. Les faces intérieures des murs restent inchangées. **Du projet** rétablit le matériau initial.
+- **Ensoleillement** : glissez de **07h00 à 20h00** par quarts d’heure, ou utilisez **N** pour basculer entre 13h et 20h. Le soleil et les ombres suivent une trajectoire indicative ; les lampes s’allument progressivement le soir. `config.northDegrees` peut orienter le nord dans le plan (0 = −Z, 90 = +X). Ce n’est pas une étude solaire géolocalisée : latitude, date et relief ne sont pas simulés.
+- **Mesures** : après l’élévation, appuyez sur **M** ou **📐 Mesurer**, puis sélectionnez deux points visibles sur des murs ou des sols. La cote est la distance directe en 3D dans la maquette. Répétez pour ajouter des cotes, utilisez **M** ou **Échap** pour quitter, et **Effacer les cotes** pour supprimer les mesures. Le mode mesure libère la souris en visite libre. La vue éclatée suspend la mesure.
+- **Pièces** : survolez une pastille, cliquez dessus ou focalisez-la au clavier pour afficher le niveau, la surface calculée en m² et la hauteur sous plafond lorsqu’elle est modélisée. La case **Pièces** masque les pastilles. Ouvrir les outils affiche la maquette 3D à la place d’une éventuelle photo IA.
+- **Brochure PDF** : téléchargez deux pages générées dans le navigateur. La première présente la façade avec les finitions choisies et le tableau des surfaces ; la seconde contient le plan de masse du RDC coté et deux cadrages intérieurs de la maquette. Aucun appel OpenRouter ni média préexistant n’est requis. Seul le chargement initial de jsPDF nécessite l’accès au CDN.
+
+Validation rapide : `node --test tests/client-tools.test.cjs`. Dans le navigateur, essayez les cotes et le PDF sur `?project=test-l` (pièce en L), puis les ombres jusqu’à 20h sur `?project=maison-croquis`. Relancez l’export avec une coupe active : les images doivent présenter la maquette complète, sans modifier la coupe dans la visite.
+
 ### Projets à étage (R+1)
 
 Les projets peuvent déclarer `level: 0` (RDC) ou `level: 1` (étage) sur les murs, ouvertures, pièces et meubles. `config.floorHeight` définit la hauteur entre niveaux ; `stairwells` décrit les trémies. Une dalle intermédiaire est produite sous les pièces de l'étage. L'éditeur propose les onglets **RDC / Étage 1** et l'outil **Trémie**. La coupe C tient compte de la hauteur totale, et X sépare la dalle et les éléments de toiture compatibles.
@@ -58,7 +70,7 @@ Installez **Node.js LTS**, puis double-cliquez sur `start.bat`. Le script démar
 
 Accès direct : **http://localhost:8000/index.html** · Éditeur : **http://localhost:8000/editor.html**.
 
-Le serveur Node écoute uniquement sur la machine locale. L'ouverture directe de `index.html` ou le serveur Python historique ne donnent pas accès à toutes les fonctions (enregistrement et IA) ; ils ne sont pas pris en charge pour l'usage normal.
+Par défaut, le serveur Node écoute uniquement sur la machine locale (`127.0.0.1`). Pour une prévisualisation derrière un proxy de développement : `HOST=0.0.0.0 node serve.js`. L'ouverture directe de `index.html` ou le serveur Python historique ne donnent pas accès à toutes les fonctions (enregistrement et IA) ; ils ne sont pas pris en charge pour l'usage normal.
 
 ---
 

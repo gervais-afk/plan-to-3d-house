@@ -609,4 +609,4 @@ http.createServer((req, res) => {
       fs.createReadStream(file).pipe(res);
     }
   });
-}).listen(PORT, '127.0.0.1', () => console.log(`Plan de maison animé : http://localhost:${PORT}/index.html`));
+}).listen(PORT, process.env.HOST || '127.0.0.1', () => console.log(`Plan de maison animé : http://localhost:${PORT}/index.html`));

@@ -1,0 +1,68 @@
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.client-tools { position: relative; }
+.client-tools summary { display: inline-flex; cursor: pointer; }
+.client-tools summary::after { content: '⌄'; margin-left: .5em; }
+.client-tools[open] summary::after { content: '⌃'; }
+.client-tool-fields {
+  position: absolute; right: 0; top: 100%; z-index: 2; margin: .4rem 0 0; min-inline-size: 0;
+  display: grid; gap: .65rem; width: min(360px, calc(100vw - 40px)); max-height: min(52vh, 420px); overflow: auto;
+  padding: .85rem; border: 1px solid #d4dcd7; border-radius: 12px; background: #f9faf7;
+  box-shadow: 0 12px 32px #17282b30; color: #18282b; font-size: .78rem;
+}
+.client-tools:not([open]) .client-tool-fields { display: none; }
+.client-finish-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
+.client-finish-row label { display: grid; gap: .3rem; }
+.client-finish-row select { min-width: 0; width: 100%; padding: .35rem; border-radius: 5px; font: inherit; }
+.client-sun { display: grid; gap: .2rem; border-block: 1px solid #e0e7e2; padding: .55rem 0; }
+.client-sun > * { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.client-sun input { flex: 1; min-width: 0; accent-color: #337765; }
+.client-sun output { font-variant-numeric: tabular-nums; font-weight: 700; }
+.client-compass { display: inline-flex; gap: .2rem; align-items: center; font-weight: 700; }
+.client-compass span { display: inline-block; font-size: 1.05rem; }
+.client-hour-scale { opacity: .7; padding-right: 2.2rem; }
+.client-check { display: inline-flex; align-items: center; gap: .15rem; }
+#client-pdf-status:empty { display: none; }
+#client-annotations { position: fixed; inset: 0; z-index: 8; pointer-events: none; }
+.client-anchor { position: absolute; top: 0; left: 0; }
+.client-hotspot {
+  position: relative; transform: translate(-50%, -50%); border: 1px solid #fff;
+  width: 26px; height: 26px; border-radius: 50%; pointer-events: auto; cursor: pointer;
+  color: #fff; background: #234641ed; box-shadow: 0 2px 10px #18282b55;
+  font: 700 13px/1 Georgia, serif;
+}
+.client-anchor:focus-within, .client-anchor:hover, .client-anchor.is-open { z-index: 1; }
+.client-room-card, .client-distance, #client-measure-status {
+  background: #172d2e; color: #fff; border-radius: 8px; box-shadow: 0 5px 20px #1425263d;
+}
+.client-room-card {
+  display: none; position: absolute; left: 0; bottom: 18px; transform: translateX(-50%);
+  padding: .65rem .8rem; min-width: 155px; width: max-content; max-width: min(240px, 72vw);
+  font-size: .78rem; line-height: 1.55; text-align: center;
+}
+.client-anchor:hover .client-room-card, .client-anchor:focus-within .client-room-card, .client-anchor.is-open .client-room-card { display: grid; }
+.client-room-card strong { color: #a9e6d4; overflow-wrap: anywhere; }
+.client-distance { transform: translate(-50%, calc(-100% - 8px)); padding: .25rem .45rem; white-space: nowrap; font: 600 .82rem Inter, sans-serif; }
+.client-measure-point { width: 9px; height: 9px; background: #41e4c1; border: 1px solid #172d2e; border-radius: 50%; transform: translate(-50%, -50%); }
+#client-measure-status { position: fixed; z-index: 13; left: 50%; bottom: 27vh; transform: translateX(-50%); width: max-content; max-width: 82vw; padding: .45rem .7rem; text-align: center; font-size: .8rem; pointer-events: none; }
+#webgl-container.is-measuring { cursor: crosshair; }
+#webgl-container.is-measuring ~ .fps-controls-overlay { visibility: hidden; }
+
+#client-annotations.is-measuring .client-hotspot { display: none; }
+
+@media (max-width: 720px) {
+  .ui-layer { padding: 12px; }
+  .top-bar { flex-direction: column; align-items: stretch; gap: 8px; }
+  .architect-header { align-self: flex-start; padding: 8px 12px; }
+  .architect-header .project-title { font-size: 17px; }
+  .architect-header .project-meta { display: none; }
+  .technical-stamp { gap: 6px; }
+  .technical-stamp .btn-row { gap: 4px; }
+  .technical-stamp .btn-toggle { padding: 4px 7px; font-size: 10px; }
+  .bottom-bar { gap: 6px; }
+  .room-card, .minimap-card { padding: 8px; }
+  .room-meta-row { flex-wrap: wrap; gap: 3px 6px; }
+  .room-name, .room-surface { font-size: 12px; }
+  .room-desc, .stats-row { display: none; }
+  #minimap-canvas { width: 82px; height: 82px; }
+  .minimap-header, .minimap-footer { display: none; }
+}

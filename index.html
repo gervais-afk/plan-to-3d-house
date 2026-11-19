@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/clientTools.css">
 </head>
 <body>
 
@@ -66,6 +67,40 @@
         <div class="btn-row">
           <button id="btn-export-video" class="btn-toggle btn-small" title="Enregistrer gratuitement le parcours complet avec MediaRecorder">🎥 Exporter l’animation vidéo</button>
         </div>
+        <details id="client-tools" class="client-tools">
+          <summary class="btn-toggle btn-small">🎨 Finitions &amp; outils</summary>
+          <fieldset id="client-tool-fields" class="client-tool-fields">
+            <legend class="sr-only">Outils de visite</legend>
+            <div class="client-finish-row">
+              <label>Sols intérieurs
+                <select id="client-floor">
+                  <option value="">Du projet</option><option value="oak">Parquet chêne clair</option>
+                  <option value="tile">Carrelage gris anthracite</option><option value="concrete">Béton ciré</option>
+                </select>
+              </label>
+              <label>Façades extérieures
+                <select id="client-facade">
+                  <option value="">Du projet</option><option value="plaster">Crépi blanc</option>
+                  <option value="timber">Bardage bois contemporain</option><option value="stone">Parement pierre</option>
+                </select>
+              </label>
+            </div>
+            <div class="client-sun">
+              <label for="client-hour"><span>Ensoleillement indicatif</span><output id="client-hour-value" for="client-hour">13h00</output></label>
+              <div><input id="client-hour" type="range" min="7" max="20" step="0.25" value="13">
+                <span class="client-compass" id="client-compass" title="Nord sur le plan, vu du dessus">N <span aria-hidden="true">↑</span></span>
+              </div>
+              <div class="client-hour-scale" aria-hidden="true"><span>07h</span><span>13h</span><span>20h</span></div>
+            </div>
+            <div class="btn-row client-actions">
+              <button type="button" id="client-measure" class="btn-toggle btn-small" aria-pressed="false" title="Touche M">📐 Mesurer</button>
+              <button type="button" id="client-clear" class="btn-toggle btn-small" disabled>Effacer les cotes</button>
+              <label class="client-check"><input id="client-hotspots" type="checkbox" checked> Pièces</label>
+            </div>
+            <button type="button" id="client-pdf" class="btn-toggle btn-small">📄 Exporter la brochure PDF</button>
+            <span id="client-pdf-status" role="status"></span>
+          </fieldset>
+        </details>
         <span id="video-export-status" class="video-export-status" role="status" aria-live="polite"></span>
       </div>
     </header>
@@ -98,6 +133,9 @@
       </div>
     </footer>
   </div>
+
+  <div id="client-annotations"></div>
+  <div id="client-measure-status" role="status" hidden></div>
 
   <!-- Barre de progression du scroll -->
   <div class="progress-bar-container">
@@ -188,6 +226,7 @@
   <script src="js/data.js"></script>
   <script src="js/projectLoader.js"></script>
   <script src="js/scene.js"></script>
+  <script src="js/solarStudy.js"></script>
   <script src="js/realism.js"></script>
   <script src="js/assets.js"></script>
   <script src="js/presentationPlan.js"></script>
@@ -195,6 +234,9 @@
   <script src="js/scrollTour.js"></script>
   <script src="js/walkController.js"></script>
   <script src="js/minimap.js"></script>
+  <script src="js/clientFinishes.js"></script>
+  <script src="js/clientTools.js"></script>
+  <script src="js/clientBrochure.js"></script>
   <script src="js/app.js"></script>
 
 </body>

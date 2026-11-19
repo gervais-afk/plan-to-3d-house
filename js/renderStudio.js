@@ -11,64 +11,83 @@ class RenderStudio {
     this.generating = null;
   }
 
-  capture(shot, width = 1920, height = 1080, ss = 1.5) {
+  capture(shot, width = 1920, height = 1080, ss = 1.5, { clean = false } = {}) {
     const hs = this.hs, r = hs.renderer, cam = hs.camera;
     const saved = {
       pos: cam.position.clone(), quat: cam.quaternion.clone(), fov: cam.fov, aspect: cam.aspect,
-      night: hs.night, nightTarget: hs.nightTarget, elev: hs.elevationProgress, quality: hs.quality,
-      ceilings: hs.ceilingsVisible, ratio: r.getPixelRatio()
+      night: hs.night, nightTarget: hs.nightTarget, solarHour: hs.solarHour,
+      elev: hs.elevationProgress, quality: hs.quality, ceilings: hs.ceilingsVisible,
+      ratio: r.getPixelRatio(), size: r.getSize(new THREE.Vector2()), bg: hs.scene.background,
+      section: hs.sectionEnabled, exploded: hs.exploded, explodedTarget: hs.explodedTarget,
+      planOverlay: hs.planOverlayManualVisible, notesVisible: hs.clientMeasureGroup?.visible
     };
+    try {
+      if (hs.quality !== 'high') hs.setQuality('high');
+      if (hs.clientMeasureGroup) hs.clientMeasureGroup.visible = false;
+      if (clean) {
+        if (saved.section) hs.toggleSectionCut();
+        hs.exploded = hs.explodedTarget = 0;
+        hs.planOverlayManualVisible = false;
+      }
+      hs.setElevation(1);
+      if (clean) hs.updateTechnicalAnimations();
+      hs.solarHour = clean ? SolarStudy.day : null;
+      hs.night = hs.nightTarget = shot.night ? 1 : 0;
+      cam.position.fromArray(shot.pos);
+      cam.lookAt(new THREE.Vector3().fromArray(shot.look));
+      cam.fov = shot.fov;
+      cam.aspect = width / height;
+      cam.updateProjectionMatrix();
+      hs.setCeilingsVisible(shot.interior ?? (Boolean(shot.room) || cam.position.y < 2.7));
+      hs.applyAtmosphere();
+      hs.scene.background = this.skyTexture(!!shot.night);
+      hs.inkEdgeMaterial.visible = false;
+      if (hs.furnEdgeMaterial) hs.furnEdgeMaterial.visible = false;
 
-    if (hs.quality !== 'high') hs.setQuality('high');
-    hs.setElevation(1);
-    hs.night = hs.nightTarget = shot.night ? 1 : 0;
-    cam.position.fromArray(shot.pos);
-    cam.lookAt(new THREE.Vector3().fromArray(shot.look));
-    cam.fov = shot.fov;
-    cam.aspect = width / height;
-    cam.updateProjectionMatrix();
-    hs.setCeilingsVisible(cam.position.y < 2.7);
-    hs.applyAtmosphere();
-    // Ciel en dégradé (zénith → horizon) pour un rendu photographique
-    const savedBg = hs.scene.background;
-    hs.scene.background = this.skyTexture(!!shot.night);
-    // Rendu photo : pas de traits d'encre « maquette »
-    hs.inkEdgeMaterial.visible = false;
-    if (hs.furnEdgeMaterial) hs.furnEdgeMaterial.visible = false;
-
-    r.setPixelRatio(1);
-    r.setSize(width * ss, height * ss, false);
-    r.render(hs.scene, cam);
-
-    const out = document.createElement('canvas');
-    out.width = width;
-    out.height = height;
-    const g = out.getContext('2d');
-    g.imageSmoothingEnabled = true;
-    g.imageSmoothingQuality = 'high';
-    g.drawImage(r.domElement, 0, 0, width, height);
-    // Vignettage photographique discret
-    const v = g.createRadialGradient(width / 2, height / 2, height * 0.45, width / 2, height / 2, height * 0.95);
-    v.addColorStop(0, 'rgba(0,0,0,0)');
-    v.addColorStop(1, shot.night ? 'rgba(0,0,0,0.35)' : 'rgba(30,20,10,0.18)');
-    g.fillStyle = v;
-    g.fillRect(0, 0, width, height);
-
-    // Restauration de l'état interactif
-    hs.scene.background = savedBg;
-    r.setPixelRatio(saved.ratio);
-    hs.night = saved.night;
-    hs.nightTarget = saved.nightTarget;
-    cam.position.copy(saved.pos);
-    cam.quaternion.copy(saved.quat);
-    cam.fov = saved.fov;
-    hs.setElevation(saved.elev);
-    hs.setCeilingsVisible(saved.ceilings);
-    if (saved.quality !== 'high') hs.setQuality(saved.quality);
-    hs.onResize();
-    hs._atmoDirty = true;
-
-    return out.toDataURL('image/jpeg', 0.92);
+      r.setPixelRatio(1);
+      r.setSize(width * ss, height * ss, false);
+      r.render(hs.scene, cam);
+      const out = document.createElement('canvas');
+      out.width = width;
+      out.height = height;
+      const g = out.getContext('2d');
+      g.imageSmoothingEnabled = true;
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(r.domElement, 0, 0, width, height);
+      const vignette = g.createRadialGradient(width / 2, height / 2, height * 0.45, width / 2, height / 2, height * 0.95);
+      vignette.addColorStop(0, 'rgba(0,0,0,0)');
+      vignette.addColorStop(1, shot.night ? 'rgba(0,0,0,0.35)' : 'rgba(30,20,10,0.18)');
+      g.fillStyle = vignette;
+      g.fillRect(0, 0, width, height);
+      return out.toDataURL('image/jpeg', 0.92);
+    } finally {
+      hs.scene.background = saved.bg;
+      hs.night = saved.night;
+      hs.nightTarget = saved.nightTarget;
+      hs.solarHour = saved.solarHour;
+      cam.position.copy(saved.pos);
+      cam.quaternion.copy(saved.quat);
+      cam.fov = saved.fov;
+      if (saved.quality !== 'high') hs.setQuality(saved.quality);
+      r.setPixelRatio(saved.ratio);
+      r.setSize(saved.size.x, saved.size.y, false);
+      cam.aspect = saved.aspect;
+      cam.updateProjectionMatrix();
+      if (clean) {
+        if (saved.section) hs.toggleSectionCut();
+        hs.planOverlayManualVisible = saved.planOverlay;
+        hs.exploded = saved.exploded || 0;
+        hs.explodedTarget = hs.exploded;
+      }
+      hs.setElevation(saved.elev);
+      if (clean) {
+        hs.updateTechnicalAnimations();
+        hs.explodedTarget = saved.explodedTarget;
+      }
+      hs.setCeilingsVisible(saved.ceilings);
+      if (hs.clientMeasureGroup) hs.clientMeasureGroup.visible = saved.notesVisible;
+      hs.applyAtmosphere();
+    }
   }
 
   skyTexture(night) {

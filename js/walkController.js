@@ -49,7 +49,7 @@ class WalkController {
 
     // Clic pour activer le pointer lock
     this.houseScene.renderer.domElement.addEventListener('click', () => {
-      if (this.enabled && !this.isPointerLocked) {
+      if (this.enabled && !this.isPointerLocked && !this.houseScene.measureActive) {
         this.houseScene.renderer.domElement.requestPointerLock();
       }
     });
@@ -82,7 +82,7 @@ class WalkController {
     this.updateCameraRotation();
 
     // Inviter l'utilisateur au verrouillage souris
-    this.houseScene.renderer.domElement.requestPointerLock();
+    if (!this.houseScene.measureActive) this.houseScene.renderer.domElement.requestPointerLock();
   }
 
   stop() {
@@ -93,7 +93,8 @@ class WalkController {
   }
 
   onKeyDown(e) {
-    if (!this.enabled) return;
+    if (!this.enabled || e.target.closest?.('button, input, select, textarea, summary, [contenteditable]')) return;
+    if (e.code === 'Escape' && this.houseScene.measureActive) return;
 
     switch (e.code) {
       case 'KeyW':

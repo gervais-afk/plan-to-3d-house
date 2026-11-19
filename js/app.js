@@ -526,6 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function openGallery() {
     if (currentMode === 'walk') setMode('scroll');
+    if (clientTools.measuring) clientTools.toggleMeasure(false);
     hidePhotoOverlay();
     gallery.classList.remove('hidden');
     if (!galleryInitialized) {
@@ -548,7 +549,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const shot = currentItem && (currentItem.shot || studio.shots.find(s => s.id === currentItem.id));
     closeGallery();
     if (!shot) return;
-    if (shot.night !== (houseScene.nightTarget > 0.5)) toggleNight();
+    clientTools.setHour(shot.night ? SolarStudy.evening : SolarStudy.day);
     if (shot.pos[1] < 3) {
       setMode('walk');
       walkController.start({ x: shot.pos[0], z: shot.pos[2] });
@@ -615,7 +616,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // À l'arrêt sur un waypoint, on propose l'IA si elle existe ; sinon la scène Three.js reste visible.
   function onScrollStop() {
-    if (!photoModeEnabled || currentMode !== 'scroll') return;
+    if (clientTools.panel.open || clientTools.measuring || !photoModeEnabled || currentMode !== 'scroll') return;
 
     const waypoints = HOUSE_DATA.tourWaypoints;
     const numSteps = waypoints.length - 1;
@@ -635,7 +636,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const token = ++photoRequestToken;
     checkPhotoAvailable(shotId).then(view => {
       const latestStep = Math.round(scrollProgress * numSteps);
-      if (token !== photoRequestToken || !photoModeEnabled || currentMode !== 'scroll' || latestStep !== nearestIdx || !view) return;
+      if (token !== photoRequestToken || clientTools.panel.open || clientTools.measuring || !photoModeEnabled || currentMode !== 'scroll' || latestStep !== nearestIdx || !view) return;
       currentPhotoView = view;
       photoOverlay.style.backgroundImage = `url("${view.image.file}")`;
       photoTitleEl.textContent = `RENDU IA · ${view.label || wp.label || shotId}`;
@@ -667,9 +668,27 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnExplode.disabled) btnExplode.title = 'Disponible avec une dalle intermédiaire ou une toiture en dalle';
     btnExplode.addEventListener('click', toggleExploded);
   }
+  const clientTools = new ClientTools(houseScene, hidePhotoOverlay);
+  const pdfButton = document.getElementById('client-pdf');
+  const pdfStatus = document.getElementById('client-pdf-status');
+  let exportingPDF = false;
+  pdfButton.addEventListener('click', async () => {
+    if (exportingPDF || tourRecording || exportVideoButton.disabled) return;
+    exportingPDF = pdfButton.disabled = true;
+    pdfStatus.textContent = 'Composition de la brochure…';
+    try {
+      await assetsReady;
+      await ClientBrochure.exportPDF(HOUSE_DATA, studio);
+      pdfStatus.textContent = 'Brochure PDF téléchargée.';
+    } catch (error) {
+      console.error(error);
+      pdfStatus.textContent = `Export PDF impossible : ${error.message}`;
+    } finally {
+      exportingPDF = pdfButton.disabled = false;
+    }
+  });
   function toggleNight() {
-    const isNight = houseScene.toggleNight();
-    btnNight.textContent = isNight ? '☾ Soir' : '☀ Jour';
+    clientTools.setHour(houseScene.nightTarget > 0.5 ? SolarStudy.day : SolarStudy.evening);
   }
   function setQuality(q) {
     if (tourRecording) return;
@@ -755,6 +774,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function exportCinematicVideo() {
+    if (exportingPDF) { setVideoExportStatus('Patientez jusqu’à la fin de l’export PDF.'); return; }
     if (tourRecording) {
       tourRecording.stopRequested = true;
       exportVideoButton.textContent = '⏳ Finalisation…';
@@ -794,6 +814,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const chunks = [];
       const state = { recorder, stopRequested: false };
       tourRecording = state;
+      clientTools.fields.disabled = true;
+      clientTools.toggleMeasure(false);
+      clientTools.measureGroup.visible = false;
       lockedControls = [btnToggleMode, btnNight, btnQuality, btnPlanStyle, btnPhotoMode, btnSection, btnExplode, btnTimelapse, document.getElementById('btn-renders')];
       lockedControls.forEach(control => { if (control) control.disabled = true; });
       exportVideoButton.disabled = false;
@@ -867,6 +890,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (stream) stream.getTracks().forEach(track => track.stop());
     } finally {
       tourRecording = null;
+      clientTools.fields.disabled = false;
       window.scrollTo(0, saved.scrollY);
       if (saved.mode === 'walk') {
         setMode('walk');
@@ -895,6 +919,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.code === 'Escape') tourRecording.stopRequested = true;
       return;
     }
+    if (e.code === 'Escape' && clientTools.measuring) { clientTools.toggleMeasure(false); return; }
+    if (e.target.closest?.('input, select, textarea, [contenteditable]')) return;
+    if (e.code === 'KeyM' && !e.repeat && gallery.classList.contains('hidden')) clientTools.toggleMeasure();
     // La touche Espace bascule le mode
     if (e.code === 'Space' && e.target === document.body) {
       e.preventDefault();
@@ -988,6 +1015,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     minimap.update(activeRoom ? activeRoom.id : null);
     houseScene.render();
+    clientTools.update(now, Boolean(tourRecording) || !gallery.classList.contains('hidden') || photoOverlay.classList.contains('is-visible'));
   }
 
   // Démarrage initial

@@ -41,6 +41,27 @@ const HouseAuto = (() => {
   const contains = (r, x, z) => (window.roomContains ? roomContains(r, x, z) : inRoom(r, { x, z }, 0));
   const roomAtPoint = (data, x, z) => (data.rooms || []).find(r => contains(r, x, z)) || null;
 
+  // Face extérieure d'un mur orienté : sondes de part et d'autre, sur le même niveau.
+  function exteriorSide(data, wall, bb = bbox(data)) {
+    const rooms = data.rooms.filter(r => r.level === wall.level);
+    const half = wall.thick / 2 + 0.08;
+    let score = 0;
+    for (const fraction of [0.2, 0.5, 0.8]) {
+      const { p, n } = openingFrame(wall, { at: wall.length * fraction });
+      const weight = side => Math.max(0, ...rooms.filter(r => contains(r, p.x + n.x * half * side, p.z + n.z * half * side)).map(r => r.habitable ? 2 : 1));
+      score += weight(-1) - weight(1);
+    }
+    if (score) return Math.sign(score);
+    const { p, n } = openingFrame(wall, { at: wall.length / 2 });
+    return (p.x - bb.cx) * n.x + (p.z - bb.cz) * n.z < 0 ? -1 : 1;
+  }
+
+  // Le Nord est -Z par défaut, angle horaire dans le plan (90° = +X).
+  function northAngle(data) {
+    const degrees = Number(data.config.northDegrees);
+    return Number.isFinite(degrees) ? ((degrees % 360) + 360) % 360 : 0;
+  }
+
   // Graphe de circulation : chaque porte / passage relie les deux espaces qu'il sépare ('outside' = extérieur)
   function doorGraph(data, level) {
     if (level !== undefined && level !== null) {
@@ -139,9 +160,13 @@ const HouseAuto = (() => {
     }
     if (!cam) {
       const b = r.bounds;
-      cam = v2(b.xMin + Math.min(0.5, (b.xMax - b.xMin) * 0.2), b.zMax - Math.min(0.5, (b.zMax - b.zMin) * 0.2));
+      const candidates = [0.2, 0.5, 0.8].flatMap(u => [0.8, 0.5, 0.2].map(v => v2(
+        b.xMin + (b.xMax - b.xMin) * u, b.zMin + (b.zMax - b.zMin) * v)));
+      candidates.unshift(v2(b.xMin + Math.min(0.5, (b.xMax - b.xMin) * 0.2), b.zMax - Math.min(0.5, (b.zMax - b.zMin) * 0.2)));
+      cam = candidates.find(p => contains(r, p.x, p.z) && Math.hypot(p.x - c.x, p.z - c.z) > 0.1) || c;
     }
     const look = v2(c.x + (c.x - cam.x) * 0.9, c.z + (c.z - cam.z) * 0.9);
+    if (Math.hypot(look.x - cam.x, look.z - cam.z) < 0.001) look.z += 1;
     return { cam, look };
   }
 
@@ -296,7 +321,7 @@ const HouseAuto = (() => {
     return data;
   }
 
-  return { complete, bbox, doorGraph, doorPath };
+  return { complete, bbox, doorGraph, doorPath, findEntry, roomPose, exteriorSide, northAngle };
 })();
 window.HouseAuto = HouseAuto;
 

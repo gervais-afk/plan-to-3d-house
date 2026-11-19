@@ -256,7 +256,7 @@ class HouseScene {
       const base = this.getFloorTextureBase(room.floorType);
       const map = base.tex.clone();
       map.needsUpdate = true;
-      map.repeat.set(w / base.meters, d / base.meters);
+      map.repeat.setScalar(1 / base.meters);
 
       const pbr = this.getPbrMaps(base.tex, `floor-${room.floorType}`);
       const normalMap = pbr.normalMap.clone(), roughnessMap = pbr.roughnessMap.clone();
@@ -272,7 +272,6 @@ class HouseScene {
       let floorMesh, line;
       if (room.poly) {
         // Pièce polygonale : forme exacte (UV en mètres → répétition 1/m)
-        map.repeat.set(1 / base.meters, 1 / base.meters);
         const shape = new THREE.Shape(room.poly.map(p => new THREE.Vector2(p[0], -p[1])));
         floorMesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), floorMat);
         floorMesh.rotation.x = -Math.PI / 2;
@@ -280,7 +279,10 @@ class HouseScene {
         const pts = room.poly.concat([room.poly[0]]).map(p => new THREE.Vector3(p[0], levelY + 0.01, p[1]));
         line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x1a2128 }));
       } else {
-        floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMat);
+        const geometry = new THREE.PlaneGeometry(w, d);
+        const uv = geometry.attributes.uv;
+        for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w, uv.getY(i) * d);
+        floorMesh = new THREE.Mesh(geometry, floorMat);
         floorMesh.rotation.x = -Math.PI / 2;
         floorMesh.position.set(cx, levelY + 0.005, cz);
         // Liseré d'encre autour de chaque pièce (plan 2D)
@@ -338,6 +340,8 @@ class HouseScene {
     const wallTexture = this.getWallTexture();
     const wallPbr = this.getPbrMaps(wallTexture, 'plaster');
     this.wallPBRMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, map: wallTexture, normalMap: wallPbr.normalMap, roughnessMap: wallPbr.roughnessMap, normalScale: new THREE.Vector2(0.08, 0.08), roughness: 0.82, metalness: 0.0 });
+    this.facadeMaterial = this.wallPBRMaterial.clone();
+    this.facadeMaterial.userData.keepBatch = true;
     this.inkEdgeMaterial = new THREE.LineBasicMaterial({ color: 0x11161d });
     this.glassMaterial = new THREE.MeshPhysicalMaterial({
       color: 0xd6e8f0, transparent: true, opacity: 0.26, roughness: 0.04, metalness: 0.0,
@@ -345,7 +349,10 @@ class HouseScene {
     });
     this.frameMaterial = new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.45, metalness: 0.4 });
 
+    const bb = HouseAuto.bbox(HOUSE_DATA);
     HOUSE_DATA.walls.forEach(w => {
+      if (!w.length) return;
+      const side = w.type === 'ext' ? HouseAuto.exteriorSide(HOUSE_DATA, w, bb) : 0;
       const levelY = this.levelOffset(w.level);
       const p1 = new THREE.Vector2(w.from[0], w.from[1]);
       const dir = new THREE.Vector2(w.to[0] - w.from[0], w.to[1] - w.from[1]).normalize();
@@ -359,9 +366,9 @@ class HouseScene {
         const s = op.at - op.w / 2;
         const e = op.at + op.w / 2;
         const top = op.sill + op.h;
-        if (s - cursor > 0.02) this.buildWallSection(p1, dir, cursor, s - cursor, angle, t, H, levelY);
-        if (H - top > 0.02) this.buildWallSection(p1, dir, s, op.w, angle, t, H - top, levelY + top);
-        if (op.sill > 0.02) this.buildWallSection(p1, dir, s, op.w, angle, t, op.sill, levelY);
+        if (s - cursor > 0.02) this.buildWallSection(p1, dir, cursor, s - cursor, angle, t, H, levelY, side);
+        if (H - top > 0.02) this.buildWallSection(p1, dir, s, op.w, angle, t, H - top, levelY + top, side);
+        if (op.sill > 0.02) this.buildWallSection(p1, dir, s, op.w, angle, t, op.sill, levelY, side);
         if (op.type === 'window' || op.type === 'bay') {
           this.buildGlassSection(p1, dir, s, op.w, angle, op.h, levelY + op.sill);
           this.buildWindowFrame(p1, dir, s, op.w, angle, op.h, op.sill, t, levelY);
@@ -369,7 +376,7 @@ class HouseScene {
         cursor = Math.max(cursor, e);
       });
       const end = L + t / 2;
-      if (end - cursor > 0.02) this.buildWallSection(p1, dir, cursor, end - cursor, angle, t, H, levelY);
+      if (end - cursor > 0.02) this.buildWallSection(p1, dir, cursor, end - cursor, angle, t, H, levelY, side);
     });
   }
 
@@ -395,9 +402,27 @@ class HouseScene {
     return { x: startP2.x + dirNorm.x * dist, z: startP2.y + dirNorm.y * dist };
   }
 
-  buildWallSection(startP2, dirNorm, offsetAlong, length, angle, thickness, height, yOffset = 0) {
+  buildWallSection(startP2, dirNorm, offsetAlong, length, angle, thickness, height, yOffset, facadeSide) {
     const p = this.alongWall(startP2, dirNorm, offsetAlong + length / 2);
-    return this.addElevated(new THREE.BoxGeometry(length, height, thickness), this.wallPBRMaterial, p.x, p.z, yOffset, height, -angle);
+    const box = new THREE.BoxGeometry(length, height, thickness);
+    const wall = this.addElevated(box, this.wallPBRMaterial, p.x, p.z, yOffset, height, -angle);
+    if (!facadeSide) return wall;
+
+    // Séparer uniquement la face extérieure sans géométrie superposée ; les deux
+    // matériaux restent fusionnables dans des lots statiques distincts.
+    const face = box.groups[facadeSide > 0 ? 4 : 5]; // normales locales +Z / -Z
+    const indices = Array.from(box.index.array);
+    const skin = box.clone();
+    skin.setIndex(indices.splice(face.start, face.count));
+    box.setIndex(indices);
+    box.clearGroups();
+    skin.clearGroups();
+    const uv = skin.attributes.uv, positions = skin.attributes.position;
+    for (let i = 0; i < uv.count; i++) {
+      uv.setXY(i, offsetAlong + length / 2 + positions.getX(i), yOffset + height / 2 + positions.getY(i));
+    }
+    this.addElevated(skin, this.facadeMaterial, p.x, p.z, yOffset, height, -angle, { edges: false, collide: false });
+    return wall;
   }
 
   buildGlassSection(startP2, dirNorm, offsetAlong, length, angle, height, yOffset) {
