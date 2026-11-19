@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Espace client privé — Plan to 3D</title>
+  <link rel="stylesheet" href="css/portal.css">
+  <script src="js/portal.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <span class="eyebrow">PLAN TO 3D · ESPACE PRIVÉ</span>
+      <h1>Accès à la visite</h1>
+      <p id="portal-status" role="status" aria-live="polite">Vérification de votre accès…</p>
+    </header>
+    <section id="portal-invite" class="panel" hidden>
+      <h2>Vous avez reçu une invitation</h2>
+      <p>L’invitation remplace la session de ce navigateur. Utilisez une fenêtre privée pour tester un lien sans fermer votre session architecte.</p>
+      <button id="portal-accept" type="button">Ouvrir la visite invitée</button>
+    </section>
+    <form id="portal-login" class="panel" method="post" hidden>
+      <h2>Connexion architecte</h2>
+      <label>Mot de passe <input id="portal-password" type="password" autocomplete="current-password" maxlength="1024" required></label>
+      <button type="submit">Se connecter</button>
+      <p>Client ? Ouvrez le lien d’invitation reçu de votre architecte.</p>
+    </form>
+    <section id="portal-active" class="panel" hidden>
+      <h2 id="portal-active-title"></h2>
+      <nav><a id="portal-visit" href="index.html">Ouvrir la visite</a><a id="portal-editor" href="editor.html" hidden>Éditeur de plan</a><button type="button" id="portal-logout" class="secondary">Se déconnecter</button></nav>
+    </section>
+    <section id="portal-manage" hidden>
+      <form id="portal-create" class="panel" method="post">
+        <h2>Nouvelle invitation</h2>
+        <div class="fields">
+          <label>Projet <select id="portal-project" required></select></label>
+          <label>Accès <select id="portal-role"><option value="read">Lecture seule</option><option value="comment">Lecture et commentaires</option></select></label>
+          <label>Validité (heures) <input id="portal-duration" type="number" min="1" max="720" step="1" value="168" required></label>
+          <label>Libellé privé (facultatif) <input id="portal-label" maxlength="60" placeholder="Ex. Présentation initiale"></label>
+        </div>
+        <button type="submit">Créer le lien d’invitation</button>
+        <div id="portal-new-link" class="new-link" hidden>
+          <label>Lien à transmettre <input id="portal-link" type="url" readonly></label>
+          <button id="portal-copy" class="secondary" type="button">Copier</button>
+          <p>Copiez ce lien maintenant. Le jeton n’est pas conservé en clair.</p>
+        </div>
+      </form>
+      <section class="panel">
+        <h2>Invitations créées</h2>
+        <ul id="portal-list"></ul>
+      </section>
+    </section>
+    <a id="portal-demo" href="index.html" hidden>Retour à la démo locale</a>
+  </main>
+</body>
+</html>

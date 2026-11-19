@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Villa Serena — Du Plan 2D à la Maison 3D Interactive</title>
+  <title>Plan to 3D — Visite interactive</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -39,11 +39,12 @@
           <span class="brand-dot"></span>
           <span>Atelier Architecture & IA</span>
         </div>
-        <h1 class="project-title">VILLA SERENA</h1>
-        <p class="project-meta">PLAN N° A-102 • ÉCHELLE 1:50 • PHASE PRO</p>
+        <h1 class="project-title">VISITE ARCHITECTURALE</h1>
+        <p class="project-meta">MAQUETTE 3D INTERACTIVE</p>
       </div>
 
       <div class="technical-stamp interactive">
+        <a id="portal-account" href="portal.html" class="btn-toggle btn-small" hidden>Espace privé</a>
         <span id="mode-badge" class="mode-badge">MODE PLAN & SCROLL 3D</span>
         <button id="btn-toggle-mode" class="btn-toggle">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -169,14 +170,13 @@
       <div class="room-card interactive">
         <div class="room-meta-row">
           <h2 id="hud-room-name" class="room-name">PLAN D'ARCHITECTE 2D</h2>
-          <span id="hud-room-surface" class="room-surface">≈ 109 m²</span>
+          <span id="hud-room-surface" class="room-surface">—</span>
         </div>
         <p id="hud-room-desc" class="room-desc">Faites défiler vers le bas pour voir les murs s'élever et visiter la maison.</p>
         
         <div class="stats-row">
           <div class="stats-item">ÉLÉVATION 3D : <strong id="hud-elevation-percent">0%</strong></div>
-          <div class="stats-item">HSP : <strong>2.80 m</strong></div>
-          <div class="stats-item">ENTRÉE : <strong>PLEIN SUD</strong></div>
+          <div class="stats-item">HSP : <strong id="hud-wall-height">—</strong></div>
         </div>
       </div>
 
@@ -282,6 +282,8 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/environments/RoomEnvironment.js"></script>
 
   <!-- Scripts du projet -->
+  <script src="js/portal-context.js"></script>
+  <script src="js/houseDataCore.js"></script>
   <script src="js/data.js"></script>
   <script src="js/projectLoader.js"></script>
   <script src="js/scene.js"></script>

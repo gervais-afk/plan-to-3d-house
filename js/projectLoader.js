@@ -327,22 +327,29 @@ window.HouseAuto = HouseAuto;
 
 // --- Chargement synchrone du projet demandé (avant la construction de la scène) ---
 (function loadProject() {
+  if (typeof HOUSE_DATA === 'undefined') return;
   const params = new URLSearchParams(location.search);
   const requested = params.get('project');
-  const stored = localStorage.getItem('lastProject');
+  const stored = window.PORTAL_CONTEXT?.project || localStorage.getItem('lastProject');
   let name = requested || (stored && /^[a-z0-9-]{1,60}$/.test(stored) ? stored : 'villa-serena');
   window.ACTIVE_PROJECT_SLUG = /^[a-z0-9-]{1,60}$/.test(name) ? name : 'villa-serena';
   if (!/^[a-z0-9-]{1,60}$/.test(name)) { console.warn('Nom de projet invalide :', name); return; }
   const xhr = new XMLHttpRequest();
   xhr.open('GET', `projects/${name}/project.json?t=${Date.now()}`, false);
   try { xhr.send(); } catch (e) { console.warn('Projet introuvable :', name); }
-  if (xhr.status !== 200 && name !== 'villa-serena') {
+  if (xhr.status !== 200 && !window.PORTAL_CONTEXT?.project && name !== 'villa-serena' && !requested) {
     name = 'villa-serena';
     window.ACTIVE_PROJECT_SLUG = name;
     xhr.open('GET', `projects/${name}/project.json?t=${Date.now()}`, false);
     try { xhr.send(); } catch (e) { console.warn('Projet introuvable :', name); }
   }
-  if (xhr.status !== 200) { console.warn('Projet introuvable :', name); return; }
+  if (xhr.status !== 200) {
+    if (window.PORTAL_CONTEXT?.role) {
+      window.PROJECT_ACCESS_FAILED = true;
+      location.replace('portal.html?session=inaccessible');
+    } else console.warn('Projet introuvable :', name);
+    return;
+  }
 
   localStorage.setItem('lastProject', name);
   const p = JSON.parse(xhr.responseText);

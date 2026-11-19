@@ -3,10 +3,12 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const feedbackStore = require('./feedbackStore');
+const { createPortal, safePath } = require('./privatePortal');
 
 const PORT = Number(process.env.PORT) || 8000;
-const ROOT = __dirname;
+const ROOT = fs.realpathSync(__dirname);
 const PROJECTS = path.join(ROOT, 'projects');
+const portal = createPortal({ root: ROOT, projects: PROJECTS, send: sendJson, read: readBody });
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
@@ -252,7 +254,9 @@ function galleryMedia(res, url) {
   });
 
   res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-  res.end(JSON.stringify({ images, videos }));
+  let renders = [];
+  try { renders = fs.readdirSync(media.renders, { withFileTypes: true }).filter(entry => entry.isFile() && /^[a-z0-9_-]+\.(?:jpe?g|png|webp)$/i.test(entry.name)).map(entry => renderPrefix + entry.name); } catch { /* pas encore de rendu */ }
+  res.end(JSON.stringify({ images, videos, renders }));
 }
 
 // --- Projets de l'éditeur de plan : projects/<slug>/project.json (+ plan.jpg|png) ---
@@ -270,10 +274,10 @@ function readBody(req, res, limit, cb) {
   });
 }
 
-function listProjects(res) {
+function listProjects(res, only) {
   fs.mkdirSync(PROJECTS, { recursive: true });
   const items = fs.readdirSync(PROJECTS, { withFileTypes: true })
-    .filter(d => d.isDirectory() && /^[a-z0-9-]{1,60}$/i.test(d.name) && fs.existsSync(path.join(PROJECTS, d.name, 'project.json')))
+    .filter(d => (!only || d.name === only) && d.isDirectory() && /^[a-z0-9-]{1,60}$/i.test(d.name) && fs.existsSync(path.join(PROJECTS, d.name, 'project.json')))
     .map(d => {
       ensureProjectMedia(d.name);
       let name = d.name;
@@ -571,16 +575,27 @@ function clientFeedback(req, res, url) {
   if (req.method !== 'POST') return sendJson(res, 405, { error: 'Méthode non autorisée.' });
   if (req.headers['content-type']?.split(';')[0] !== 'application/json') return sendJson(res, 415, { error: 'JSON requis.' });
   return readBody(req, res, 8192, data => {
+    if (portal.enabled && !portal.authorizeFeedback(req)) return sendJson(res, 403, { error: 'Accès non autorisé.' });
     try { return sendJson(res, 201, { item: feedbackStore.append(PROJECTS, project, channel, data) }); }
     catch (error) { return respondError(error); }
   });
 }
 
 http.createServer((req, res) => {
-  const requestUrl = new URL(req.url, 'http://localhost');
-  let urlPath;
-  try { urlPath = decodeURIComponent(requestUrl.pathname); }
-  catch { res.writeHead(400); return res.end('URL invalide'); }
+  let requestUrl, requestedPath;
+  try {
+    requestUrl = new URL(req.url, 'http://localhost');
+    requestedPath = decodeURIComponent(requestUrl.pathname);
+    if (/[\u0000-\u001f\u007f]/.test(requestedPath)) throw new Error('Chemin invalide');
+  } catch { res.writeHead(400); return res.end('URL invalide'); }
+  const file = path.resolve(ROOT, '.' + (requestedPath === '/' ? '/index.html' : requestedPath));
+  const nativeRelative = path.relative(ROOT, file);
+  if (!nativeRelative || nativeRelative.startsWith('..' + path.sep) || nativeRelative === '..' || path.isAbsolute(nativeRelative)) { res.writeHead(403); return res.end(); }
+  const relative = nativeRelative.split(path.sep).join('/');
+  if (!safePath(relative)) { res.writeHead(404); return res.end(); }
+  const urlPath = '/' + relative;
+  const access = portal.enabled ? portal.guard(req, res, requestUrl, relative) : {};
+  if (!access) return;
   if (urlPath === '/api/client-feedback') return clientFeedback(req, res, requestUrl);
   if (req.method === 'GET' && urlPath === '/api/ai/status') return aiStatus(res);
   if (req.method === 'POST' && urlPath === '/api/ai/chat') return aiChat(req, res);
@@ -590,44 +605,45 @@ http.createServer((req, res) => {
     submitVideo(req, res, body).catch(error => sendJson(res, 502, { error: error.message }));
   });
   if (req.method === 'GET' && urlPath === '/api/ai/videos/status') return videoStatus(req, res, new URL(req.url, 'http://localhost'));
-  if (/(^|\/)(?:openrouter\.key|\.env(?:\.[^/]*)?)$/i.test(urlPath)) { res.writeHead(403); return res.end(); } // secrets locaux jamais servis
   if (req.method === 'POST' && urlPath === '/api/save-render') return saveRender(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/save-generated') return saveGenerated(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/save-video') return saveVideo(req, res, requestUrl);
   if (req.method === 'GET' && urlPath === '/api/gallery/media') return galleryMedia(res, requestUrl);
-  if (req.method === 'GET' && urlPath === '/api/projects') return listProjects(res);
+  if (req.method === 'GET' && urlPath === '/api/projects') return listProjects(res, access.only);
   if (req.method === 'POST' && urlPath === '/api/save-project') return saveProject(req, res);
-  const file = path.resolve(ROOT, '.' + (urlPath === '/' ? '/index.html' : urlPath));
-  const relative = path.relative(ROOT, file);
-  if (relative.split(path.sep).some(part => part.toLowerCase() === feedbackStore.directoryName)) { res.writeHead(404); return res.end(); }
-  if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) { res.writeHead(403); return res.end(); }
-  fs.stat(file, (err, stat) => {
-    if (err || !stat.isFile()) { res.writeHead(404); return res.end('Not found'); }
-    const ext = path.extname(file).toLowerCase();
-    const mime = TYPES[ext] || 'application/octet-stream';
-    const range = req.headers.range;
-    if (range && stat.size > 0) {
-      const parts = range.replace(/bytes=/, '').split('-');
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
-      if (start >= stat.size || end >= stat.size || start > end) {
-        res.writeHead(416, { 'Content-Range': `bytes */${stat.size}` });
-        return res.end();
+  if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405); return res.end(); }
+  fs.realpath(file, (realErr, realFile) => {
+    if (realErr || realFile !== file) { res.writeHead(404); return res.end('Not found'); }
+    fs.stat(file, (err, stat) => {
+      if (err || !stat.isFile()) { res.writeHead(404); return res.end('Not found'); }
+      const ext = path.extname(file).toLowerCase();
+      const mime = TYPES[ext] || 'application/octet-stream';
+      const range = req.headers.range;
+      if (range && stat.size > 0) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+        if (!Number.isInteger(start) || !Number.isInteger(end) || start >= stat.size || end >= stat.size || start > end) {
+          res.writeHead(416, { 'Content-Range': `bytes */${stat.size}` });
+          return res.end();
+        }
+        res.writeHead(206, {
+          'Content-Range': `bytes ${start}-${end}/${stat.size}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': end - start + 1,
+          'Content-Type': mime
+        });
+        if (req.method === 'HEAD') return res.end();
+        fs.createReadStream(file, { start, end }).on('error', () => res.destroy()).pipe(res);
+      } else {
+        res.writeHead(200, {
+          'Content-Length': stat.size,
+          'Accept-Ranges': 'bytes',
+          'Content-Type': mime
+        });
+        if (req.method === 'HEAD') return res.end();
+        fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);
       }
-      res.writeHead(206, {
-        'Content-Range': `bytes ${start}-${end}/${stat.size}`,
-        'Accept-Ranges': 'bytes',
-        'Content-Length': end - start + 1,
-        'Content-Type': mime
-      });
-      fs.createReadStream(file, { start, end }).pipe(res);
-    } else {
-      res.writeHead(200, {
-        'Content-Length': stat.size,
-        'Accept-Ranges': 'bytes',
-        'Content-Type': mime
-      });
-      fs.createReadStream(file).pipe(res);
-    }
+    });
   });
 }).listen(PORT, process.env.HOST || '127.0.0.1', () => console.log(`Plan de maison animé : http://localhost:${PORT}/index.html`));

@@ -60,7 +60,7 @@ Validation rapide : `node --test tests/client-tools.test.cjs`. Dans le navigateu
 ### Variantes, retours et étude solaire
 
 - **Variantes & partage** : nommez et enregistrez jusqu’à 24 variantes locales par projet (réenregistrer un nom remplace sa variante). Un lien fige la caméra, l’élévation, les finitions et l’heure ; le destinataire peut reprendre le scroll à tout moment. Le lien intègre l’instantané, pas les médias de la maquette : il faut que le projet soit disponible sur le serveur d’origine. Le même cadrage conserve la même direction et le même champ vertical ; les bords visibles dépendent du format de l’écran. Après élévation complète, **Comparer A/B** bascule uniquement les finitions au cadrage et à l’heure en cours. **Exporter la variante** applique ces choix aux vues de la brochure, avec le nom et le détail en couverture.
-- **Retours client** : créez un dossier, partagez son lien, puis placez un repère sur un sol ou un mur. Les notes sont enregistrées sur le serveur Node, classées par pièce et accessibles depuis le panneau ou la maquette. Le bouton **Actualiser** récupère les nouveaux retours. Le lien donne un accès de lecture et d’ajout à tous ses détenteurs ; il ne protège pas la maquette elle-même. Pour un projet confidentiel, placez le serveur derrière un accès contrôlé et ne publiez pas le lien. Il n’y a pas de compte, de modération ni de révocation dans cette version. Le stockage, limité à 100 notes par dossier et 100 dossiers par projet, se trouve dans `projects/<projet>/.client-feedback/` (non servi comme fichier statique, ignoré par Git). Sauvegardez ce dossier si vous changez de serveur.
+- **Retours client** : créez un dossier, partagez son lien, puis placez un repère sur un sol ou un mur. Les notes sont enregistrées sur le serveur Node, classées par pièce et accessibles depuis le panneau ou la maquette. Le bouton **Actualiser** récupère les nouveaux retours. En mode démo, le lien donne un accès de lecture et d’ajout à ses détenteurs. En mode privé, il faut aussi une invitation active pour ce projet : le rôle **Lecture seule** ne peut pas publier. Le lien de dossier et l’invitation sont distincts. Le stockage, limité à 100 notes par dossier et 100 dossiers par projet, se trouve dans `projects/<projet>/.client-feedback/` (non servi comme fichier statique, ignoré par Git). Sauvegardez ce dossier si vous changez de serveur.
 - **Étude par lieu et date** : dans les finitions, activez ce mode et saisissez latitude, longitude, date, décalage UTC à cette date (heure d’été comprise) et nord du plan. Le curseur affiche l’heure civile locale, l’azimut et la hauteur du soleil. Vous pouvez définir des paramètres initiaux avec `config.solarStudy = { date, lat, lon, utc, north }`. Le calcul est une approximation de la position du soleil ; ni météo, ni relief, ni masques voisins non modélisés ne sont simulés.
 
 Tests automatisés : `node --test tests/*.cjs`.
@@ -79,6 +79,21 @@ Installez **Node.js LTS**, puis double-cliquez sur `start.bat`. Le script démar
 Accès direct : **http://localhost:8000/index.html** · Éditeur : **http://localhost:8000/editor.html**.
 
 Par défaut, le serveur Node écoute uniquement sur la machine locale (`127.0.0.1`). Pour une prévisualisation derrière un proxy de développement : `HOST=0.0.0.0 node serve.js`. L'ouverture directe de `index.html` ou le serveur Python historique ne donnent pas accès à toutes les fonctions (enregistrement et IA) ; ils ne sont pas pris en charge pour l'usage normal.
+
+---
+
+## Portail privé : partager de vrais projets clients
+
+Le **mode démo ne protège pas les projets**. Pour héberger des maquettes confidentielles, activez le portail Node.js et ne servez **jamais** `projects/`, ni cette racine, via un serveur statique en parallèle.
+
+1. Fournissez `PORTAL_PASSWORD` (mot de passe architecte d’au moins 16 caractères) via les secrets de votre hébergeur ou votre environnement local, jamais dans Git. Définissez `PRIVATE_PORTAL=1` et `PORTAL_ORIGIN` sur l’origine HTTPS exacte du site (par exemple `https://visite.example.com`). Lancez `node serve.js` derrière un proxy TLS qui transmet toutes les routes vers Node sans en mettre les réponses en cache. Utilisez une origine dédiée au portail.
+2. Connectez-vous sur `/portal.html`. Choisissez le projet, le rôle **Lecture seule** ou **Lecture et commentaires**, puis la validité (1 à 720 heures). Copiez le lien et envoyez-le au client ; le jeton est affiché une seule fois lors de la création.
+3. Le client ouvre le lien et clique sur **Ouvrir la visite invitée**. Pour transmettre une variante ou un dossier de retours, envoyez aussi son lien après activation de l’invitation. La visite et la galerie existante sont consultables ; l’éditeur, les écritures de rendus et les appels IA sont réservés à l’architecte.
+4. **Révoquer** invalide le lien et les sessions associées, y compris pour les URL directes des médias. Un onglet ouvert vérifie son accès périodiquement. La révocation ne récupère pas les contenus déjà affichés, enregistrés ou exportés.
+
+Test local : `PRIVATE_PORTAL=1 PORTAL_INSECURE_LOCAL=1 PORTAL_ORIGIN=http://127.0.0.1:8000 node serve.js` (avec `PORTAL_PASSWORD` déjà fourni et le serveur lié à la boucle locale). Ouvrez `http://127.0.0.1:8000/portal.html`, pas `localhost` pour cette configuration. Pour tester un lien sans fermer votre session architecte, ouvrez-le en navigation privée.
+
+Les invitations sont stockées hachées dans `.private-portal/` (ignoré par Git), à conserver sur un volume persistant. Les sessions durent au plus 12 h et sont fermées au redémarrage ; une invitation encore valide peut rouvrir une session. Une installation qui contient ce dossier ne démarre pas sans configuration privée, pour éviter le retour accidentel en mode démo. Hébergement mono-instance ; pas de gestion multi-architectes. Placez les nouveaux plans, médias et modèles privés dans `projects/<slug>/` ; `assets/models/` est réservé à la bibliothèque publique partagée. Ne rendez pas publics les médias protégés pour alimenter un fournisseur IA.
 
 ---
 
@@ -129,7 +144,7 @@ Sans paramètre, `index.html` affiche toujours la Villa Serena définie dans `js
 
 ### Projet de démonstration `maison-croquis`
 
-Ouvrez `http://127.0.0.1:8000/index.html?project=maison-croquis` pour voir le relevé indicatif du croquis coté. Les deux références papier sont conservées dans `assets/plans/` (`croquis-cote.jpg` et `croquis-technique.jpg`). Le calque de fond utilise le dessin coté, calibré à environ **35,2 px/m** sur la cote manuscrite **15,50 m**, avec l'origine au centre de l'emprise. Les murs, pièces, ouvertures et surfaces sont une interprétation de démonstration à confirmer sur site ; le dessin ne spécifiant aucun étage, le projet reste un RDC. Une toiture plate de démonstration est présente uniquement pour tester la vue éclatée X, pas comme relevé d'une toiture existante.
+Ouvrez `http://127.0.0.1:8000/index.html?project=maison-croquis` pour voir le relevé indicatif du croquis coté. Les deux références papier sont conservées dans `assets/plans/` (`croquis-cote.jpg` et `croquis-technique.jpg`). Le calque de fond utilise la copie du dessin coté dans le dossier du projet, calibré à environ **35,2 px/m** sur la cote manuscrite **15,50 m**, avec l'origine au centre de l'emprise. Les murs, pièces, ouvertures et surfaces sont une interprétation de démonstration à confirmer sur site ; le dessin ne spécifiant aucun étage, le projet reste un RDC. Une toiture plate de démonstration est présente uniquement pour tester la vue éclatée X, pas comme relevé d'une toiture existante.
 
 Au chargement, l'image du plan est posée à plat sous la maison ; elle s'estompe à mesure que les murs se dressent. Le raccourci P permet de la réafficher/masquer.
 

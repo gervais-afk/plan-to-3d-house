@@ -3,6 +3,7 @@ class ClientFeedback {
   constructor(tools, variants, channel) {
     this.tools = tools;
     this.variants = variants;
+    this.canComment = window.PORTAL_CONTEXT?.role !== 'read';
     const el = id => document.getElementById(`feedback-${id}`);
     this.panel = document.getElementById('client-feedback');
     this.fields = el('fields');
@@ -20,6 +21,10 @@ class ClientFeedback {
     this.key = `plan3d:retours:v1:${variants.project}`;
     try { channel ||= localStorage.getItem(this.key); } catch { /* lien uniquement */ }
     this.setChannel(VariantState.channelPattern.test(channel || '') ? channel : null);
+    if (!this.canComment) {
+      el('create').hidden = this.start.hidden = true;
+      this.status.textContent = 'Lecture seule : vous pouvez consulter les dossiers dont vous avez reçu le lien.';
+    }
     el('create').addEventListener('click', () => {
       if (this.posting || (this.channel && !window.confirm('Créer un nouveau dossier ? Conservez le lien précédent pour retrouver ses remarques.'))) return;
       this.cancel();
@@ -75,6 +80,7 @@ class ClientFeedback {
   }
 
   begin() {
+    if (!this.canComment) return;
     if (!this.tools.ready()) { this.status.textContent = 'Attendez la fin de l’élévation et quittez la vue éclatée.'; return; }
     this.tools.toggleMeasure(false);
     this.placing = this.tools.hs.feedbackActive = true;
@@ -131,7 +137,7 @@ class ClientFeedback {
   }
 
   async post(button) {
-    if (!this.draft || this.posting) return;
+    if (!this.canComment || !this.draft || this.posting) return;
     const text = this.text.value.trim();
     if (!text) return;
     this.posting = button.disabled = true;

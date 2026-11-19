@@ -8,7 +8,7 @@ const file = path => readFileSync(resolve(__dirname, '..', path), 'utf8');
 const model = runInNewContext([
   'const window = {}; const location = { search: "" }; const localStorage = { getItem: () => null };',
   'class XMLHttpRequest { open() {} send() {} status = 404; }',
-  file('js/data.js'), file('js/projectLoader.js'), file('js/solarStudy.js'),
+  file('js/houseDataCore.js'), file('js/data.js'), file('js/projectLoader.js'), file('js/solarStudy.js'),
   '({ HouseAuto, SolarStudy, normalizeHouseData, roomContains, config: HOUSE_DATA.config });'
 ].join('\n'), { URLSearchParams, console: { warn() {} } });
 

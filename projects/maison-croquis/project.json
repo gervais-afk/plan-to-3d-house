@@ -18,7 +18,7 @@
     "walkStart": { "x": -3.1, "z": 1.6, "yaw": 0 },
     "walkBounds": { "xMin": -9, "xMax": 9, "zMin": -8, "zMax": 9 },
     "planImage": {
-      "url": "assets/plans/croquis-cote.jpg",
+      "url": "projects/maison-croquis/plan.jpg",
       "pxPerMeter": 35.2,
       "originPx": [368.5, 495],
       "calibrated": true,

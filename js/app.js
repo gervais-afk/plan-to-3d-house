@@ -4,11 +4,29 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+  if (window.PROJECT_ACCESS_FAILED || typeof HOUSE_DATA === 'undefined') return;
+  const portalContext = window.PORTAL_CONTEXT;
+  const invited = ['read', 'comment'].includes(portalContext?.role);
+  if (portalContext?.role) document.getElementById('portal-account').hidden = false;
+  if (invited) {
+    for (const id of ['btn-export-video', 'rg-regen', 'rg-generate-videos']) document.getElementById(id).hidden = true;
+    async function checkSession() {
+      if (document.hidden) return;
+      try {
+        const res = await fetch('api/portal/session', { cache: 'no-store' });
+        if (!res.ok) return;
+        const current = await res.json();
+        if (current.project !== portalContext.project || current.role !== portalContext.role) location.replace('portal.html?session=terminee');
+      } catch { /* renouveler la vérification après une coupure réseau */ }
+    }
+    document.addEventListener('visibilitychange', checkSession);
+    setInterval(checkSession, 20000);
+  }
   const PROJECT_SLUG = window.ACTIVE_PROJECT_SLUG || HOUSE_DATA.meta?.slug || 'villa-serena';
   const projectApi = endpoint => `${endpoint}?project=${encodeURIComponent(PROJECT_SLUG)}`;
   const projectMedia = path => `projects/${encodeURIComponent(PROJECT_SLUG)}/generated/${path}`;
   const projectPicker = document.getElementById('project-picker');
-  if (projectPicker) {
+  if (projectPicker && !invited) {
     fetch('api/projects', { cache: 'no-store' }).then(response => response.ok ? response.json() : []).then(projects => {
       projectPicker.replaceChildren();
       projects.forEach(project => {
@@ -34,10 +52,12 @@ document.addEventListener('DOMContentLoaded', () => {
       location.href = `index.html?project=${encodeURIComponent(projectPicker.value)}`;
     });
   }
+  if (invited && projectPicker) { projectPicker.hidden = true; projectPicker.labels[0].hidden = true; }
   const container = document.getElementById('webgl-container');
   const minimapCanvas = document.getElementById('minimap-canvas');
 
   // Éléments du HUD
+  document.getElementById('hud-wall-height').textContent = `${clientNumber.format(HOUSE_DATA.config.wallHeight)} m`;
   const roomNameEl = document.getElementById('hud-room-name');
   const roomSurfaceEl = document.getElementById('hud-room-surface');
   const roomDescEl = document.getElementById('hud-room-desc');
@@ -115,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
     meta.innerHTML = `<div><div class="rg-card-title">${escapeHtml(shot.label)}</div><div class="rg-card-sub">Vue capturée depuis la maquette Three.js</div></div>`;
     card.appendChild(meta);
 
-    if (!aiImage && shot.ext !== 'png') {
+    if (!invited && !aiImage && shot.ext !== 'png') {
       const modelChoice = document.createElement('select');
       modelChoice.className = 'rg-model-choice';
       modelChoice.setAttribute('aria-label', `Modèle de photoréalisation — ${shot.label}`);
@@ -142,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         event.stopPropagation();
         openLightbox(shot, aiImage, true);
       });
-    } else if (shot.ext !== 'png') {
+    } else if (!invited && shot.ext !== 'png') {
       action.textContent = '✨ Générer le rendu photoréaliste (IA)';
       action.addEventListener('click', event => {
         event.stopPropagation();
@@ -150,8 +170,8 @@ document.addEventListener('DOMContentLoaded', () => {
         photorealize(shot, action, model);
       });
     } else {
-      action.textContent = 'Plan de référence';
-      action.disabled = true;
+      action.textContent = invited ? 'Ouvrir la vue' : 'Plan de référence';
+      action.disabled = !invited;
     }
     card.appendChild(action);
     card.onclick = () => openLightbox(shot, aiImage, false);
@@ -333,7 +353,16 @@ document.addEventListener('DOMContentLoaded', () => {
     grid.innerHTML = '';
     status.textContent = 'Vérification des images réellement disponibles…';
     const media = await loadGalleryMedia(true);
-    const shots3D = studio.results;
+    const shots3D = invited ? studio.getExisting3DShots().filter(shot => media.renders?.includes(shot.url)) : studio.results;
+    if (invited) {
+      const added = new Set(shots3D.map(shot => shot.url));
+      for (const url of media.renders || []) {
+        if (added.has(url)) continue;
+        const name = url.split('/').pop();
+        const id = name.replace(/\.[^.]+$/, '');
+        shots3D.push({ id, label: id.replace(/[-_]/g, ' '), url, ext: name.split('.').pop() });
+      }
+    }
 
     addSection('🏛 Vues de la maquette 3D', 'Captures locales gratuites · les rendus IA disponibles se comparent sur la même carte');
     let withAI = 0;
@@ -343,12 +372,17 @@ document.addEventListener('DOMContentLoaded', () => {
       grid.appendChild(createViewCard(shot, aiImage));
     });
 
+    if (invited) {
+      const extra = media.images.filter(image => !shots3D.some(shot => aiImageForShot(shot, [image])));
+      if (extra.length) addSection('Rendus disponibles', 'Images enregistrées dans ce projet');
+      extra.forEach(image => grid.appendChild(createViewCard({ ...image, url: image.file, ext: image.file.split('.').pop() }, null)));
+    }
     if (media.videos.length) {
       addSection('🎬 Animations vidéo disponibles', 'Seuls les fichiers MP4 présents sont affichés');
       media.videos.forEach(video => grid.appendChild(createVideoCard(video)));
     }
 
-    status.textContent = `${shots3D.length} vues 3D capturées gratuitement · ${withAI} rendu(s) IA disponible(s)${media.videos.length ? ` · ${media.videos.length} vidéo(s)` : ''}`;
+    status.textContent = `${shots3D.length} vues 3D ${invited ? 'enregistrées' : 'capturées gratuitement'} · ${withAI} rendu(s) IA disponible(s)${media.videos.length ? ` · ${media.videos.length} vidéo(s)` : ''}`;
     galleryInitialized = true;
   }
 
@@ -532,7 +566,7 @@ document.addEventListener('DOMContentLoaded', () => {
     hidePhotoOverlay();
     gallery.classList.remove('hidden');
     if (!galleryInitialized) {
-      if (studio.results.length) await buildGallery();
+      if (invited || studio.results.length) await buildGallery();
       else await generateRenders();
     }
   }
@@ -831,6 +865,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function exportCinematicVideo() {
+    if (invited) return;
     if (exportingPDF) { setVideoExportStatus('Patientez jusqu’à la fin de l’export PDF.'); return; }
     if (tourRecording) {
       tourRecording.stopRequested = true;

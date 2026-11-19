@@ -87,3 +87,5 @@
 #variant-fields .client-actions, #feedback-fields .client-actions { justify-content: flex-start; }
 .client-panel-tabs { position: relative; }
 .client-panel-tabs .client-tools { position: static; }
+#portal-account[hidden], #btn-export-video[hidden], #rg-regen[hidden], #rg-generate-videos[hidden] { display: none; }
+#portal-account { text-decoration: none; }
