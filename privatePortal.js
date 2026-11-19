@@ -18,7 +18,8 @@ const viewerFiles = new Set(['js/portal-context.js', 'js/houseDataCore.js', 'js/
   'js/scene.js', 'js/variantState.js', 'js/solarStudy.js', 'js/realism.js', 'js/assets.js', 'js/presentationPlan.js',
   'js/renderStudio.js', 'js/scrollTour.js', 'js/walkController.js', 'js/minimap.js', 'js/solarOptions.js',
   'js/clientFinishes.js', 'js/clientTools.js', 'js/clientVariants.js', 'js/clientFeedback.js', 'js/clientBrochure.js',
-  'js/app.js', 'js/clientDecisions.js', 'css/style.css', 'css/clientTools.css']);
+  'js/app.js', 'js/clientDecisions.js', 'css/style.css', 'css/clientTools.css',
+  'js/home.js', 'css/accueil.css', 'assets/fonts/manrope.woff2', 'assets/fonts/source-serif-4.woff2']);
 const publicFiles = new Set(['portal.html', 'js/portal.js', 'css/portal.css']);
 
 function safePath(relative) {
@@ -188,14 +189,14 @@ function createPortal({ root, projects, send, read, env = process.env, now = Dat
       if (relative === 'portal.html') res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'");
       return { session };
     }
-    if (reading && ['index.html', 'editor.html'].includes(relative)) {
+    if (reading && ['index.html', 'accueil.html', 'editor.html'].includes(relative)) {
       if (!session) {
         res.writeHead(302, { Location: '/portal.html?next=' + encodeURIComponent(urlPath + url.search) }); res.end(); return false;
       }
       if (isClient(session)) {
         const project = url.searchParams.get('project');
         if (relative === 'editor.html' || (project && project !== session.project)) { deny(res, session); return false; }
-        if (!project) { res.writeHead(302, { Location: `/index.html?project=${session.project}` }); res.end(); return false; }
+        if (!project) { res.writeHead(302, { Location: `/${relative}?project=${session.project}` }); res.end(); return false; }
       }
       if (session.role === 'architect' && relative === 'index.html' && defaultProject && !url.searchParams.has('project')) {
         res.writeHead(302, { Location: `/index.html?project=${defaultProject}` }); res.end(); return false;

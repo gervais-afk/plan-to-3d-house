@@ -37,6 +37,10 @@ test('Recette HTTPS : rôles, avis, validation immuable et rendu refusé après 
   await openInvite(reader, 'read');
   const invitation = await openInvite(commenter, 'comment');
   assert.equal((await reader.request(`/index.html?project=${a}`)).status, 200);
+  assert.equal((await reader.request(`/accueil.html?project=${b}`)).status, 403);
+  const font = await reader.request('/assets/fonts/source-serif-4.woff2');
+  assert.equal(font.status, 200);
+  assert.equal(font.headers['content-type'], 'font/woff2');
   assert.equal((await reader.request('/js/clientDecisions.js')).status, 200);
   const warm = await commenter.request(render(a));
   assert.equal(warm.status, 200);

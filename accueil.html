@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#eeede6">
+  <meta name="description" content="Le dossier architectural, du plan à la visite 3D.">
+  <title>Plan to 3D — Dossier architectural</title>
+  <link rel="stylesheet" href="css/accueil.css">
+  <script src="js/portal-context.js" defer></script>
+  <script src="js/houseDataCore.js" defer></script>
+  <script src="js/home.js" defer></script>
+</head>
+<body>
+  <a href="#contenu" class="skip">Aller au projet</a>
+  <header class="masthead shell">
+    <a class="brand" id="home-brand" href="accueil.html" aria-label="Plan to 3D, accueil">
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 36 36" fill="none"><path d="M6 28V8h24v20H6Zm0-11h14V8m0 9v11m0-5h10" stroke="currentColor" stroke-width="1.6"/><path d="M9 11h8v3H9zm14 15h4" stroke="currentColor" stroke-width="1.1"/></svg></span>
+      <span>PLAN<span class="brand-slash">/</span>3D<small>ATELIER NUMÉRIQUE</small></span>
+    </a>
+    <nav class="masthead-links" aria-label="Navigation principale">
+      <div class="project-picker" id="home-picker" hidden>
+        <label for="home-project">Projet</label>
+        <select id="home-project"></select>
+      </div>
+      <a class="nav-link" id="home-account" href="portal.html" hidden>Espace privé</a>
+      <a class="nav-link" id="home-editor" href="editor.html" hidden>Éditeur <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+
+  <main id="contenu" class="shell">
+    <div class="folio" aria-hidden="true"><span><i></i> DOSSIER ARCHITECTURAL</span><span>PLAN / VOLUME / MATIÈRE</span></div>
+    <section class="cover" aria-labelledby="cover-title" id="home-cover" tabindex="-1">
+      <div class="cover-art" aria-hidden="true"><div id="cover-drawing" class="cover-drawing"></div><img id="cover-image" alt="" fetchpriority="high" hidden></div>
+      <div class="cover-shade" aria-hidden="true"></div>
+      <span class="registration registration-top" aria-hidden="true"></span><span class="registration registration-bottom" aria-hidden="true"></span>
+      <div class="cover-copy">
+        <p class="plate-label"><span></span> PRÉSENTATION DU PROJET</p>
+        <h1 id="cover-title">L’architecture<br>en volume.</h1>
+        <p class="cover-description" id="cover-description">Du dessin à l’espace : découvrez le projet à votre rythme dans la maquette interactive.</p>
+        <div class="cover-actions">
+          <a id="cover-enter" class="primary" href="index.html">Entrer dans la maquette <span aria-hidden="true">↗</span></a>
+        </div>
+      </div>
+      <div class="cover-index" id="cover-index" hidden aria-label="Navigation entre les vues">
+        <button id="cover-prev" type="button" aria-label="Vue précédente">←</button>
+        <span id="cover-number">01 / 01</span>
+        <button id="cover-next" type="button" aria-label="Vue suivante">→</button>
+      </div>
+      <div class="cover-caption"><span class="caption-key" aria-hidden="true">FIG.</span><span id="cover-caption" role="status">PLAN DE PROJET</span></div>
+    </section>
+    <p id="home-status" class="load-status" role="status"></p>
+
+    <div class="dossier" id="project-details">
+      <section class="dossier-intro" aria-labelledby="dossier-title">
+        <p class="section-kicker"><span>01</span> / LE DOSSIER</p>
+        <h2 id="dossier-title">Du trait<br> à l’espace.</h2>
+        <dl class="project-facts" id="project-facts" hidden></dl>
+      </section>
+      <section class="view-section" aria-labelledby="view-title">
+        <div class="views-heading"><p class="section-kicker"><span>02</span> / LES VUES</p><a id="cover-gallery" class="more-link" href="index.html?galerie=1">Toute la galerie <span aria-hidden="true">↗</span></a></div>
+        <h2 id="view-title" class="sr-only">Aperçus du projet</h2>
+        <div id="cover-views" class="views-grid"></div>
+        <p id="cover-empty" class="empty-views" hidden>Aucun rendu publié. Explorez le plan et les volumes dans la maquette.</p>
+      </section>
+    </div>
+  </main>
+  <footer class="footer shell"><span>PLAN / 3D</span><span>PRÉSENTATION ARCHITECTURALE INTERACTIVE</span></footer>
+</body>
+</html>

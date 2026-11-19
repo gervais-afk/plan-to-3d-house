@@ -194,3 +194,9 @@ La recette de régression locale (`node --test tests/staging-https.test.cjs`, Op
 - **Éditeur** : **Enregistrer** confirme ou explique le résultat côté serveur sans remplacer la sauvegarde par un téléchargement. **Exporter le JSON** permet de récupérer volontairement une copie (sans intégrer l’image du plan). L’API valide la structure principale et remplace le fichier du projet de façon atomique.
 
 La visite guidée et les médias sont navigables sans souris ; la manipulation graphique du plan dans l’éditeur reste pour l’instant un outil de dessin principalement prévu pour souris ou pavé tactile.
+
+### Accueil du dossier
+
+Avec `node serve.js`, `/` ouvre la présentation du projet en mode démo. La maquette elle-même reste sur `index.html` ; les anciens liens de visite et les fragments partagés restent valides. En mode privé, la présentation du projet est accessible depuis **Options → Présentation du projet**, sous les mêmes droits que sa maquette.
+
+La couverture lit le nom, la description et la géométrie de `project.json`. Elle utilise les premières images publiées dans le manifeste de la galerie, ou les captures de maquette disponibles. Sans rendu, elle dessine un aperçu du plan en SVG sans lancer Three.js. Pour optimiser un rendu de couverture, placez un WebP facultatif à côté du fichier publié : `facade.jpg` → `facade-apercu.webp` dans `generated/images/`. Les polices locales Manrope et Source Serif 4 sont fournies sous leurs licences OFL respectives dans `assets/fonts/`.

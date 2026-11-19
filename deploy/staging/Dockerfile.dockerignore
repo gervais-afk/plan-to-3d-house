@@ -4,6 +4,11 @@
 !feedbackStore.js
 !decisionStore.js
 !index.html
+!accueil.html
+!assets/
+!assets/fonts/
+!assets/fonts/*.woff2
+!assets/fonts/*.LICENSE.txt
 !editor.html
 !portal.html
 !js/

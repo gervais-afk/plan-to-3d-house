@@ -14,7 +14,7 @@ const portal = createPortal({ root: ROOT, projects: PROJECTS, send: sendJson, re
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
-  '.mp4': 'video/mp4', '.webm': 'video/webm',
+  '.mp4': 'video/mp4', '.webm': 'video/webm', '.woff2': 'font/woff2',
   '.hdr': 'application/octet-stream', '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.bin': 'application/octet-stream'
 };
 
@@ -232,14 +232,18 @@ function galleryMedia(res, url) {
       const name = item.file.slice(imagePrefix.length);
       return item.file.startsWith(imagePrefix) && name === path.basename(name) && /^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp)$/i.test(name)
         && fs.existsSync(path.join(media.images, name)) && fs.statSync(path.join(media.images, name)).isFile();
-    }).map(item => ({
-      id: String(item.id || ''), type: 'image', file: item.file,
-      reference: typeof item.reference === 'string' && item.reference.startsWith(renderPrefix)
-        && /^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp)$/i.test(item.reference.slice(renderPrefix.length)) ? item.reference : null,
-      room: item.room || null, label: item.label || item.id || 'Image générée',
-      generator: item.generator || '', prompt: item.prompt || '', notes: item.notes || '',
-      width: item.width || null, height: item.height || null
-    }));
+    }).map(item => {
+      const preview = path.parse(item.file).name + '-apercu.webp';
+      return {
+        id: String(item.id || ''), type: 'image', file: item.file,
+        preview: fs.statSync(path.join(media.images, preview), { throwIfNoEntry: false })?.isFile() ? imagePrefix + preview : null,
+        reference: typeof item.reference === 'string' && item.reference.startsWith(renderPrefix)
+          && /^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp)$/i.test(item.reference.slice(renderPrefix.length)) ? item.reference : null,
+        room: item.room || null, label: item.label || item.id || 'Image générée',
+        generator: item.generator || '', prompt: item.prompt || '', notes: item.notes || '',
+        width: item.width || null, height: item.height || null
+      };
+    });
 
   let videoFiles = [];
   try { videoFiles = fs.readdirSync(media.videos, { withFileTypes: true }).filter(entry => entry.isFile() && /\.(?:mp4|webm)$/i.test(entry.name)); } catch (e) { /* pas de dossier vidéo */ }
@@ -295,12 +299,13 @@ function readBody(req, res, limit, cb) {
 
 function listProjects(res, only) {
   fs.mkdirSync(PROJECTS, { recursive: true });
+  const defaultSlug = portal.enabled ? process.env.PORTAL_DEFAULT_PROJECT || projectSlug() : projectSlug();
   const items = fs.readdirSync(PROJECTS, { withFileTypes: true })
     .filter(d => (!only || d.name === only) && d.isDirectory() && /^[a-z0-9-]{1,60}$/i.test(d.name) && fs.existsSync(path.join(PROJECTS, d.name, 'project.json')))
     .map(d => {
       let name = d.name;
       try { name = JSON.parse(fs.readFileSync(path.join(PROJECTS, d.name, 'project.json'), 'utf8')).meta.name || d.name; } catch (e) { /* nom par défaut */ }
-      return { slug: d.name, name, updated: fs.statSync(path.join(PROJECTS, d.name, 'project.json')).mtimeMs };
+      return { slug: d.name, name, default: d.name === defaultSlug, updated: fs.statSync(path.join(PROJECTS, d.name, 'project.json')).mtimeMs };
     })
     .sort((a, b) => b.updated - a.updated);
   res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -689,7 +694,9 @@ http.createServer((req, res) => {
     requestedPath = decodeURIComponent(requestUrl.pathname);
     if (/[\u0000-\u001f\u007f]/.test(requestedPath)) throw new Error('Chemin invalide');
   } catch { res.writeHead(400); return res.end('URL invalide'); }
-  const file = path.resolve(ROOT, '.' + (requestedPath === '/' ? '/index.html' : requestedPath));
+  // Les anciens liens racine avec ?project= et l’entrée privée restent des liens de visite.
+  const entry = portal.enabled || requestUrl.searchParams.has('project') ? '/index.html' : '/accueil.html';
+  const file = path.resolve(ROOT, '.' + (requestedPath === '/' ? entry : requestedPath));
   const nativeRelative = path.relative(ROOT, file);
   if (!nativeRelative || nativeRelative.startsWith('..' + path.sep) || nativeRelative === '..' || path.isAbsolute(nativeRelative)) { res.writeHead(403); return res.end(); }
   const relative = nativeRelative.split(path.sep).join('/');
@@ -748,4 +755,4 @@ http.createServer((req, res) => {
       }
     });
   });
-}).listen(PORT, process.env.HOST || '127.0.0.1', () => console.log(`Plan de maison animé : http://localhost:${PORT}/index.html`));
+}).listen(PORT, process.env.HOST || '127.0.0.1', () => console.log(`Plan de maison animé : http://localhost:${PORT}/`));

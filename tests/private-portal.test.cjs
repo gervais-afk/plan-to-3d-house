@@ -36,7 +36,7 @@ async function serve(root, variables = {}) {
 }
 
 function fixture(root) {
-  for (const file of ['serve.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'portal.html', 'index.html', 'editor.html']) fs.copyFileSync(path.join(source, file), path.join(root, file));
+  for (const file of ['serve.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'portal.html', 'accueil.html', 'index.html', 'editor.html']) fs.copyFileSync(path.join(source, file), path.join(root, file));
   fs.mkdirSync(path.join(root, 'js'));
   for (const file of ['variantState.js', 'data.js']) fs.copyFileSync(path.join(source, 'js', file), path.join(root, 'js', file));
   for (const project of ['plan-a', 'plan-b']) {
@@ -70,6 +70,8 @@ test('Mode démo conservé sans exposer les fichiers cachés', async t => {
   fs.writeFileSync(path.join(root, '.env'), 'TEST=NON_PUBLIC');
   const server = await serve(root);
   t.after(server.close);
+  assert.match(await (await server.request('/')).text(), /id="home-cover"/);
+  assert.match(await (await server.request('/?project=plan-a')).text(), /id="webgl-container"/);
   assert.equal((await server.request('/index.html')).status, 200);
   assert.equal((await server.request('/projects/plan-a/project.json')).status, 200);
   assert.equal((await server.request('/api/portal/session')).status, 404);
@@ -104,8 +106,9 @@ test('Invitations : portée projet, rôles, accès direct, expiration et révoca
   const a = '/projects/plan-a', b = '/projects/plan-b';
   const render = '/generated/renders/facade.jpg';
   const protectedPaths = [b + '/project.json', b + '/plan.jpg', b + render, '/projects/plan-a/%2e%2e%2fplan-b/plan.jpg',
-    '/index.html?project=plan-b', '/editor.html', '/js/editor.js', '/api/gallery/media?project=plan-b', '/api/ai/status', '/assets/plans/historique.jpg'];
+    '/index.html?project=plan-b', '/accueil.html?project=plan-b', '/editor.html', '/js/editor.js', '/api/gallery/media?project=plan-b', '/api/ai/status', '/assets/plans/historique.jpg'];
   assert.match((await guest.request('/index.html')).headers.get('location'), /^\/portal\.html\?next=/);
+  assert.equal((await guest.request('/accueil.html?project=plan-a')).status, 302);
   assert.equal((await guest.request(a + render)).status, 401);
   assert.equal((await guest.request('/js/data.js')).status, 401);
   assert.equal((await guest.api('accept', { token: expiredToken })).status, 403);
@@ -126,6 +129,9 @@ test('Invitations : portée projet, rôles, accès direct, expiration et révoca
   const accepted = await commenter.api('accept', { token: comment.token });
   assert.equal((await accepted.json()).role, 'comment');
   assert.equal((await reader.request('/index.html?project=plan-a')).status, 200);
+  const cover = await reader.request('/accueil.html?project=plan-a');
+  assert.equal(cover.status, 200);
+  assert.equal(cover.headers.get('cache-control'), 'private, no-store');
   assert.equal((await reader.request(a + '/project.json')).status, 200);
   const range = await reader.request(a + render, { headers: { Range: 'bytes=0-4' } });
   assert.equal(range.status, 206);

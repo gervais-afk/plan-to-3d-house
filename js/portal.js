@@ -35,8 +35,9 @@
     try { url = new URL(params.get('next') || '', location.origin); } catch { return null; }
     if (!params.has('next') || url.origin !== location.origin) return null;
     if (session.role === 'architect' && url.pathname === '/editor.html') return url.pathname + url.search + location.hash;
-    if (!['/', '/index.html'].includes(url.pathname)) return null;
+    if (!['/', '/index.html', '/accueil.html'].includes(url.pathname)) return null;
     if (session.project && url.searchParams.get('project') && url.searchParams.get('project') !== session.project) return null;
+    if (session.project && url.pathname === '/accueil.html') return `/accueil.html?project=${encodeURIComponent(session.project)}`;
     return (session.project ? visit(session.project) : url.pathname + url.search) + location.hash;
   }
 

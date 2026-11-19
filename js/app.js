@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(checkSession, 20000);
   }
   const PROJECT_SLUG = window.ACTIVE_PROJECT_SLUG || HOUSE_DATA.meta?.slug || 'villa-serena';
+  document.getElementById('viewer-home').href = `accueil.html?project=${encodeURIComponent(PROJECT_SLUG)}`;
   const projectApi = endpoint => `${endpoint}?project=${encodeURIComponent(PROJECT_SLUG)}`;
   const projectMedia = path => `projects/${encodeURIComponent(PROJECT_SLUG)}/generated/${path}`;
   const projectPicker = document.getElementById('project-picker');
@@ -1245,4 +1246,5 @@ document.addEventListener('DOMContentLoaded', () => {
   if (share.variant) variants.apply(share.variant);
   if (share.invalid) { document.getElementById('client-variants').open = true; variants.status.textContent = 'Lien partagé incomplet ou incompatible avec ce projet.'; }
   animate();
+  if (new URLSearchParams(location.search).get('galerie') === '1') void openGallery();
 });
