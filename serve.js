@@ -2,6 +2,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const feedbackStore = require('./feedbackStore');
 
 const PORT = Number(process.env.PORT) || 8000;
 const ROOT = __dirname;
@@ -559,9 +560,28 @@ function videoStatus(req, res, url) {
   })().catch(error => sendJson(res, 502, { error: error.message }));
 }
 
+function clientFeedback(req, res, url) {
+  const project = url.searchParams.get('project');
+  const channel = req.headers['x-feedback-channel'];
+  const respondError = error => sendJson(res, error.status || 500, { error: error.status ? error.message : 'Stockage des retours indisponible.' });
+  if (req.method === 'GET') {
+    try { return sendJson(res, 200, { notes: feedbackStore.open(PROJECTS, project, channel).notes }); }
+    catch (error) { return respondError(error); }
+  }
+  if (req.method !== 'POST') return sendJson(res, 405, { error: 'Méthode non autorisée.' });
+  if (req.headers['content-type']?.split(';')[0] !== 'application/json') return sendJson(res, 415, { error: 'JSON requis.' });
+  return readBody(req, res, 8192, data => {
+    try { return sendJson(res, 201, { item: feedbackStore.append(PROJECTS, project, channel, data) }); }
+    catch (error) { return respondError(error); }
+  });
+}
+
 http.createServer((req, res) => {
   const requestUrl = new URL(req.url, 'http://localhost');
-  const urlPath = decodeURIComponent(requestUrl.pathname);
+  let urlPath;
+  try { urlPath = decodeURIComponent(requestUrl.pathname); }
+  catch { res.writeHead(400); return res.end('URL invalide'); }
+  if (urlPath === '/api/client-feedback') return clientFeedback(req, res, requestUrl);
   if (req.method === 'GET' && urlPath === '/api/ai/status') return aiStatus(res);
   if (req.method === 'POST' && urlPath === '/api/ai/chat') return aiChat(req, res);
   if (req.method === 'POST' && urlPath === '/api/ai/images') return aiImage(req, res);
@@ -579,6 +599,7 @@ http.createServer((req, res) => {
   if (req.method === 'POST' && urlPath === '/api/save-project') return saveProject(req, res);
   const file = path.resolve(ROOT, '.' + (urlPath === '/' ? '/index.html' : urlPath));
   const relative = path.relative(ROOT, file);
+  if (relative.split(path.sep).some(part => part.toLowerCase() === feedbackStore.directoryName)) { res.writeHead(404); return res.end(); }
   if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) { res.writeHead(403); return res.end(); }
   fs.stat(file, (err, stat) => {
     if (err || !stat.isFile()) { res.writeHead(404); return res.end('Not found'); }

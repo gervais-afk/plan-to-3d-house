@@ -15,6 +15,7 @@ class ClientTools {
     this.hotspotToggle = document.getElementById('client-hotspots');
     this.hour = document.getElementById('client-hour');
     this.hourOutput = document.getElementById('client-hour-value');
+    this.solarOptions = new SolarOptions(this);
     document.querySelector('#client-compass span').style.transform = `rotate(${hs.northDegrees}deg)`;
     this.finishes = new ClientFinishes(hs);
     this.canvas = hs.renderer.domElement;
@@ -51,6 +52,7 @@ class ClientTools {
     const label = SolarStudy.format(this.hs.solarTarget);
     this.hourOutput.value = label;
     this.hour.setAttribute('aria-valuetext', label);
+    this.solarOptions.updateReading();
     document.getElementById('btn-night').textContent = this.hs.nightTarget > 0.5 ? '☾ Soir' : '☀ Jour';
     this.onLiveView();
   }
@@ -163,8 +165,7 @@ class ClientTools {
     return meshes.filter(mesh => mesh.isMesh && mesh.visible && mesh.material.visible && mesh.material.opacity > 0.1);
   }
 
-  pick(event) {
-    if (!this.measuring || !this.ready() || this.fields.disabled || event.button !== 0) return;
+  pickSurface(event) {
     const rect = this.canvas.getBoundingClientRect();
     this.ndc.set((event.clientX - rect.left) * 2 / rect.width - 1, 1 - (event.clientY - rect.top) * 2 / rect.height);
     this.hs.scene.updateMatrixWorld(true);
@@ -172,7 +173,13 @@ class ClientTools {
     this.ray.far = this.hs.camera.far;
     this.ray.setFromCamera(this.ndc, this.hs.camera);
     const hit = this.ray.intersectObjects(this.blockers(true), false).find(h => !this.clipped(h.point));
-    if (!hit || !this.surfaceSet.has(hit.object)) {
+    return hit && this.surfaceSet.has(hit.object) ? hit : null;
+  }
+
+  pick(event) {
+    if (!this.measuring || !this.ready() || this.fields.disabled || event.button !== 0) return;
+    const hit = this.pickSurface(event);
+    if (!hit) {
       this.syncMeasureStatus('Aucun mur ni sol visible à cet endroit. Choisissez un autre point.');
       return;
     }

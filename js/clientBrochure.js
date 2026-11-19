@@ -105,7 +105,7 @@ const ClientBrochure = (() => {
     }
   }
 
-  function sitePlan(doc, data, x, y, w, h) {
+  function sitePlan(doc, data, x, y, w, h, northDegrees) {
     const bb = HouseAuto.bbox(data), ex = data.exterior || {};
     const rooms = data.rooms.filter(r => !r.level), walls = data.walls.filter(wall => !wall.level);
     const dims = (data.dimensions || []).filter(d => !Number(d.level) && d.from?.length >= 3 && d.to?.length >= 3);
@@ -168,7 +168,7 @@ const ClientBrochure = (() => {
       [[a, b], [c, d]].forEach(([u, v]) => doc.line(u - nx, v - ny, u + nx, v + ny));
       text(doc, `${clientNumber.format(length / scale)} m`, (a + c) / 2 - nx * 1.5, (b + d) / 2 - ny * 1.5, 6.5, { align: 'center', color: muted });
     });
-    const north = HouseAuto.northAngle(data) * Math.PI / 180;
+    const north = (northDegrees ?? HouseAuto.northAngle(data)) * Math.PI / 180;
     const cx = x + w - 12, cy = y + 13, ux = Math.sin(north), uz = -Math.cos(north);
     doc.setDrawColor(ink).setLineWidth(0.4).circle(cx, cy, 5).line(cx - ux * 3, cy - uz * 3, cx + ux * 4, cy + uz * 4);
     doc.setFillColor(ink).triangle(cx + ux * 4, cy + uz * 4, cx + ux - uz * 1.2, cy + uz + ux * 1.2, cx + ux + uz * 1.2, cy + uz - ux * 1.2, 'F');
@@ -179,18 +179,29 @@ const ClientBrochure = (() => {
     text(doc, `${Number(step.toPrecision(2))} m`, x + 5, y + h - 2.5, 6.5);
   }
 
-  async function exportPDF(data, studio) {
+  async function exportPDF(data, studio, variant = null, prepare = () => {}) {
     const JsPDF = await loadJsPDF();
+    const restore = prepare();
+    try { build(JsPDF, data, studio, variant); }
+    finally { restore?.(); }
+  }
+
+  function build(JsPDF, data, studio, variant) {
     const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: true });
     const title = data.meta?.name || 'Projet architectural';
-    doc.setProperties({ title, subject: 'Brochure de présentation architecturale' });
+    const footerTitle = [title, variant?.name].filter(Boolean).join(' · ');
+    doc.setProperties({ title: footerTitle, subject: 'Brochure de présentation architecturale' });
     const shots = selectShots(data, studio.hs);
-    const capture = (shot, w, h) => studio.capture(shot, w, h, 1, { clean: true });
-    chrome(doc, title, 1);
-    text(doc, 'DOSSIER DE PRÉSENTATION', margin, 17, 9, { bold: true, color: muted });
+    const capture = (shot, w, h) => studio.capture(shot, w, h, 1, { clean: true, solar: variant });
+    chrome(doc, footerTitle, 1);
+    text(doc, variant ? `VARIANTE · ${variant.name}` : 'DOSSIER DE PRÉSENTATION', margin, 17, 9, { bold: true, color: muted, maxWidth: width });
     text(doc, title, margin, 31, 29, { bold: true, maxWidth: width });
     const subtitle = data.meta?.subtitle;
-    if (subtitle) text(doc, subtitle, margin, 39, 9, { color: muted, maxWidth: width });
+    if (variant) {
+      const label = key => Array.from(document.getElementById(`client-${key}`).options).find(o => o.value === variant[key])?.textContent || 'Du projet';
+      const finishes = `${label('floor')} / ${label('facade')} · ${SolarStudy.format(variant.hour)}${variant.solar ? ` · ${variant.solar.date}` : ''}`;
+      text(doc, finishes, margin, 39, 8.5, { color: muted, maxWidth: width });
+    } else if (subtitle) text(doc, subtitle, margin, 39, 9, { color: muted, maxWidth: width });
     doc.addImage(capture(shots.facade, 1400, 645), 'JPEG', margin, 44, width, 82);
     const total = data.rooms.reduce((sum, room) => sum + room.area, 0);
     text(doc, `${clientNumber.format(data.totals.habitable)} m² habitables`, margin, 138, 13, { bold: true });
@@ -199,11 +210,11 @@ const ClientBrochure = (() => {
     if (!data.rooms.length) text(doc, 'Aucune pièce renseignée.', margin, 158);
 
     doc.addPage();
-    chrome(doc, title, 2);
+    chrome(doc, footerTitle, 2);
     text(doc, 'PLAN & ESPACES', margin, 19, 9, { bold: true, color: muted });
     text(doc, 'Plan de masse', margin, 33, 24, { bold: true });
     text(doc, 'RDC et abords modélisés · cotes indicatives de la maquette', margin, 41, 9, { color: muted });
-    sitePlan(doc, data, margin, 47, width, 131);
+    sitePlan(doc, data, margin, 47, width, 131, variant?.solar?.north);
     text(doc, 'Vues intérieures', margin, 195, 17, { bold: true });
     const photoW = (width - 5) / 2, photoH = 57;
     for (let i = 0; i < 2; i++) {
@@ -217,7 +228,8 @@ const ClientBrochure = (() => {
       }
     }
     const slug = (window.ACTIVE_PROJECT_SLUG || data.meta?.slug || 'projet').replace(/[^a-z0-9-]/gi, '-');
-    doc.save(`${slug}-brochure.pdf`);
+    const suffix = variant?.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    doc.save(`${slug}${suffix ? '-' + suffix : ''}-brochure.pdf`);
   }
   return { exportPDF };
 })();

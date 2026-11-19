@@ -431,8 +431,8 @@
 
   P.setSolarHour = function (hour) {
     if (!Number.isFinite(hour)) return;
-    this.solarTarget = SolarStudy.clamp(hour);
-    this.nightTarget = SolarStudy.sample(this.solarTarget).dusk;
+    this.solarTarget = SolarStudy.clampHour(hour, this.solarGeo);
+    this.nightTarget = SolarStudy.position(this.solarTarget, this.northDegrees, this.solarGeo).dusk;
     this._atmoDirty = true;
   };
 
@@ -446,7 +446,7 @@
 
   P.applyAtmosphere = function () {
     const k = smooth(0.4, 1.0, this.elevationProgress);
-    const solar = this.solarHour == null ? null : SolarStudy.sample(this.solarHour, this.northDegrees);
+    const solar = this.solarHour == null ? null : SolarStudy.position(this.solarHour, this.northDegrees, this.solarGeo);
     const n = solar ? solar.dusk : this.night;
     if (solar) {
       this.sunLight.target.position.copy(this.sunCenter);

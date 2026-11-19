@@ -11,11 +11,11 @@ class RenderStudio {
     this.generating = null;
   }
 
-  capture(shot, width = 1920, height = 1080, ss = 1.5, { clean = false } = {}) {
+  capture(shot, width = 1920, height = 1080, ss = 1.5, { clean = false, solar = null } = {}) {
     const hs = this.hs, r = hs.renderer, cam = hs.camera;
     const saved = {
       pos: cam.position.clone(), quat: cam.quaternion.clone(), fov: cam.fov, aspect: cam.aspect,
-      night: hs.night, nightTarget: hs.nightTarget, solarHour: hs.solarHour,
+      night: hs.night, nightTarget: hs.nightTarget, solarHour: hs.solarHour, solarGeo: hs.solarGeo,
       elev: hs.elevationProgress, quality: hs.quality, ceilings: hs.ceilingsVisible,
       ratio: r.getPixelRatio(), size: r.getSize(new THREE.Vector2()), bg: hs.scene.background,
       section: hs.sectionEnabled, exploded: hs.exploded, explodedTarget: hs.explodedTarget,
@@ -31,7 +31,8 @@ class RenderStudio {
       }
       hs.setElevation(1);
       if (clean) hs.updateTechnicalAnimations();
-      hs.solarHour = clean ? SolarStudy.day : null;
+      hs.solarHour = clean ? solar?.hour ?? SolarStudy.day : null;
+      hs.solarGeo = solar?.solar || null;
       hs.night = hs.nightTarget = shot.night ? 1 : 0;
       cam.position.fromArray(shot.pos);
       cam.lookAt(new THREE.Vector3().fromArray(shot.look));
@@ -40,7 +41,7 @@ class RenderStudio {
       cam.updateProjectionMatrix();
       hs.setCeilingsVisible(shot.interior ?? (Boolean(shot.room) || cam.position.y < 2.7));
       hs.applyAtmosphere();
-      hs.scene.background = this.skyTexture(!!shot.night);
+      hs.scene.background = this.skyTexture(solar ? SolarStudy.position(solar.hour, hs.northDegrees, solar.solar).dusk > 0.5 : !!shot.night);
       hs.inkEdgeMaterial.visible = false;
       if (hs.furnEdgeMaterial) hs.furnEdgeMaterial.visible = false;
 
@@ -65,6 +66,7 @@ class RenderStudio {
       hs.night = saved.night;
       hs.nightTarget = saved.nightTarget;
       hs.solarHour = saved.solarHour;
+      hs.solarGeo = saved.solarGeo;
       cam.position.copy(saved.pos);
       cam.quaternion.copy(saved.quat);
       cam.fov = saved.fov;

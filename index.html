@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
+  <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Villa Serena — Du Plan 2D à la Maison 3D Interactive</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -67,40 +68,97 @@
         <div class="btn-row">
           <button id="btn-export-video" class="btn-toggle btn-small" title="Enregistrer gratuitement le parcours complet avec MediaRecorder">🎥 Exporter l’animation vidéo</button>
         </div>
-        <details id="client-tools" class="client-tools">
-          <summary class="btn-toggle btn-small">🎨 Finitions &amp; outils</summary>
-          <fieldset id="client-tool-fields" class="client-tool-fields">
-            <legend class="sr-only">Outils de visite</legend>
-            <div class="client-finish-row">
-              <label>Sols intérieurs
-                <select id="client-floor">
-                  <option value="">Du projet</option><option value="oak">Parquet chêne clair</option>
-                  <option value="tile">Carrelage gris anthracite</option><option value="concrete">Béton ciré</option>
-                </select>
-              </label>
-              <label>Façades extérieures
-                <select id="client-facade">
-                  <option value="">Du projet</option><option value="plaster">Crépi blanc</option>
-                  <option value="timber">Bardage bois contemporain</option><option value="stone">Parement pierre</option>
-                </select>
-              </label>
-            </div>
-            <div class="client-sun">
-              <label for="client-hour"><span>Ensoleillement indicatif</span><output id="client-hour-value" for="client-hour">13h00</output></label>
-              <div><input id="client-hour" type="range" min="7" max="20" step="0.25" value="13">
-                <span class="client-compass" id="client-compass" title="Nord sur le plan, vu du dessus">N <span aria-hidden="true">↑</span></span>
+        <div class="btn-row client-panel-tabs">
+          <details id="client-tools" class="client-tools">
+            <summary class="btn-toggle btn-small">🎨 Finitions &amp; outils</summary>
+            <fieldset id="client-tool-fields" class="client-tool-fields">
+              <legend class="sr-only">Outils de visite</legend>
+              <div class="client-finish-row">
+                <label>Sols intérieurs
+                  <select id="client-floor">
+                    <option value="">Du projet</option><option value="oak">Parquet chêne clair</option>
+                    <option value="tile">Carrelage gris anthracite</option><option value="concrete">Béton ciré</option>
+                  </select>
+                </label>
+                <label>Façades extérieures
+                  <select id="client-facade">
+                    <option value="">Du projet</option><option value="plaster">Crépi blanc</option>
+                    <option value="timber">Bardage bois contemporain</option><option value="stone">Parement pierre</option>
+                  </select>
+                </label>
               </div>
-              <div class="client-hour-scale" aria-hidden="true"><span>07h</span><span>13h</span><span>20h</span></div>
-            </div>
-            <div class="btn-row client-actions">
-              <button type="button" id="client-measure" class="btn-toggle btn-small" aria-pressed="false" title="Touche M">📐 Mesurer</button>
-              <button type="button" id="client-clear" class="btn-toggle btn-small" disabled>Effacer les cotes</button>
-              <label class="client-check"><input id="client-hotspots" type="checkbox" checked> Pièces</label>
-            </div>
-            <button type="button" id="client-pdf" class="btn-toggle btn-small">📄 Exporter la brochure PDF</button>
-            <span id="client-pdf-status" role="status"></span>
-          </fieldset>
-        </details>
+              <div class="client-sun">
+                <label for="client-hour"><span>Ensoleillement indicatif</span><output id="client-hour-value" for="client-hour">13h00</output></label>
+                <div><input id="client-hour" type="range" min="7" max="20" step="0.25" value="13">
+                  <span class="client-compass" id="client-compass" title="Nord sur le plan, vu du dessus">N <span aria-hidden="true">↑</span></span>
+                </div>
+                <div id="client-hour-scale" class="client-hour-scale">07h00 — simulation indicative — 20h00</div>
+                <label class="client-check"><input id="solar-geo" type="checkbox"> Étude par lieu et date</label>
+                <div id="solar-inputs" class="solar-inputs" hidden>
+                  <label>Latitude (°)<input id="solar-lat" type="number" min="-90" max="90" step="any" placeholder="Nord +"></label>
+                  <label>Longitude (°)<input id="solar-lon" type="number" min="-180" max="180" step="any" placeholder="Est +"></label>
+                  <label>Date locale<input id="solar-date" type="date"></label>
+                  <label>Décalage UTC (h)<input id="solar-utc" type="number" min="-12" max="14" step="any"></label>
+                  <label>Nord sur le plan (°)<input id="solar-north" type="number" min="0" max="360" step="any"></label>
+                  <output id="solar-result" aria-live="polite"></output>
+                </div>
+              </div>
+              <div class="btn-row client-actions">
+                <button type="button" id="client-measure" class="btn-toggle btn-small" aria-pressed="false" title="Touche M">📐 Mesurer</button>
+                <button type="button" id="client-clear" class="btn-toggle btn-small" disabled>Effacer les cotes</button>
+                <label class="client-check"><input id="client-hotspots" type="checkbox" checked> Pièces</label>
+              </div>
+              <button type="button" id="client-pdf" class="btn-toggle btn-small">📄 Exporter la brochure PDF</button>
+              <span id="client-pdf-status" role="status"></span>
+            </fieldset>
+          </details>
+          <details id="client-variants" class="client-tools">
+            <summary class="btn-toggle btn-small">Variantes &amp; partage</summary>
+            <fieldset id="variant-fields" class="client-tool-fields">
+              <legend class="sr-only">Variantes et partage</legend>
+              <label class="client-field">Nom de la variante <input id="variant-name" maxlength="60" placeholder="Ex. Façade bois"></label>
+              <div class="btn-row client-actions">
+                <button type="button" id="variant-save" class="btn-toggle btn-small">Enregistrer</button>
+                <button type="button" id="variant-link" class="btn-toggle btn-small">Copier le lien</button>
+              </div>
+              <input id="variant-url" type="url" aria-label="Lien à copier" readonly hidden>
+              <div class="client-finish-row">
+                <label>Variante A <select id="variant-a"></select></label>
+                <label>Variante B <select id="variant-b"></select></label>
+              </div>
+              <div class="btn-row client-actions">
+                <button type="button" id="variant-load" class="btn-toggle btn-small">Ouvrir A</button>
+                <button type="button" id="variant-delete" class="btn-toggle btn-small">Supprimer A</button>
+                <button type="button" id="variant-compare" class="btn-toggle btn-small" aria-pressed="false">Comparer A/B</button>
+                <button type="button" id="variant-pdf" class="btn-toggle btn-small">Exporter la variante</button>
+              </div>
+              <span id="variant-status" role="status"></span>
+            </fieldset>
+          </details>
+          <details id="client-feedback" class="client-tools">
+            <summary class="btn-toggle btn-small">📌 Retours client</summary>
+            <fieldset id="feedback-fields" class="client-tool-fields">
+              <legend class="sr-only">Retours client</legend>
+              <p>Les détenteurs du lien peuvent lire et ajouter des remarques à ce dossier.</p>
+              <div class="btn-row client-actions">
+                <button type="button" id="feedback-create" class="btn-toggle btn-small">Créer un dossier</button>
+                <button type="button" id="feedback-share" class="btn-toggle btn-small" disabled>Partager le dossier</button>
+                <button type="button" id="feedback-start" class="btn-toggle btn-small" aria-pressed="false" disabled>Placer un repère</button>
+                <button type="button" id="feedback-refresh" class="btn-toggle btn-small" disabled>Actualiser</button>
+              </div>
+              <form id="feedback-form" hidden>
+                <label class="client-field"><span id="feedback-anchor">Remarque</span><textarea id="feedback-text" maxlength="700" rows="3" required></textarea></label>
+                <div class="btn-row client-actions">
+                  <button type="submit" id="feedback-submit" class="btn-toggle btn-small">Publier</button>
+                  <button type="button" id="feedback-cancel" class="btn-toggle btn-small">Annuler</button>
+                </div>
+              </form>
+              <span id="feedback-status" role="status"></span>
+              <div id="feedback-list"></div>
+            </fieldset>
+          </details>
+        </div>
+        <button type="button" id="variant-resume" class="btn-toggle btn-small" hidden>Reprendre la visite au scroll</button>
         <span id="video-export-status" class="video-export-status" role="status" aria-live="polite"></span>
       </div>
     </header>
@@ -136,6 +194,7 @@
 
   <div id="client-annotations"></div>
   <div id="client-measure-status" role="status" hidden></div>
+  <div id="feedback-prompt" class="client-feedback-prompt" role="status" hidden></div>
 
   <!-- Barre de progression du scroll -->
   <div class="progress-bar-container">
@@ -226,6 +285,7 @@
   <script src="js/data.js"></script>
   <script src="js/projectLoader.js"></script>
   <script src="js/scene.js"></script>
+  <script src="js/variantState.js"></script>
   <script src="js/solarStudy.js"></script>
   <script src="js/realism.js"></script>
   <script src="js/assets.js"></script>
@@ -235,7 +295,10 @@
   <script src="js/walkController.js"></script>
   <script src="js/minimap.js"></script>
   <script src="js/clientFinishes.js"></script>
+  <script src="js/solarOptions.js"></script>
   <script src="js/clientTools.js"></script>
+  <script src="js/clientVariants.js"></script>
+  <script src="js/clientFeedback.js"></script>
   <script src="js/clientBrochure.js"></script>
   <script src="js/app.js"></script>
 

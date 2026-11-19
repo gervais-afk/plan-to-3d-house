@@ -19,3 +19,6 @@ Thumbs.db
 
 # Médias lourds ou temporaires de validation (GitHub bloque les fichiers > 100 Mo)
 projects/**/temp*
+
+# Retours privés par lien, hors du serveur statique
+projects/**/.client-feedback/

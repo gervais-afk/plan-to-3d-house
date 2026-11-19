@@ -15,7 +15,7 @@
 .client-finish-row select { min-width: 0; width: 100%; padding: .35rem; border-radius: 5px; font: inherit; }
 .client-sun { display: grid; gap: .2rem; border-block: 1px solid #e0e7e2; padding: .55rem 0; }
 .client-sun > * { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
-.client-sun input { flex: 1; min-width: 0; accent-color: #337765; }
+.client-sun input[type=range] { flex: 1; min-width: 0; accent-color: #337765; }
 .client-sun output { font-variant-numeric: tabular-nums; font-weight: 700; }
 .client-compass { display: inline-flex; gap: .2rem; align-items: center; font-weight: 700; }
 .client-compass span { display: inline-block; font-size: 1.05rem; }
@@ -66,3 +66,24 @@
   #minimap-canvas { width: 82px; height: 82px; }
   .minimap-header, .minimap-footer { display: none; }
 }
+.client-tool-fields [hidden], #variant-resume[hidden] { display: none; }
+.client-field { display: grid; gap: .3rem; }
+.client-field input, .solar-inputs input, #variant-url { width: 100%; min-width: 0; padding: .35rem; font: inherit; }
+.client-sun > .solar-inputs:not([hidden]) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; }
+.solar-inputs label { display: grid; gap: .15rem; }
+.solar-inputs output, #variant-status:not(:empty) { grid-column: 1 / -1; font-size: .75rem; }
+.feedback-pin { color: #fff5d7; background: #92501a; }
+.feedback-draft { background: #fbb952; }
+.client-anchor:has(.feedback-pin) .client-room-card { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 32vh; overflow: auto; }
+#feedback-list h4 { margin: .55rem 0 .25rem; }
+#feedback-list ul { list-style: none; margin: 0; padding: 0; }
+#feedback-list li { display: grid; gap: .35rem; padding: .4rem; border-top: 1px solid #e0e7e2; overflow-wrap: anywhere; }
+#feedback-list li button { justify-self: start; }
+#feedback-text { resize: vertical; width: 100%; font: inherit; padding: .35rem; }
+.client-feedback-prompt { position: fixed; z-index: 15; left: 50%; bottom: 27vh; transform: translateX(-50%); max-width: 82vw; width: max-content; padding: .45rem .7rem; border-radius: 8px; color: #fff; background: #5b3518; pointer-events: none; font-size: .8rem; }
+#webgl-container.is-annotating { cursor: crosshair; }
+#webgl-container.is-annotating ~ .fps-controls-overlay { visibility: hidden; }
+#client-annotations.is-annotating .client-hotspot { display: none; }
+#variant-fields .client-actions, #feedback-fields .client-actions { justify-content: flex-start; }
+.client-panel-tabs { position: relative; }
+.client-panel-tabs .client-tools { position: static; }

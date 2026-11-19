@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnToggleMode = document.getElementById('btn-toggle-mode');
   const fpsHelpEl = document.getElementById('fps-controls-overlay');
 
+  let pinnedView = null;
   let currentMode = 'scroll'; // 'scroll' ou 'walk'
   let scrollProgress = 0.0;
   let activeRoom = null;
@@ -526,6 +527,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function openGallery() {
     if (currentMode === 'walk') setMode('scroll');
+    if (feedback.placing) feedback.cancel();
     if (clientTools.measuring) clientTools.toggleMeasure(false);
     hidePhotoOverlay();
     gallery.classList.remove('hidden');
@@ -549,6 +551,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const shot = currentItem && (currentItem.shot || studio.shots.find(s => s.id === currentItem.id));
     closeGallery();
     if (!shot) return;
+    releaseView(false);
     clientTools.setHour(shot.night ? SolarStudy.evening : SolarStudy.day);
     if (shot.pos[1] < 3) {
       setMode('walk');
@@ -616,7 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // À l'arrêt sur un waypoint, on propose l'IA si elle existe ; sinon la scène Three.js reste visible.
   function onScrollStop() {
-    if (clientTools.panel.open || clientTools.measuring || !photoModeEnabled || currentMode !== 'scroll') return;
+    if (pinnedView || feedback.placing || feedback.panel.open || clientTools.panel.open || clientTools.measuring || document.getElementById('client-floor').value || document.getElementById('client-facade').value || houseScene.solarGeo || !photoModeEnabled || currentMode !== 'scroll') return;
 
     const waypoints = HOUSE_DATA.tourWaypoints;
     const numSteps = waypoints.length - 1;
@@ -636,7 +639,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const token = ++photoRequestToken;
     checkPhotoAvailable(shotId).then(view => {
       const latestStep = Math.round(scrollProgress * numSteps);
-      if (token !== photoRequestToken || clientTools.panel.open || clientTools.measuring || !photoModeEnabled || currentMode !== 'scroll' || latestStep !== nearestIdx || !view) return;
+      if (token !== photoRequestToken || pinnedView || clientTools.panel.open || clientTools.measuring || !photoModeEnabled || currentMode !== 'scroll' || latestStep !== nearestIdx || !view) return;
       currentPhotoView = view;
       photoOverlay.style.backgroundImage = `url("${view.image.file}")`;
       photoTitleEl.textContent = `RENDU IA · ${view.label || wp.label || shotId}`;
@@ -672,23 +675,35 @@ document.addEventListener('DOMContentLoaded', () => {
   const pdfButton = document.getElementById('client-pdf');
   const pdfStatus = document.getElementById('client-pdf-status');
   let exportingPDF = false;
-  pdfButton.addEventListener('click', async () => {
+  async function exportClientPDF(variant = null) {
     if (exportingPDF || tourRecording || exportVideoButton.disabled) return;
-    exportingPDF = pdfButton.disabled = true;
+    const variantButton = document.getElementById('variant-pdf');
+    exportingPDF = pdfButton.disabled = variantButton.disabled = true;
+    if (variant) variants.status.textContent = 'Composition de la brochure…';
     pdfStatus.textContent = 'Composition de la brochure…';
     try {
       await assetsReady;
-      await ClientBrochure.exportPDF(HOUSE_DATA, studio);
+      await ClientBrochure.exportPDF(HOUSE_DATA, studio, variant, () => {
+        if (!variant) return;
+        const floor = document.getElementById('client-floor').value, facade = document.getElementById('client-facade').value;
+        clientTools.finishes.setFloor(variant.floor);
+        clientTools.finishes.setFacade(variant.facade);
+        return () => { clientTools.finishes.setFloor(floor); clientTools.finishes.setFacade(facade); };
+      });
       pdfStatus.textContent = 'Brochure PDF téléchargée.';
     } catch (error) {
       console.error(error);
       pdfStatus.textContent = `Export PDF impossible : ${error.message}`;
     } finally {
-      exportingPDF = pdfButton.disabled = false;
+      exportingPDF = pdfButton.disabled = variantButton.disabled = false;
+      if (variant) variants.status.textContent = pdfStatus.textContent;
     }
-  });
+  }
+  pdfButton.addEventListener('click', () => exportClientPDF());
   function toggleNight() {
-    clientTools.setHour(houseScene.nightTarget > 0.5 ? SolarStudy.day : SolarStudy.evening);
+    const geo = houseScene.solarGeo;
+    const nightPreset = geo ? 22 : SolarStudy.evening;
+    clientTools.setHour(houseScene.solarTarget >= nightPreset ? SolarStudy.day : nightPreset);
   }
   function setQuality(q) {
     if (tourRecording) return;
@@ -729,6 +744,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function setMode(newMode) {
+    releaseView(false);
     currentMode = newMode;
     hidePhotoOverlay();
 
@@ -750,6 +766,47 @@ document.addEventListener('DOMContentLoaded', () => {
       updateFromScroll();
     }
   }
+
+  const resume = document.getElementById('variant-resume');
+  function pinView(pose) {
+    if (currentMode === 'walk') setMode('scroll');
+    const hs = houseScene;
+    pinnedView = pose;
+    hidePhotoOverlay();
+    clearTimeout(photoDebounceTimer);
+    if (Boolean(hs.sectionEnabled) !== pose.cut) toggleSectionCut();
+    if (Boolean(hs.explodedTarget) !== pose.exploded) toggleExploded();
+    hs.planOverlayManualVisible = pose.overlay ?? undefined;
+    hs.setElevation(pose.e);
+    hs.camera.position.fromArray(pose.p);
+    hs.camera.quaternion.fromArray(pose.q);
+    hs.camera.fov = pose.f;
+    hs.camera.updateProjectionMatrix();
+    scrollTour.detectCurrentRoom(hs.camera.position);
+    elevationPercentEl.textContent = `${Math.round(pose.e * 100)}%`;
+    modeBadgeEl.textContent = 'VUE FIGÉE';
+    resume.hidden = false;
+  }
+
+  function releaseView(update = true) {
+    if (!pinnedView) return;
+    pinnedView = null;
+    resume.hidden = true;
+    modeBadgeEl.textContent = 'MODE PLAN & SCROLL 3D';
+    if (update) updateFromScroll();
+  }
+
+  const variants = new ClientVariants(clientTools, PROJECT_SLUG, pinView, exportClientPDF);
+  const share = VariantState.readLink(location.hash, PROJECT_SLUG);
+  const feedback = new ClientFeedback(clientTools, variants, share.channel);
+  const panels = [clientTools.panel, document.getElementById('client-variants'), feedback.panel];
+  panels.forEach(panel => panel.addEventListener('toggle', () => {
+    if (!panel.open) return;
+    panels.filter(other => other !== panel).forEach(other => { other.open = false; });
+    hidePhotoOverlay();
+  }));
+  clientTools.measureButton.addEventListener('click', () => { if (clientTools.measuring && feedback.placing) feedback.cancel(); });
+  resume.addEventListener('click', () => releaseView());
 
   btnToggleMode.addEventListener('click', () => {
     setMode(currentMode === 'scroll' ? 'walk' : 'scroll');
@@ -788,7 +845,7 @@ document.addEventListener('DOMContentLoaded', () => {
     exportVideoButton.disabled = true;
     setVideoExportStatus('Préparation du parcours…');
     const saved = {
-      mode: currentMode,
+      mode: currentMode, pinned: pinnedView,
       scrollY: window.scrollY,
       position: houseScene.camera.position.clone(),
       quaternion: houseScene.camera.quaternion.clone(),
@@ -814,7 +871,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const chunks = [];
       const state = { recorder, stopRequested: false };
       tourRecording = state;
-      clientTools.fields.disabled = true;
+      clientTools.fields.disabled = variants.fields.disabled = feedback.fields.disabled = true;
+      if (feedback.placing) feedback.cancel();
+      releaseView(false);
       clientTools.toggleMeasure(false);
       clientTools.measureGroup.visible = false;
       lockedControls = [btnToggleMode, btnNight, btnQuality, btnPlanStyle, btnPhotoMode, btnSection, btnExplode, btnTimelapse, document.getElementById('btn-renders')];
@@ -890,7 +949,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (stream) stream.getTracks().forEach(track => track.stop());
     } finally {
       tourRecording = null;
-      clientTools.fields.disabled = false;
+      clientTools.fields.disabled = variants.fields.disabled = feedback.fields.disabled = false;
       window.scrollTo(0, saved.scrollY);
       if (saved.mode === 'walk') {
         setMode('walk');
@@ -905,6 +964,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setMode('scroll');
         updateFromScroll();
       }
+      if (saved.pinned) pinView(saved.pinned);
       lockedControls.forEach(control => { if (control) control.disabled = false; });
       exportVideoButton.disabled = false;
       exportVideoButton.textContent = '🎥 Exporter l’animation vidéo';
@@ -919,9 +979,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.code === 'Escape') tourRecording.stopRequested = true;
       return;
     }
+    if (e.code === 'Escape' && feedback.placing) { feedback.cancel(); return; }
     if (e.code === 'Escape' && clientTools.measuring) { clientTools.toggleMeasure(false); return; }
     if (e.target.closest?.('input, select, textarea, [contenteditable]')) return;
-    if (e.code === 'KeyM' && !e.repeat && gallery.classList.contains('hidden')) clientTools.toggleMeasure();
+    if (e.code === 'KeyM' && !e.repeat && gallery.classList.contains('hidden')) {
+      if (feedback.placing) feedback.cancel();
+      clientTools.toggleMeasure();
+    }
     // La touche Espace bascule le mode
     if (e.code === 'Space' && e.target === document.body) {
       e.preventDefault();
@@ -943,7 +1007,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- GESTION DU SCROLL ---
   function updateFromScroll() {
-    if (currentMode !== 'scroll' || tourRecording) return;
+    if (currentMode !== 'scroll' || tourRecording || pinnedView) return;
     hidePhotoOverlay();
     clearTimeout(photoDebounceTimer);
     photoDebounceTimer = setTimeout(onScrollStop, 350);
@@ -967,6 +1031,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Téléportation fluide vers une pièce lors d'un clic
   function jumpToRoom(room) {
+    releaseView(false);
     hidePhotoOverlay();
     const waypoints = HOUSE_DATA.tourWaypoints;
     let bestIndex = waypoints.findIndex(w => w.room === room.id);
@@ -1011,14 +1076,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Plafonds seulement à hauteur d'homme : intérieur réaliste, maquette ouverte vue d'en haut
-    houseScene.setCeilingsVisible(houseScene.camera.position.y < 2.7 && houseScene.elevationProgress >= 0.99);
+    houseScene.setCeilingsVisible(pinnedView?.ceilings ?? (houseScene.camera.position.y < 2.7 && houseScene.elevationProgress >= 0.99));
 
     minimap.update(activeRoom ? activeRoom.id : null);
     houseScene.render();
-    clientTools.update(now, Boolean(tourRecording) || !gallery.classList.contains('hidden') || photoOverlay.classList.contains('is-visible'));
+    const suppressed = Boolean(tourRecording) || !gallery.classList.contains('hidden') || photoOverlay.classList.contains('is-visible');
+    clientTools.update(now, suppressed || feedback.placing);
+    feedback.update(now, suppressed);
   }
 
   // Démarrage initial
+  if (clientTools.solarOptions.configured) clientTools.solarOptions.restore(clientTools.solarOptions.configured, SolarStudy.day);
   updateFromScroll();
+  if (share.variant) variants.apply(share.variant);
+  if (share.invalid) { document.getElementById('client-variants').open = true; variants.status.textContent = 'Lien partagé incomplet ou incompatible avec ce projet.'; }
   animate();
 });
