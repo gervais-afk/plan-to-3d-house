@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Éditeur de plan — Plan 2D vers visite 3D</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/editor.css">
+</head>
+<body>
+  <header class="ed-top">
+    <div class="ed-brand">
+      <span class="ed-dot"></span>
+      <strong>ÉDITEUR DE PLAN</strong>
+      <span id="ed-project-name" class="ed-muted">Nouveau projet</span>
+    </div>
+    <div class="ed-actions">
+      <button id="btn-new" title="Nouveau projet">Nouveau</button>
+      <button id="btn-open" title="Ouvrir un projet enregistré">Ouvrir…</button>
+      <button id="btn-import-villa" title="Charger la Villa Serena (js/data.js) comme exemple">Exemple Villa Serena</button>
+      <label class="ed-btn-file" title="Importer une image ou un PDF de plan">Plan PDF / image…<input id="file-plan" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,.png,.jpg,.jpeg"></label>
+      <button id="btn-ai-read" title="Lecture automatique du plan par IA (OpenRouter)">✨ Lecture IA</button>
+      <button id="btn-undo" title="Annuler (Ctrl+Z)">↶</button>
+      <button id="btn-redo" title="Rétablir (Ctrl+Y)">↷</button>
+      <button id="btn-save" class="ed-primary" title="Enregistrer dans projects/ (Ctrl+S)">Enregistrer</button>
+      <button id="btn-preview" class="ed-primary" title="Enregistrer puis ouvrir la visite 3D de ce projet">👁 Lancer la visite 3D</button>
+    </div>
+  </header>
+
+  <aside class="ed-tools" id="ed-tools">
+    <button data-tool="select" title="Sélection / déplacement (V)"><b>⬚</b><span>Sélection</span><kbd>V</kbd></button>
+    <button data-tool="calibrate" title="Calibrer l'échelle : 2 clics sur une cote connue (K)"><b>⟷</b><span>Échelle</span><kbd>K</kbd></button>
+    <hr>
+    <button data-tool="wall-ext" title="Mur extérieur 25 cm, clics successifs (M)"><b>▬</b><span>Mur ext.</span><kbd>M</kbd></button>
+    <button data-tool="wall-int" title="Cloison 15 cm, clics successifs (C)"><b>▭</b><span>Cloison</span><kbd>C</kbd></button>
+    <button data-tool="door" title="Porte : clic sur un mur (D)"><b>◜</b><span>Porte</span><kbd>D</kbd></button>
+    <button data-tool="window" title="Fenêtre : clic sur un mur (F)"><b>▤</b><span>Fenêtre</span><kbd>F</kbd></button>
+    <button data-tool="open" title="Passage libre : clic sur un mur (B)"><b>⊓</b><span>Passage</span><kbd>B</kbd></button>
+    <hr>
+    <button data-tool="room-auto" title="Pièce auto : cliquer à l'intérieur d'un espace fermé par des murs (W)"><b>✦</b><span>Pièce auto</span><kbd>W</kbd></button>
+    <button data-tool="room" title="Pièce rectangle : glisser un rectangle (A)"><b>▦</b><span>Rectangle</span><kbd>A</kbd></button>
+    <button data-tool="room-poly" title="Pièce polygone : cliquer les sommets, Entrée pour fermer (P)"><b>⬠</b><span>Polygone</span><kbd>P</kbd></button>
+    <button data-tool="column" title="Colonne / poteau : clic (O)"><b>■</b><span>Colonne</span><kbd>O</kbd></button>
+    <button data-tool="slab" title="Auvent (dalle) : glisser un rectangle (U)"><b>⌸</b><span>Auvent</span><kbd>U</kbd></button>
+    <button data-tool="stairwell" title="Trémie d'escalier : glisser un rectangle sur le plan d'étage"><b>▱</b><span>Trémie</span></button>
+    <button data-tool="pergola" title="Pergola : glisser un rectangle (G)"><b>☰</b><span>Pergola</span><kbd>G</kbd></button>
+    <button data-tool="furniture" title="Mobilier : choisir dans la bibliothèque puis cliquer (E)"><b>🛋</b><span>Mobilier</span><kbd>E</kbd></button>
+    <hr>
+    <button data-tool="camera" title="Caméras du parcours : déplacer, orienter, ajouter (T)"><b>🎥</b><span>Caméras</span><kbd>T</kbd></button>
+  </aside>
+
+  <main class="ed-stage" id="ed-stage">
+    <nav class="ed-level-tabs" aria-label="Niveau du plan">
+      <button type="button" data-level="0" class="active">Rez-de-chaussée</button>
+      <button type="button" data-level="1">Étage 1</button>
+      <label><input id="ed-ghost-toggle" type="checkbox" checked> RDC fantôme</label>
+    </nav>
+    <canvas id="ed-canvas"></canvas>
+    <div id="ed-drop-overlay" class="ed-drop-overlay hidden" aria-hidden="true">Déposez ici votre plan PDF, PNG ou JPG</div>
+    <div id="ed-hint" class="ed-hint"></div>
+    <div class="ed-status"><span id="ed-coords">x 0.00 · z 0.00 m</span><span id="ed-scale"></span></div>
+  </main>
+
+  <aside class="ed-panel">
+    <section id="ed-props"></section>
+    <section id="ed-library" class="hidden"></section>
+    <section class="ed-help">
+      <h4>Raccourcis</h4>
+      <p><kbd>Molette</kbd> zoom · <kbd>Clic droit</kbd> ou <kbd>Espace</kbd>+glisser : déplacer la vue</p>
+      <p><kbd>Échap</kbd> termine un mur / désélectionne · <kbd>Suppr</kbd> efface · <kbd>R</kbd> +15° · <kbd>Maj+R</kbd> −15° pour un meuble</p>
+      <p><kbd>Maj</kbd> désactive l'aimantation · <kbd>Alt</kbd> mur en biais · <kbd>Ctrl+Z</kbd> annuler</p>
+    </section>
+  </aside>
+
+  <dialog id="dlg-open" class="ed-dialog">
+    <h3>Ouvrir un projet</h3>
+    <div id="dlg-open-list" class="ed-list"></div>
+    <div class="ed-dialog-actions">
+      <label class="ed-btn-file">Importer un project.json…<input id="file-json" type="file" accept="application/json,.json"></label>
+      <button id="dlg-open-close">Fermer</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-ai" class="ed-dialog">
+    <h3>✨ Lecture automatique du plan</h3>
+    <p class="ed-note">L'image du plan est envoyée au modèle choisi via OpenRouter. Il renvoie murs, portes, fenêtres, pièces et mobilier, que vous corrigez ensuite dans l'éditeur.</p>
+    <div class="ed-field"><label>Modèle</label><select id="ai-model"></select></div>
+    <p id="ai-cost-estimate" class="ed-note" aria-live="polite"></p>
+    <div class="ed-field"><label>Tracé existant</label>
+      <select id="ai-mode"><option value="replace">Remplacer</option><option value="merge">Ajouter</option></select></div>
+    <div class="ed-field"><label>Échelle</label>
+      <select id="ai-scale"><option value="ai">Détectée par l'IA (cotes du plan)</option><option value="calibrated">Celle que j'ai calibrée (K)</option></select></div>
+    <div class="ed-field"><label>Mobilier</label><input type="checkbox" id="ai-furniture" checked></div>
+    <p id="ai-status" class="ed-note"></p>
+    <div class="ed-dialog-actions">
+      <button id="ai-cancel">Fermer</button>
+      <button id="ai-run" class="ed-primary">Lancer la lecture</button>
+    </div>
+  </dialog>
+
+  <div id="ed-toast" class="ed-toast"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/projectLoader.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/editorAI.js"></script>
+</body>
+</html>

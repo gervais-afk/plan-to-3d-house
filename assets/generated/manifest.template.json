@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "facade-sud",
+      "type": "image",
+      "file": "assets/generated/images/facade-sud.jpg",
+      "reference": "assets/renders/facade-sud.jpg",
+      "room": null,
+      "label": "Façade sud & porche",
+      "width": 1920,
+      "height": 1080,
+      "generator": "Midjourney v6 / Stable Diffusion / Flux / etc.",
+      "prompt": "Architectural photography of a contemporary single-story villa with flat roof and parapet, smooth off-white stucco facade, square white columns supporting entrance porch, clear stone paving pathway, lush tropical African garden with palm trees, mango tree, vibrant fuchsia bougainvillea on perimeter wall, warm golden late afternoon sunlight, sharp architectural shadows, 24mm lens, photorealistic archviz render --ar 16:9",
+      "notes": "Parfaitement conforme au plan"
+    },
+    {
+      "id": "sejour",
+      "type": "image",
+      "file": "assets/generated/images/sejour.jpg",
+      "reference": "assets/renders/sejour.jpg",
+      "room": "living",
+      "label": "Séjour",
+      "width": 1920,
+      "height": 1080,
+      "generator": "Midjourney v6 / Stable Diffusion / Flux / etc.",
+      "prompt": "Interior architectural photo of a modern bright living room, light oak parquet floor, warm white walls, U-shaped arrangement of 3 beige linen sofas around modern wooden coffee table, wall-mounted TV on the east wall, soft lateral daylight streaming from south porch window, black pendant light, indoor plants, realistic archviz V-Ray style --ar 16:9",
+      "notes": "Parfaitement conforme au plan"
+    },
+    {
+      "id": "anim-arrivee",
+      "type": "video",
+      "file": "assets/generated/videos/anim-arrivee.mp4",
+      "poster": "assets/generated/images/facade-sud.jpg",
+      "duration": 8,
+      "label": "Arrivée par l'allée",
+      "generator": "Runway Gen-3 / Luma Dream Machine / Kling",
+      "prompt": "Slow smooth forward camera movement along the stone walkway towards the white columned entrance porch, golden hour light, static architecture, professional archviz animation",
+      "notes": "Trajectoire fluide"
+    }
+  ]
+}

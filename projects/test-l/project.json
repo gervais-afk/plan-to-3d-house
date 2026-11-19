@@ -1,0 +1,183 @@
+{
+  "meta": {
+    "name": "TEST L",
+    "slug": "test-l",
+    "subtitle": "",
+    "client": "",
+    "updated": "2026-11-18T18:47:40.429Z"
+  },
+  "config": {
+    "wallHeight": 2.8
+  },
+  "walls": [
+    {
+      "from": [
+        -5,
+        -4
+      ],
+      "to": [
+        5,
+        -4
+      ],
+      "thick": 0.25,
+      "type": "ext",
+      "openings": []
+    },
+    {
+      "from": [
+        5,
+        -4
+      ],
+      "to": [
+        5,
+        4
+      ],
+      "thick": 0.25,
+      "type": "ext",
+      "openings": []
+    },
+    {
+      "from": [
+        5,
+        4
+      ],
+      "to": [
+        -5,
+        4
+      ],
+      "thick": 0.25,
+      "type": "ext",
+      "openings": [
+        {
+          "type": "door",
+          "at": 7,
+          "w": 1,
+          "h": 2.1,
+          "sill": 0,
+          "hinge": "start",
+          "side": -1,
+          "entry": true
+        }
+      ]
+    },
+    {
+      "from": [
+        -5,
+        4
+      ],
+      "to": [
+        -5,
+        -4
+      ],
+      "thick": 0.25,
+      "type": "ext",
+      "openings": []
+    },
+    {
+      "from": [
+        0.5,
+        -4
+      ],
+      "to": [
+        0.5,
+        0
+      ],
+      "thick": 0.15,
+      "type": "int",
+      "openings": [
+        {
+          "type": "door",
+          "at": 2,
+          "w": 0.85,
+          "h": 2.1,
+          "sill": 0,
+          "hinge": "start",
+          "side": 1
+        }
+      ]
+    },
+    {
+      "from": [
+        0.5,
+        0
+      ],
+      "to": [
+        5,
+        0
+      ],
+      "thick": 0.15,
+      "type": "int",
+      "openings": []
+    }
+  ],
+  "rooms": [
+    {
+      "id": "piece-1",
+      "name": "SÉJOUR EN L",
+      "bounds": {
+        "xMin": -5,
+        "xMax": 5,
+        "zMin": -4,
+        "zMax": 4
+      },
+      "floorType": "parquet",
+      "habitable": true,
+      "desc": "",
+      "poly": [
+        [
+          -5,
+          -4
+        ],
+        [
+          0.5,
+          -4
+        ],
+        [
+          0.5,
+          0
+        ],
+        [
+          5,
+          0
+        ],
+        [
+          5,
+          4
+        ],
+        [
+          -5,
+          4
+        ]
+      ]
+    },
+    {
+      "id": "piece-2",
+      "name": "CHAMBRE",
+      "bounds": {
+        "xMin": 0.5,
+        "xMax": 5,
+        "zMin": -4,
+        "zMax": 0
+      },
+      "floorType": "parquet",
+      "habitable": true,
+      "desc": ""
+    }
+  ],
+  "columns": [],
+  "canopies": [],
+  "furniture": [
+    {
+      "name": "Canapé 3 places",
+      "model": "sofa",
+      "x": -2.5,
+      "z": 2.6,
+      "w": 1.8,
+      "d": 0.9,
+      "h": 0.8,
+      "color": "#6b6560",
+      "rotY": 3.141592653589793,
+      "y": 0.4
+    }
+  ]
+}

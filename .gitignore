@@ -1,0 +1,21 @@
+# Clés d'API et secrets d'environnement
+openrouter.key
+*.key
+.env
+.env.*
+*.env
+
+# Dépendances et caches
+node_modules/
+.npm/
+
+# Fichiers système et éditeurs
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
+.vscode/
+.idea/
+
+# Médias lourds ou temporaires de validation (GitHub bloque les fichiers > 100 Mo)
+projects/**/temp*

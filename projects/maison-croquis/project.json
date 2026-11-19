@@ -1,0 +1,87 @@
+{
+  "meta": {
+    "name": "MAISON CROQUIS",
+    "slug": "maison-croquis",
+    "subtitle": "Relevé indicatif du croquis coté · RDC · 15,50 × 14,00 m",
+    "description": "Maquette de démonstration relevée à partir du plan coté dessiné à la main. Les dimensions et distributions sont approximatives et à confirmer."
+  },
+  "config": {
+    "wallHeight": 2.8,
+    "floorHeight": 3,
+    "extWallThickness": 0.25,
+    "intWallThickness": 0.15,
+    "doorWidth": 0.85,
+    "doorHeight": 2.1,
+    "windowSill": 0.95,
+    "windowHeight": 1.25,
+    "elevationEnd": 0.18,
+    "walkStart": { "x": -3.1, "z": 1.6, "yaw": 0 },
+    "walkBounds": { "xMin": -9, "xMax": 9, "zMin": -8, "zMax": 9 },
+    "planImage": {
+      "url": "assets/plans/croquis-cote.jpg",
+      "pxPerMeter": 35.2,
+      "originPx": [368.5, 495],
+      "calibrated": true,
+      "calibrationNote": "Échelle relevée sur la cote manuscrite de 15,50 m (environ 546 px entre les extrémités)."
+    }
+  },
+  "levels": [
+    { "id": 0, "name": "Rez-de-chaussée", "elevation": 0 }
+  ],
+  "rooms": [
+    { "id": "terrasse-2", "name": "TERRASSE 2", "level": 0, "bounds": { "xMin": -7.73, "xMax": -4.22, "zMin": -6.99, "zMax": -5.26 }, "floorType": "stone", "habitable": false, "desc": "Terrasse nord attenante à la cuisine." },
+    { "id": "cuisine", "name": "CUISINE", "level": 0, "bounds": { "xMin": -7.73, "xMax": -5.64, "zMin": -5.26, "zMax": -2.27 }, "floorType": "tiles", "habitable": true, "desc": "Cuisine relevée d'après le croquis coté." },
+    { "id": "salle-manger", "name": "SALLE À MANGER", "level": 0, "bounds": { "xMin": -7.73, "xMax": -4.22, "zMin": -2.27, "zMax": 0.14 }, "floorType": "parquet", "habitable": true, "desc": "Espace repas ouvert sur le séjour." },
+    { "id": "chambre-2", "name": "CHAMBRE 2", "level": 0, "bounds": { "xMin": -4.22, "xMax": -0.33, "zMin": -6.99, "zMax": -1.56 }, "floorType": "parquet", "habitable": true, "desc": "Chambre dans la partie nord-ouest du plan." },
+    { "id": "chambre-1", "name": "CHAMBRE 1", "level": 0, "bounds": { "xMin": -0.33, "xMax": 5.16, "zMin": -6.99, "zMax": -1.56 }, "floorType": "parquet", "habitable": true, "desc": "Chambre dans la partie nord-est du plan." },
+    { "id": "toilettes-1", "name": "TOILETTES", "level": 0, "bounds": { "xMin": 5.16, "xMax": 7.77, "zMin": -6.99, "zMax": -1.56 }, "floorType": "tiles", "habitable": true, "desc": "Cabinet de toilette supérieur." },
+    { "id": "hall", "name": "DÉGAGEMENT", "level": 0, "bounds": { "xMin": -4.22, "xMax": 7.77, "zMin": -1.56, "zMax": 0.14 }, "floorType": "tiles", "habitable": true, "desc": "Circulation centrale entre les chambres et les pièces de vie." },
+    { "id": "salon", "name": "SALON", "level": 0, "bounds": { "xMin": -7.73, "xMax": -1.66, "zMin": 0.14, "zMax": 5.11 }, "floorType": "parquet", "habitable": true, "desc": "Séjour principal, ouvert vers la salle à manger." },
+    { "id": "chambre-3", "name": "CHAMBRE 3", "level": 0, "bounds": { "xMin": -0.24, "xMax": 3.74, "zMin": 0.14, "zMax": 5.11 }, "floorType": "parquet", "habitable": true, "desc": "Troisième chambre représentée sur le dessin." },
+    { "id": "toilettes-2", "name": "TOILETTES 2", "level": 0, "bounds": { "xMin": 5.16, "xMax": 7.77, "zMin": -1.56, "zMax": 0.99 }, "floorType": "tiles", "habitable": true, "desc": "Cabinet de toilette inférieur." },
+    { "id": "garage", "name": "GARAGE", "level": 0, "bounds": { "xMin": 3.74, "xMax": 7.77, "zMin": 0.99, "zMax": 6.96 }, "floorType": "concrete", "habitable": false, "desc": "Garage à l'est de la maison." },
+    { "id": "terrasse-1", "name": "TERRASSE 1", "level": 0, "bounds": { "xMin": -7.73, "xMax": -0.24, "zMin": 5.11, "zMax": 6.99 }, "floorType": "stone", "habitable": false, "desc": "Terrasse sud dessinée devant le séjour." }
+  ],
+  "walls": [
+    { "from": [-7.73, -6.99], "to": [7.77, -6.99], "thick": 0.25, "type": "ext", "level": 0, "openings": [{ "type": "window", "at": 2.6, "w": 1.5, "h": 1.25, "sill": 0.95 }, { "type": "window", "at": 8.6, "w": 2.0, "h": 1.25, "sill": 0.95 }, { "type": "window", "at": 12.7, "w": 1.5, "h": 1.25, "sill": 0.95 }] },
+    { "from": [7.77, -6.99], "to": [7.77, -1.56], "thick": 0.25, "type": "ext", "level": 0, "openings": [{ "type": "window", "at": 2.8, "w": 0.7, "h": 0.5, "sill": 1.6 }] },
+    { "from": [7.77, -1.56], "to": [5.16, -1.56], "thick": 0.25, "type": "ext", "level": 0, "openings": [] },
+    { "from": [5.16, -1.56], "to": [5.16, 0.99], "thick": 0.15, "type": "int", "level": 0, "openings": [{ "type": "door", "at": 1.25, "w": 0.72, "h": 2.1, "hinge": "start", "side": 1 }] },
+    { "from": [5.16, 0.99], "to": [7.77, 0.99], "thick": 0.25, "type": "ext", "level": 0, "openings": [] },
+    { "from": [7.77, 0.99], "to": [7.77, 6.96], "thick": 0.25, "type": "ext", "level": 0, "openings": [{ "type": "door", "at": 3.0, "w": 2.4, "h": 2.35, "hinge": "start", "side": -1 }] },
+    { "from": [7.77, 6.96], "to": [3.74, 6.96], "thick": 0.25, "type": "ext", "level": 0, "openings": [] },
+    { "from": [3.74, 6.96], "to": [3.74, 5.11], "thick": 0.25, "type": "ext", "level": 0, "openings": [] },
+    { "from": [3.74, 5.11], "to": [-0.24, 5.11], "thick": 0.25, "type": "ext", "level": 0, "openings": [{ "type": "window", "at": 2.0, "w": 1.8, "h": 1.25, "sill": 0.95 }] },
+    { "from": [-0.24, 5.11], "to": [-0.24, 6.99], "thick": 0.25, "type": "ext", "level": 0, "openings": [] },
+    { "from": [-0.24, 6.99], "to": [-7.73, 6.99], "thick": 0.25, "type": "ext", "level": 0, "openings": [] },
+    { "from": [-7.73, 6.99], "to": [-7.73, -6.99], "thick": 0.25, "type": "ext", "level": 0, "openings": [{ "type": "window", "at": 3.8, "w": 1.2, "h": 1.25, "sill": 0.95 }] },
+    { "from": [-4.22, -6.99], "to": [-4.22, -1.56], "thick": 0.15, "type": "int", "level": 0, "openings": [{ "type": "door", "at": 4.45, "w": 0.82, "h": 2.1, "hinge": "end", "side": 1 }] },
+    { "from": [-0.33, -6.99], "to": [-0.33, -1.56], "thick": 0.15, "type": "int", "level": 0, "openings": [{ "type": "door", "at": 4.45, "w": 0.82, "h": 2.1, "hinge": "start", "side": -1 }] },
+    { "from": [5.16, -6.99], "to": [5.16, -1.56], "thick": 0.15, "type": "int", "level": 0, "openings": [{ "type": "door", "at": 4.45, "w": 0.72, "h": 2.1 }] },
+    { "from": [-7.73, -5.26], "to": [-4.22, -5.26], "thick": 0.15, "type": "int", "level": 0, "openings": [] },
+    { "from": [-7.73, -2.27], "to": [-5.64, -2.27], "thick": 0.15, "type": "int", "level": 0, "openings": [{ "type": "open", "at": 0.95, "w": 0.8, "h": 2.2 }] },
+    { "from": [-5.64, -5.26], "to": [-5.64, -2.27], "thick": 0.15, "type": "int", "level": 0, "openings": [{ "type": "door", "at": 1.55, "w": 0.78, "h": 2.1 }] },
+    { "from": [-4.22, -1.56], "to": [7.77, -1.56], "thick": 0.15, "type": "int", "level": 0, "openings": [{ "type": "door", "at": 2.0, "w": 0.85, "h": 2.1 }, { "type": "door", "at": 5.2, "w": 0.85, "h": 2.1 }, { "type": "door", "at": 10.8, "w": 0.75, "h": 2.1 }] },
+    { "from": [-7.73, 0.14], "to": [-1.66, 0.14], "thick": 0.15, "type": "int", "level": 0, "openings": [{ "type": "door", "at": 4.25, "w": 0.95, "h": 2.1, "hinge": "start", "side": 1 }] },
+    { "from": [-1.66, 0.14], "to": [-1.66, 5.11], "thick": 0.15, "type": "int", "level": 0, "openings": [{ "type": "open", "at": 2.0, "w": 1.0, "h": 2.2 }] },
+    { "from": [-0.24, 0.14], "to": [-0.24, 5.11], "thick": 0.15, "type": "int", "level": 0, "openings": [{ "type": "door", "at": 0.7, "w": 0.82, "h": 2.1 }] },
+    { "from": [-0.24, 0.14], "to": [3.74, 0.14], "thick": 0.15, "type": "int", "level": 0, "openings": [{ "type": "door", "at": 2.3, "w": 0.82, "h": 2.1 }] },
+    { "from": [3.74, 0.14], "to": [3.74, 6.96], "thick": 0.15, "type": "int", "level": 0, "openings": [{ "type": "door", "at": 2.4, "w": 2.2, "h": 2.3 }] },
+    { "from": [-7.73, 5.11], "to": [-0.24, 5.11], "thick": 0.25, "type": "ext", "level": 0, "openings": [{ "type": "window", "at": 2.1, "w": 2.0, "h": 1.25, "sill": 0.95 }] }
+  ],
+  "furniture": [],
+  "columns": [],
+  "canopies": [
+    {
+      "name": "Toiture plate de démonstration",
+      "type": "slab",
+      "level": 0,
+      "y": 2.8,
+      "thick": 0.18,
+      "color": "#d8d3c9",
+      "poly": [[-7.73,-6.99],[7.77,-6.99],[7.77,-1.56],[5.16,-1.56],[5.16,0.99],[7.77,0.99],[7.77,6.96],[3.74,6.96],[3.74,5.11],[-0.24,5.11],[-0.24,6.99],[-7.73,6.99]]
+    }
+  ],
+  "stairwells": [],
+  "assets": {}
+}
