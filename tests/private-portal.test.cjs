@@ -36,7 +36,7 @@ async function serve(root, variables = {}) {
 }
 
 function fixture(root) {
-  for (const file of ['serve.js', 'privatePortal.js', 'feedbackStore.js', 'portal.html', 'index.html', 'editor.html']) fs.copyFileSync(path.join(source, file), path.join(root, file));
+  for (const file of ['serve.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'portal.html', 'index.html', 'editor.html']) fs.copyFileSync(path.join(source, file), path.join(root, file));
   fs.mkdirSync(path.join(root, 'js'));
   for (const file of ['variantState.js', 'data.js']) fs.copyFileSync(path.join(source, 'js', file), path.join(root, 'js', file));
   for (const project of ['plan-a', 'plan-b']) {

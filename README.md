@@ -157,3 +157,32 @@ Les clips Image-to-Video sont générés depuis **📷 Rendus HD → 🎞 Géné
 La source locale est transmise comme image intégrée. La documentation OpenRouter recommande une image d’entrée en HTTPS publiquement accessible ; si votre compte/fournisseur refuse les données intégrées, définissez `OPENROUTER_PUBLIC_BASE_URL` dans l’environnement du serveur sur l’URL HTTPS publique de cette application (racine contenant `assets/`) puis redémarrez-le. Ne rendez pas public un hébergement local sans en comprendre les implications de sécurité.
 
 Dans la galerie, la capture MediaRecorder est identifiée par **🎥 Capture 3D locale**, les clips photoréalistes par **✨ Rendu IA**. Pour les images, Gemini est estimé à environ 0,068 $ par rendu. MAI-Image 2.7 Flash est facturé au jeton (tarifs affichés avant confirmation) ; son total dépend du volume d’entrée et de sortie. La lecture IA du plan affiche également son estimation et demande confirmation avant l’appel.
+
+### Préproduction HTTPS, avec deux maquettes fictives
+
+Sur un hôte Docker distinct de la démo, faites pointer un **nom DNS dédié** vers l’hôte et ouvrez les ports 80 et 443. Caddy redirige HTTP vers HTTPS, obtient le certificat et relaie toutes les routes vers Node. Le port Node n’est pas publié. N’ajoutez ni CDN avec mise en cache, ni volume de production, ni clé IA à cette installation.
+
+```bash
+export STAGING_HOST=visite-recette.example.com  # Remplacer par le DNS réel
+read -rs -p 'Mot de passe de recette (16 caractères minimum) : ' PORTAL_PASSWORD; echo
+export PORTAL_PASSWORD
+docker compose -f deploy/staging/compose.yaml up -d --build
+unset PORTAL_PASSWORD
+```
+
+Ouvrez `https://<domaine>/portal.html`. L’image ne copie ni le dossier `projects/` habituel ni les rendus historiques : elle embarque uniquement **Atelier Témoin** et **Atelier Contrôle**, plus le code de visite. Les invitations et les données de recette persistent dans les volumes locaux. Utilisez une seule instance Node. Ne réutilisez pas ces volumes pour la production ; `docker compose … down -v` les efface définitivement.
+
+**Recette avant d’y mettre des maquettes réelles :**
+
+1. Sur le domaine final, vérifier la redirection HTTP, le certificat accepté **sans exception** par un téléphone et le cookie `Secure`, `HttpOnly`, `SameSite=Lax`. `PORTAL_ORIGIN` doit être exactement l’origine publique HTTPS (port compris s’il n’est pas standard). Si un autre proxy est ajouté, il doit conserver l’hôte, l’en-tête `Origin`, les cookies et les requêtes `Range` sans mise en cache ; ne pas exposer l’amont HTTP.
+2. Créer deux invitations d’Atelier Témoin : lecture seule et lecture + commentaires. Depuis des sessions séparées sur téléphone, ouvrir les liens reçus, puis le lien du dossier de retours. Vérifier que la lecture seule voit les remarques et propositions sans pouvoir écrire, et que l’autre peut publier une remarque et valider une version. Le rendu d’Atelier Contrôle doit rester inaccessible par URL directe.
+3. Dans la session « commentaires », ouvrir `projects/atelier-temoin/generated/renders/facade.jpg`, puis révoquer son invitation côté architecte. Recharger cette même URL et vérifier le refus (`401`), y compris avec `Range`, tandis que l’invitation en lecture seule reste valable. Vérifier `Cache-Control: private, no-store` sur le média et le refus depuis le domaine public, sans réponse de cache. Un fichier déjà téléchargé ne peut pas être repris.
+
+La recette de régression locale (`node --test tests/staging-https.test.cjs`, OpenSSL requis) utilise les mêmes maquettes derrière un reverse proxy TLS Node avec certificat de test. Elle ne remplace pas la vérification de Docker/Caddy, du certificat public, des éventuels proxys intermédiaires ni du parcours sur téléphone réel.
+
+### Suivi des décisions (portail privé)
+
+- **Architecte** : dans **Retours & remarques**, ouvrez ou créez un dossier. Pour une remarque, dépliez **Répondre ou modifier le statut** et choisissez **À traiter**, **Répondu** (réponse requise) ou **Clos**. Les clients voient la réponse et le statut dans ce même dossier.
+- Pour soumettre une variante, affichez-la dans la visite après l’élévation, donnez un nom à cette version et choisissez **Proposer la vue actuelle**. Envoyez au client l’invitation au projet, puis le lien du dossier. Le lien du dossier seul ne donne pas accès au projet privé.
+- **Client** : dans le dossier, **Voir cette version** applique l’instantané publié. Seul le rôle **Lecture et commentaires** peut ensuite choisir **Valider cette version**. L’heure serveur et l’instantané validé sont conservés ; publier une autre version ou modifier la variante locale ne change pas la décision précédente. Le dossier n’identifie pas nominativement le signataire : il ne s’agit pas d’une signature électronique.
+- L’instantané v1 contient la vue, les finitions et le soleil, pas une copie des fichiers 3D ou des rendus. L’empreinte SHA-256 de `project.json` rattache la proposition à la maquette au moment de la publication ; une visite restée ouverte sur une ancienne maquette doit être rechargée. Si ce fichier change, la proposition reste consultable dans le dossier mais ne peut plus être affichée sur la nouvelle maquette ni recevoir une nouvelle approbation. Publiez une nouvelle version pour reprendre le processus. Sauvegardez le répertoire `.client-feedback/` de chaque projet avec les données privées du portail.

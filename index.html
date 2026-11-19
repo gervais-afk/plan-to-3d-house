@@ -140,7 +140,7 @@
             <summary class="btn-toggle btn-small">📌 Retours client</summary>
             <fieldset id="feedback-fields" class="client-tool-fields">
               <legend class="sr-only">Retours client</legend>
-              <p>Les détenteurs du lien peuvent lire et ajouter des remarques à ce dossier.</p>
+              <p id="feedback-intro">Les détenteurs du lien peuvent lire et ajouter des remarques à ce dossier.</p>
               <div class="btn-row client-actions">
                 <button type="button" id="feedback-create" class="btn-toggle btn-small">Créer un dossier</button>
                 <button type="button" id="feedback-share" class="btn-toggle btn-small" disabled>Partager le dossier</button>
@@ -156,6 +156,15 @@
               </form>
               <span id="feedback-status" role="status"></span>
               <div id="feedback-list"></div>
+              <section id="decision-section" hidden>
+                <h4>Variantes proposées et décisions</h4>
+                <form id="decision-create" hidden>
+                  <label class="client-field">Nom de la version <input id="decision-name" maxlength="60" placeholder="Nom de la variante actuelle par défaut"></label>
+                  <button type="submit" class="btn-toggle btn-small">Proposer la vue actuelle</button>
+                </form>
+                <p id="decision-status" role="status"></p>
+                <ul id="decision-list"></ul>
+              </section>
             </fieldset>
           </details>
         </div>
@@ -300,6 +309,7 @@
   <script src="js/solarOptions.js"></script>
   <script src="js/clientTools.js"></script>
   <script src="js/clientVariants.js"></script>
+  <script src="js/clientDecisions.js"></script>
   <script src="js/clientFeedback.js"></script>
   <script src="js/clientBrochure.js"></script>
   <script src="js/app.js"></script>

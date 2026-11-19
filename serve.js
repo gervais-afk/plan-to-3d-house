@@ -3,6 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const feedbackStore = require('./feedbackStore');
+const decisionStore = require('./decisionStore');
 const { createPortal, safePath } = require('./privatePortal');
 
 const PORT = Number(process.env.PORT) || 8000;
@@ -572,12 +573,41 @@ function clientFeedback(req, res, url) {
     try { return sendJson(res, 200, { notes: feedbackStore.open(PROJECTS, project, channel).notes }); }
     catch (error) { return respondError(error); }
   }
+  const review = req.method === 'PATCH';
+  if (!review && req.method !== 'POST') return sendJson(res, 405, { error: 'Méthode non autorisée.' });
+  if (review && !portal.enabled) return sendJson(res, 403, { error: 'Le suivi des décisions requiert le portail privé.' });
+  if (req.headers['content-type']?.split(';')[0] !== 'application/json') return sendJson(res, 415, { error: 'JSON requis.' });
+  return readBody(req, res, 8192, data => {
+    const role = portal.enabled ? portal.roleForProject(req, project) : null;
+    if (portal.enabled && !(role === 'architect' || (!review && role === 'comment'))) return sendJson(res, 403, { error: 'Accès non autorisé.' });
+    try {
+      const item = (review ? feedbackStore.review : feedbackStore.append)(PROJECTS, project, channel, data);
+      return sendJson(res, review ? 200 : 201, { item });
+    } catch (error) { return respondError(error); }
+  });
+}
+
+function clientDecisions(req, res, url) {
+  if (!portal.enabled) return sendJson(res, 403, { error: 'Le suivi des décisions requiert le portail privé.' });
+  const project = url.searchParams.get('project'), channel = req.headers['x-feedback-channel'];
+  const respondError = error => sendJson(res, error.status || 500, { error: error.status ? error.message : 'Stockage des décisions indisponible.' });
+  if (req.method === 'GET') {
+    try { return sendJson(res, 200, { proposals: decisionStore.list(PROJECTS, project, channel) }); }
+    catch (error) { return respondError(error); }
+  }
   if (req.method !== 'POST') return sendJson(res, 405, { error: 'Méthode non autorisée.' });
   if (req.headers['content-type']?.split(';')[0] !== 'application/json') return sendJson(res, 415, { error: 'JSON requis.' });
   return readBody(req, res, 8192, data => {
-    if (portal.enabled && !portal.authorizeFeedback(req)) return sendJson(res, 403, { error: 'Accès non autorisé.' });
-    try { return sendJson(res, 201, { item: feedbackStore.append(PROJECTS, project, channel, data) }); }
-    catch (error) { return respondError(error); }
+    const role = portal.roleForProject(req, project);
+    try {
+      if (data?.action === 'propose' && role === 'architect') {
+        return sendJson(res, 201, { item: decisionStore.propose(PROJECTS, project, channel, data.variant, data.modelHash) });
+      }
+      if (data?.action === 'approve' && role === 'comment') {
+        return sendJson(res, 200, { item: decisionStore.approve(PROJECTS, project, channel, data.id, data.modelHash) });
+      }
+      return sendJson(res, 403, { error: 'Ce rôle ne peut pas effectuer cette action.' });
+    } catch (error) { return respondError(error); }
   });
 }
 
@@ -597,6 +627,7 @@ http.createServer((req, res) => {
   const access = portal.enabled ? portal.guard(req, res, requestUrl, relative) : {};
   if (!access) return;
   if (urlPath === '/api/client-feedback') return clientFeedback(req, res, requestUrl);
+  if (urlPath === '/api/client-decisions') return clientDecisions(req, res, requestUrl);
   if (req.method === 'GET' && urlPath === '/api/ai/status') return aiStatus(res);
   if (req.method === 'POST' && urlPath === '/api/ai/chat') return aiChat(req, res);
   if (req.method === 'POST' && urlPath === '/api/ai/images') return aiImage(req, res);

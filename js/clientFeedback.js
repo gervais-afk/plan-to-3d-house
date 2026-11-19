@@ -3,7 +3,9 @@ class ClientFeedback {
   constructor(tools, variants, channel) {
     this.tools = tools;
     this.variants = variants;
-    this.canComment = window.PORTAL_CONTEXT?.role !== 'read';
+    const role = window.PORTAL_CONTEXT?.role;
+    this.canComment = role !== 'read';
+    this.canReview = role === 'architect';
     const el = id => document.getElementById(`feedback-${id}`);
     this.panel = document.getElementById('client-feedback');
     this.fields = el('fields');
@@ -13,11 +15,15 @@ class ClientFeedback {
     this.text = el('text');
     this.start = el('start');
     this.list = el('list');
+    if (role) el('intro').textContent = role === 'read'
+      ? 'Consultez les remarques et les décisions de ce dossier en lecture seule.'
+      : 'Ce dossier est accessible aux personnes qui ont son lien et un accès au projet.';
     this.notes = [];
     this.anchors = [];
     this.lastView = new THREE.Matrix4();
     this.lastProjection = new THREE.Matrix4();
     this.nextCheck = 0;
+    this.decisions = new ClientDecisions(this);
     this.key = `plan3d:retours:v1:${variants.project}`;
     try { channel ||= localStorage.getItem(this.key); } catch { /* lien uniquement */ }
     this.setChannel(VariantState.channelPattern.test(channel || '') ? channel : null);
@@ -26,7 +32,7 @@ class ClientFeedback {
       this.status.textContent = 'Lecture seule : vous pouvez consulter les dossiers dont vous avez reçu le lien.';
     }
     el('create').addEventListener('click', () => {
-      if (this.posting || (this.channel && !window.confirm('Créer un nouveau dossier ? Conservez le lien précédent pour retrouver ses remarques.'))) return;
+      if (this.posting || this.reviewing || this.decisions.pending || (this.channel && !window.confirm('Créer un nouveau dossier ? Conservez le lien précédent pour retrouver ses remarques.'))) return;
       this.cancel();
       const token = Array.from(crypto.getRandomValues(new Uint8Array(16)), n => n.toString(16).padStart(2, '0')).join('');
       this.setChannel(token);
@@ -46,6 +52,7 @@ class ClientFeedback {
 
   setChannel(channel) {
     this.channel = channel;
+    this.decisions.useChannel(channel);
     for (const id of ['share', 'start', 'refresh']) document.getElementById(`feedback-${id}`).disabled = !channel;
     document.getElementById('feedback-create').textContent = channel ? 'Nouveau dossier' : 'Créer un dossier';
     this.selected = null;
@@ -53,21 +60,22 @@ class ClientFeedback {
     if (channel) { try { localStorage.setItem(this.key, channel); } catch { /* lien uniquement */ } }
   }
 
-  async request(note) {
-    const options = { cache: 'no-store', headers: { 'X-Feedback-Channel': this.channel } };
+  async request(note, method = note ? 'POST' : 'GET', endpoint = 'client-feedback') {
+    const options = { method, cache: 'no-store', headers: { 'X-Feedback-Channel': this.channel } };
     if (note) {
-      options.method = 'POST';
       options.headers['Content-Type'] = 'application/json';
       options.body = JSON.stringify(note);
     }
-    const response = await fetch(`api/client-feedback?project=${encodeURIComponent(this.variants.project)}`, options);
+    const response = await fetch(`api/${endpoint}?project=${encodeURIComponent(this.variants.project)}`, options);
     const body = await response.json().catch(() => null);
     if (!response.ok || !body) throw new Error(body?.error || 'Retours indisponibles sur ce serveur.');
     return body;
   }
 
   async refresh(announce = true) {
-    if (this.loading || this.posting) return;
+    if (!this.channel) return;
+    void this.decisions.refresh();
+    if (this.loading || this.posting || this.reviewing) return;
     this.loading = true;
     const channel = this.channel;
     try {
@@ -183,11 +191,57 @@ class ClientFeedback {
           this.rebuildAnchors();
         });
         row.append(message, view);
+        if (window.PORTAL_CONTEXT?.role) this.addReview(row, note);
         block.append(row);
       }
       this.list.append(title, block);
     }
     this.rebuildAnchors();
+  }
+
+  addReview(row, note) {
+    const labels = { open: 'À traiter', answered: 'Répondu', closed: 'Clos' };
+    const status = document.createElement('strong');
+    status.textContent = labels[note.status] || labels.open;
+    row.prepend(status);
+    if (note.reply) {
+      const reply = document.createElement('p');
+      reply.textContent = `Architecte : ${note.reply}`;
+      row.append(reply);
+    }
+    if (!this.canReview) return;
+    const editor = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = 'Répondre ou modifier le statut';
+    const form = document.createElement('form');
+    const text = document.createElement('textarea');
+    text.maxLength = 1000;
+    text.rows = 2;
+    text.setAttribute('aria-label', 'Réponse de l’architecte');
+    text.placeholder = 'Votre réponse…';
+    text.value = note.reply || '';
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', 'Statut de la remarque');
+    select.append(...Object.entries(labels).map(([id, label]) => new Option(label, id)));
+    select.value = note.status || 'open';
+    const save = document.createElement('button');
+    save.className = 'btn-toggle btn-small';
+    save.type = 'submit';
+    save.textContent = 'Enregistrer le suivi';
+    form.append(text, select, save);
+    editor.append(summary, form);
+    row.append(editor);
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (this.loading || this.reviewing || this.posting) return;
+      this.reviewing = save.disabled = true;
+      try {
+        const { item } = await this.request({ id: note.id, revision: note.revision ?? 0, status: select.value, reply: text.value }, 'PATCH');
+        this.render(this.notes.map(current => current.id === item.id ? item : current));
+        this.status.textContent = 'Suivi enregistré.';
+      } catch (error) { this.status.textContent = error.message; }
+      finally { this.reviewing = save.disabled = false; }
+    });
   }
 
   rebuildAnchors() {

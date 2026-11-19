@@ -18,7 +18,7 @@ const viewerFiles = new Set(['js/portal-context.js', 'js/houseDataCore.js', 'js/
   'js/scene.js', 'js/variantState.js', 'js/solarStudy.js', 'js/realism.js', 'js/assets.js', 'js/presentationPlan.js',
   'js/renderStudio.js', 'js/scrollTour.js', 'js/walkController.js', 'js/minimap.js', 'js/solarOptions.js',
   'js/clientFinishes.js', 'js/clientTools.js', 'js/clientVariants.js', 'js/clientFeedback.js', 'js/clientBrochure.js',
-  'js/app.js', 'css/style.css', 'css/clientTools.css']);
+  'js/app.js', 'js/clientDecisions.js', 'css/style.css', 'css/clientTools.css']);
 const publicFiles = new Set(['portal.html', 'js/portal.js', 'css/portal.css']);
 
 function safePath(relative) {
@@ -48,6 +48,7 @@ function createPortal({ root, projects, send, read, env = process.env, now = Dat
   }
   if (origin.href !== origin.origin + '/') throw new Error('PORTAL_ORIGIN doit être une origine sans chemin ni identifiants.');
   const passwordHash = digest(password);
+  const defaultProject = projectPattern.test(env.PORTAL_DEFAULT_PROJECT || '') ? env.PORTAL_DEFAULT_PROJECT : null;
   const cookieName = secure ? '__Host-plan3d' : 'plan3d-local';
   // Un redémarrage sans configuration ne doit pas republier une installation privée.
   fs.mkdirSync(storage, { recursive: true, mode: 0o700 });
@@ -196,6 +197,9 @@ function createPortal({ root, projects, send, read, env = process.env, now = Dat
         if (relative === 'editor.html' || (project && project !== session.project)) { deny(res, session); return false; }
         if (!project) { res.writeHead(302, { Location: `/index.html?project=${session.project}` }); res.end(); return false; }
       }
+      if (session.role === 'architect' && relative === 'index.html' && defaultProject && !url.searchParams.has('project')) {
+        res.writeHead(302, { Location: `/index.html?project=${defaultProject}` }); res.end(); return false;
+      }
       return { session };
     }
     if (!session) { deny(res, null); return false; }
@@ -210,16 +214,16 @@ function createPortal({ root, projects, send, read, env = process.env, now = Dat
     }
     if (relative === 'api/projects' && req.method === 'GET') return { session, only: session.project };
     if (url.searchParams.get('project') === session.project &&
-      ((relative === 'api/gallery/media' && req.method === 'GET') || (relative === 'api/client-feedback' &&
+      ((relative === 'api/gallery/media' && req.method === 'GET') || (['api/client-feedback', 'api/client-decisions'].includes(relative) &&
         (req.method === 'GET' || (req.method === 'POST' && session.role === 'comment'))))) return { session };
     if (reading && allowClientFile(relative, session)) return { session };
     deny(res, session);
     return false;
   }
 
-  return { enabled, guard, directory, authorizeFeedback: req => {
+  return { enabled, guard, roleForProject(req, project) {
     const current = sessionFor(cookie(req));
-    return current?.role === 'architect' || (current?.role === 'comment' && current.project === new URL(req.url, origin).searchParams.get('project'));
+    return current?.role === 'architect' || current?.project === project ? current?.role : null;
   } };
 }
 

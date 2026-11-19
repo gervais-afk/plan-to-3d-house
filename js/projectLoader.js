@@ -353,6 +353,12 @@ window.HouseAuto = HouseAuto;
 
   localStorage.setItem('lastProject', name);
   const p = JSON.parse(xhr.responseText);
+  if (window.PORTAL_CONTEXT?.role && globalThis.crypto?.subtle) {
+    const bytes = new TextEncoder().encode(xhr.responseText);
+    window.PROJECT_MODEL_HASH = crypto.subtle.digest('SHA-256', bytes)
+      .then(buffer => Array.from(new Uint8Array(buffer), byte => byte.toString(16).padStart(2, '0')).join(''))
+      .catch(() => null);
+  }
   const baseConfig = Object.assign({}, HOUSE_DATA.config);
   delete baseConfig.walkStart; delete baseConfig.walkBounds; delete baseConfig.planImage;
   const baseAssets = HOUSE_DATA.assets;
