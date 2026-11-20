@@ -52,7 +52,7 @@ async function serve(root, variables = {}) {
 function fixture(root) {
   for (const file of ['serve.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'presentationStore.js', 'cabinetStore.js', 'portal.html', 'accueil.html', 'index.html', 'editor.html']) fs.copyFileSync(path.join(source, file), path.join(root, file));
   fs.mkdirSync(path.join(root, 'js'));
-  for (const file of ['variantState.js', 'data.js']) fs.copyFileSync(path.join(source, 'js', file), path.join(root, 'js', file));
+  for (const file of ['variantState.js', 'data.js', 'coverImage.js']) fs.copyFileSync(path.join(source, 'js', file), path.join(root, 'js', file));
   for (const project of ['plan-a', 'plan-b']) {
     const dir = path.join(root, 'projects', project);
     fs.mkdirSync(path.join(dir, 'generated', 'renders'), { recursive: true });
@@ -184,6 +184,7 @@ test('Invitations : portée projet, rôles, accès direct, expiration et révoca
   const cover = await reader.request('/accueil.html?project=plan-a');
   assert.equal(cover.status, 200);
   assert.equal(cover.headers.get('cache-control'), 'private, no-store');
+  assert.equal((await reader.request('/js/coverImage.js')).status, 200, 'le client invité reçoit le script de cadrage de couverture');
   const projectResponse = await reader.request(a + '/project.json');
   assert.equal(projectResponse.status, 200);
   assert.equal((await projectResponse.json()).meta.client, undefined, 'le client reste masqué dans le JSON invité');

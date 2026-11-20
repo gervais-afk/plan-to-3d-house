@@ -101,8 +101,7 @@
     current = (index + activeViews.length) % activeViews.length;
     const version = ++pictureVersion;
     const shot = activeViews[current];
-    const focal = current === 0 ? presentation.focal : { x: 50, y: 50 };
-    image.style.objectPosition = `${focal.x}% ${focal.y}%`;
+    const focal = current === 0 ? presentation?.focal : null;
     if (!shot.published) {
       image.hidden = true;
       cover.dataset.art = 'plan';
@@ -114,18 +113,14 @@
     const source = new URL(shot.preview || shot.source, url).href;
     el('cover-number').textContent = `${counter(current + 1)} / ${counter(activeViews.length)}`;
     Array.from(views.children).forEach((button, i) => button.setAttribute('aria-pressed', String(i === current)));
-    const next = new Image();
-    next.fetchPriority = 'high';
     // Réseau lent : le plan dessiné couvre l’attente plutôt qu’une trame vide.
     const patience = setTimeout(() => { if (version === pictureVersion && cover.dataset.art !== 'photo') cover.dataset.art = 'plan'; }, 1200);
     try {
-      next.src = source;
-      try { await next.decode(); }
-      catch (error) { if (source === original) throw error; next.src = original; await next.decode(); }
-      if (version !== pictureVersion) return;
-      next.id = image.id;
-      next.alt = shot.alt;
-      image.replaceWith(next);
+      const next = await CoverImage.replace(image, {
+        ImageConstructor: Image, source, original, alt: shot.alt, focal,
+        isCurrent: () => version === pictureVersion
+      });
+      if (!next) return;
       image = next;
       cover.dataset.art = 'photo';
       el('cover-caption').textContent = shot.label;
