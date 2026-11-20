@@ -97,6 +97,28 @@ function saveRender(req, res, url) {
   });
 }
 
+// Sélections de l’architecte sur une image publiée : catalogue des intérieurs et cahier de plans.
+function galleryFlags(req, res, url) {
+  readBody(req, res, 4 * 1024, body => {
+    const { id } = body || {};
+    const flags = Object.fromEntries(['catalog', 'book'].filter(key => typeof body?.[key] === 'boolean').map(key => [key, body[key]]));
+    if (typeof id !== 'string' || !/^[a-z0-9_-]{1,80}$/i.test(id) || !Object.keys(flags).length) {
+      return sendJson(res, 422, { error: 'Indiquez une image et un choix catalogue ou cahier.' });
+    }
+    let media;
+    try { media = ensureProjectMedia(projectSlug(url.searchParams.get('project'))); }
+    catch (error) { return sendJson(res, 400, { error: error.message }); }
+    let manifest;
+    try { manifest = JSON.parse(fs.readFileSync(media.manifest, 'utf8')); }
+    catch { return sendJson(res, 409, { error: 'Le manifeste du projet est illisible.' }); }
+    const item = Array.isArray(manifest?.items) && manifest.items.find(entry => entry && entry.type === 'image' && entry.id === id);
+    if (!item) return sendJson(res, 404, { error: 'Image introuvable dans ce projet.' });
+    Object.assign(item, flags);
+    atomicFile(media.manifest, JSON.stringify(manifest, null, 2));
+    return sendJson(res, 200, { ok: true, id, catalog: item.catalog === true, book: item.book === true });
+  });
+}
+
 // Enregistre une photoréalisation en ajoutant/remplaçant uniquement son entrée dans le manifeste.
 function saveGenerated(req, res, url) {
   readBody(req, res, 30 * 1024 * 1024, body => {
@@ -239,7 +261,8 @@ function galleryMedia(res, url) {
         preview: fs.statSync(path.join(media.images, preview), { throwIfNoEntry: false })?.isFile() ? imagePrefix + preview : null,
         reference: typeof item.reference === 'string' && item.reference.startsWith(renderPrefix)
           && /^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp)$/i.test(item.reference.slice(renderPrefix.length)) ? item.reference : null,
-        room: item.room || null, label: item.label || item.id || 'Image générée',
+        room: item.room || null, label: item.label || item.id || 'Image générée', cover: item.cover === true,
+        catalog: item.catalog === true, book: item.book === true,
         generator: item.generator || '', prompt: item.prompt || '', notes: item.notes || '',
         width: item.width || null, height: item.height || null
       };
@@ -341,7 +364,18 @@ function projectProblem(project) {
   for (const key of ['furniture', 'columns', 'canopies', 'stairwells']) {
     if (project[key] !== undefined && (!Array.isArray(project[key]) || !project[key].every(isRecord))) return `La liste « ${key} » est invalide.`;
   }
+  if (project.estimate !== undefined && !estimateSettingsValid(project.estimate)) return 'Les réglages de l’estimation sont invalides.';
   return null;
+}
+
+// Réglages d’estimation (js/costEstimate.js) : clés connues, nombres finis positifs ou libellés courts.
+const ESTIMATE_TEXT = new Set(['standing', 'city', 'currency']);
+const ESTIMATE_NUMBERS = new Set(['version', 'perM2', 'annexWeight', 'grossShare', 'contingency', 'rangeLow', 'rangeHigh',
+  'permitOther', 'blockPrice15', 'blockPrice20', 'blocksPerM2', 'blockWaste']);
+function estimateSettingsValid(value) {
+  return isRecord(value) && Object.entries(value).every(([key, item]) =>
+    (ESTIMATE_TEXT.has(key) && typeof item === 'string' && /^[a-zA-Z-]{1,20}$/.test(item)) ||
+    (ESTIMATE_NUMBERS.has(key) && ((key === 'perM2' && item === null) || (Number.isFinite(item) && item >= 0 && item <= 1e9))));
 }
 
 function atomicFile(file, data) {
@@ -716,6 +750,7 @@ http.createServer((req, res) => {
   if (req.method === 'GET' && urlPath === '/api/ai/videos/status') return videoStatus(req, res, new URL(req.url, 'http://localhost'));
   if (req.method === 'POST' && urlPath === '/api/save-render') return saveRender(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/save-generated') return saveGenerated(req, res, requestUrl);
+  if (req.method === 'POST' && urlPath === '/api/gallery/flags') return galleryFlags(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/save-video') return saveVideo(req, res, requestUrl);
   if (req.method === 'GET' && urlPath === '/api/gallery/media') return galleryMedia(res, requestUrl);
   if (req.method === 'GET' && urlPath === '/api/projects') return listProjects(res, access.only);

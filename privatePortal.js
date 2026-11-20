@@ -19,8 +19,8 @@ const viewerFiles = new Set(['js/portal-context.js', 'js/houseDataCore.js', 'js/
   'js/renderStudio.js', 'js/scrollTour.js', 'js/walkController.js', 'js/minimap.js', 'js/solarOptions.js',
   'js/clientFinishes.js', 'js/clientTools.js', 'js/clientVariants.js', 'js/clientFeedback.js', 'js/clientBrochure.js',
   'js/app.js', 'js/clientDecisions.js', 'css/style.css', 'css/clientTools.css',
-  'js/home.js', 'css/accueil.css', 'assets/fonts/manrope.woff2', 'assets/fonts/source-serif-4.woff2']);
-const publicFiles = new Set(['portal.html', 'js/portal.js', 'css/portal.css']);
+  'css/tokens.css', 'css/motion.css', 'js/icons.js', 'js/motion.js', 'js/presentMode.js', 'js/viewOrder.js', 'js/costEstimate.js', 'js/planBook.js', 'assets/vendor/jspdf-4.2.1.umd.min.js', 'js/home.js', 'css/accueil.css', 'assets/fonts/manrope.woff2', 'assets/fonts/source-serif-4.woff2']);
+const publicFiles = new Set(['portal.html', 'js/portal.js', 'css/portal.css', 'css/tokens.css', 'assets/fonts/manrope.woff2', 'assets/fonts/source-serif-4.woff2']);
 
 function safePath(relative) {
   // Bloque aussi les dossiers cachés, secrets et liens symboliques (contrôlés avant l’envoi).
@@ -186,7 +186,7 @@ function createPortal({ root, projects, send, read, env = process.env, now = Dat
     if (!reading && req.headers.origin !== origin.origin) { send(res, 403, { error: 'Origine de la requête non autorisée.' }); return false; }
     if (urlPath.startsWith('/api/portal/')) { authApi(req, res, urlPath, session); return false; }
     if (reading && publicFiles.has(relative)) {
-      if (relative === 'portal.html') res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'");
+      if (relative === 'portal.html') res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'");
       return { session };
     }
     if (reading && ['index.html', 'accueil.html', 'editor.html'].includes(relative)) {

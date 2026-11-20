@@ -1,15 +1,26 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" data-scheme="auto">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta name="theme-color" content="#eeede6">
+  <meta name="theme-color" content="#f4f2eb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141a16" media="(prefers-color-scheme: dark)">
   <meta name="description" content="Le dossier architectural, du plan à la visite 3D.">
   <title>Plan to 3D — Dossier architectural</title>
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="fr_FR">
+  <meta property="og:title" content="Dossier architectural — du plan à la visite 3D">
+  <meta property="og:description" content="Plans, rendus et maquette interactive du projet.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Crect width='36' height='36' rx='6' fill='%231f2a1f'/%3E%3Cg fill='none' stroke='%23dcea9f'%3E%3Cpath d='M6 28V8h24v20H6Zm0-11h14V8m0 9v11m0-5h10' stroke-width='1.9'/%3E%3Cpath d='M9 11h8v3H9zm14 15h4' stroke-width='1.3'/%3E%3C/g%3E%3C/svg%3E">
+  <meta name="color-scheme" content="light dark">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/motion.css">
   <link rel="stylesheet" href="css/accueil.css">
   <script src="js/portal-context.js" defer></script>
+  <script src="js/motion.js" defer></script>
   <script src="js/houseDataCore.js" defer></script>
+  <script src="js/viewOrder.js" defer></script>
   <script src="js/home.js" defer></script>
 </head>
 <body>
@@ -32,7 +43,7 @@
   <main id="contenu" class="shell">
     <div class="folio" aria-hidden="true"><span><i></i> DOSSIER ARCHITECTURAL</span><span>PLAN / VOLUME / MATIÈRE</span></div>
     <section class="cover" aria-labelledby="cover-title" id="home-cover" tabindex="-1">
-      <div class="cover-art" aria-hidden="true"><div id="cover-drawing" class="cover-drawing"></div><img id="cover-image" alt="" fetchpriority="high" hidden></div>
+      <div class="cover-art"><div id="cover-drawing" class="cover-drawing" aria-hidden="true"></div><img id="cover-image" alt="" fetchpriority="high" hidden></div>
       <div class="cover-shade" aria-hidden="true"></div>
       <span class="registration registration-top" aria-hidden="true"></span><span class="registration registration-bottom" aria-hidden="true"></span>
       <div class="cover-copy">
@@ -65,7 +76,24 @@
         <p id="cover-empty" class="empty-views" hidden>Aucun rendu publié. Explorez le plan et les volumes dans la maquette.</p>
       </section>
     </div>
+
+    <section class="project-sheet" id="project-sheet" aria-labelledby="sheet-title" hidden>
+      <p class="section-kicker"><span>03</span> / LE PROJET</p>
+      <div class="sheet-grid">
+        <div class="sheet-concept" id="sheet-concept-block">
+          <h2 id="sheet-title" class="sheet-title">Le parti architectural</h2>
+          <p id="sheet-concept" class="sheet-lead"></p>
+        </div>
+        <dl id="sheet-facts" class="sheet-facts" aria-label="Fiche technique"></dl>
+      </div>
+    </section>
+
+    <section class="plan-section" id="plan-section" aria-labelledby="plan-title" hidden>
+      <div class="views-heading"><p class="section-kicker"><span>04</span> / LE PLAN</p><a id="plan-enter" class="more-link" href="index.html">Explorer en 3D <span aria-hidden="true">↗</span></a></div>
+      <h2 id="plan-title" class="sr-only">Plan du projet</h2>
+      <figure class="plan-figure"><div id="plan-figure" class="plan-drawing"></div><figcaption id="plan-caption"></figcaption></figure>
+    </section>
   </main>
-  <footer class="footer shell"><span>PLAN / 3D</span><span>PRÉSENTATION ARCHITECTURALE INTERACTIVE</span></footer>
+  <footer class="footer shell"><span>PLAN / 3D</span><span class="footer-signature" id="footer-signature" hidden><span id="footer-architect"></span> <a id="footer-contact" hidden></a></span><span>PRÉSENTATION ARCHITECTURALE INTERACTIVE</span><a class="footer-link" id="footer-editor" href="editor.html">ESPACE ATELIER</a></footer>
 </body>
 </html>

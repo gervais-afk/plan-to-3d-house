@@ -177,13 +177,13 @@ document.addEventListener('DOMContentLoaded', () => {
     action.type = 'button';
     action.className = 'btn-toggle btn-small rg-card-action';
     if (aiImage) {
-      action.textContent = '↔ Comparer Avant (3D) / Après (IA)';
+      Icons.label(action, 'compare', 'Comparer Avant (3D) / Après (IA)');
       action.addEventListener('click', event => {
         event.stopPropagation();
         openLightbox(shot, aiImage, true);
       });
     } else if (!invited && shot.ext !== 'png') {
-      action.textContent = '✨ Générer le rendu photoréaliste (IA)';
+      Icons.label(action, 'sparkle', 'Générer le rendu photoréaliste (IA)');
       action.addEventListener('click', event => {
         event.stopPropagation();
         const model = card.querySelector('.rg-model-choice').value;
@@ -194,6 +194,35 @@ document.addEventListener('DOMContentLoaded', () => {
       action.setAttribute('aria-label', `Ouvrir la vue : ${shot.label}`);
     }
     card.appendChild(action);
+    if (!invited && aiImage?.id) {
+      // Le rendu IA de cette vue peut rejoindre le catalogue des intérieurs et/ou le cahier de plans.
+      const flags = document.createElement('div');
+      flags.className = 'rg-flags';
+      [['catalog', 'Catalogue'], ['book', 'Cahier']].forEach(([key, label]) => {
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'btn-toggle btn-small rg-flag';
+        const paint = () => {
+          toggle.setAttribute('aria-pressed', String(aiImage[key] === true));
+          // État porté par aria-pressed (fond sable) et par l’icône : coche quand l’image est retenue.
+          Icons.label(toggle, aiImage[key] ? 'check' : key === 'catalog' ? 'gallery' : 'book', label);
+          toggle.title = aiImage[key] ? `Retirer du ${label.toLowerCase()}` : `Ajouter au ${label.toLowerCase()}`;
+        };
+        paint();
+        toggle.addEventListener('click', async event => {
+          event.stopPropagation();
+          toggle.disabled = true;
+          try {
+            await setImageFlags(aiImage.id, { [key]: !aiImage[key] });
+            aiImage[key] = !aiImage[key];
+            paint();
+          } catch (error) { status.textContent = error.message; }
+          finally { toggle.disabled = false; }
+        });
+        flags.append(toggle);
+      });
+      card.appendChild(flags);
+    }
     if (action.textContent !== 'Ouvrir la vue') {
       const view = document.createElement('button');
       view.type = 'button';
@@ -219,8 +248,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const badge = document.createElement('div');
     badge.className = 'rg-badge rg-badge-video';
     const videoSourceLabel = item.sourceLabel || (item.generator === 'MediaRecorder local'
-      ? '🎥 Capture 3D locale'
-      : item.generator ? '✨ Rendu IA' : '🎞 Vidéo');
+      ? 'Capture 3D locale'
+      : item.generator ? 'Rendu IA' : 'Vidéo');
     badge.textContent = videoSourceLabel;
     thumbWrap.appendChild(badge);
 
@@ -340,6 +369,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const aiImage = aiImageForShot(item, media.images) || saved.item;
       const cost = result.usage?.cost !== undefined ? ` · ${Number(result.usage.cost).toFixed(3)} $` : '';
       status.textContent = `Rendu IA enregistré${cost}. Vérifiez sa fidélité au plan.`;
+      // Proposition immédiate : rejoindre le catalogue des intérieurs (modifiable ensuite depuis la carte).
+      if (confirm(`Ajouter « ${item.label} » au catalogue des intérieurs ?\n\nLe client pourra l’exporter en PDF avec les autres vues du catalogue.`)) {
+        try {
+          await setImageFlags(id, { catalog: true });
+          status.textContent += ' Ajouté au catalogue.';
+          galleryInitialized = false;
+          await buildGallery();
+        } catch (error) { status.textContent += ` Ajout au catalogue impossible : ${error.message}`; }
+      }
       openLightbox(item, aiImage, true);
     } catch (error) {
       status.textContent = `Photoréalisation impossible : ${error.message}`;
@@ -361,6 +399,17 @@ document.addEventListener('DOMContentLoaded', () => {
       galleryMediaCache = { images: [], videos: [], unavailable: true };
     }
     return galleryMediaCache;
+  }
+
+  // Ajoute ou retire une image publiée du catalogue des intérieurs ou du cahier de plans (architecte).
+  async function setImageFlags(id, flags) {
+    const response = await fetch(projectApi('api/gallery/flags'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...flags })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) throw new Error(result.error || `Enregistrement du choix impossible (HTTP ${response.status})`);
+    galleryMediaCache = null;
+    return result;
   }
 
   function aiImageForShot(shot, images) {
@@ -406,7 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    addSection('🏛 Vues de la maquette 3D', 'Captures locales gratuites · les rendus IA disponibles se comparent sur la même carte');
+    addSection('Vues de la maquette 3D', 'Captures locales gratuites · les rendus IA disponibles se comparent sur la même carte');
     let withAI = 0;
     shots3D.forEach(shot => {
       const aiImage = aiImageForShot(shot, media.images);
@@ -420,7 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
       extra.forEach(image => grid.appendChild(createViewCard({ ...image, url: image.file, ext: image.file.split('.').pop() }, null)));
     }
     if (media.videos.length) {
-      addSection('🎬 Animations vidéo disponibles', 'Seuls les fichiers MP4 présents sont affichés');
+      addSection('Animations vidéo disponibles', 'Seuls les fichiers MP4 présents sont affichés');
       media.videos.forEach(video => grid.appendChild(createVideoCard(video)));
     }
 
@@ -468,8 +517,8 @@ document.addEventListener('DOMContentLoaded', () => {
       videoEl.play().catch(() => {});
       captionEl.textContent = item.label;
       const sourceLabel = item.sourceLabel || (item.generator === 'MediaRecorder local'
-        ? '🎥 Capture 3D locale'
-        : item.generator ? '✨ Rendu IA' : '🎞 Vidéo');
+        ? 'Capture 3D locale'
+        : item.generator ? 'Rendu IA' : 'Vidéo');
       metaEl.textContent = `${item.duration ? item.duration + ' s · ' : ''}${sourceLabel} · Vidéo ${(item.format || item.file.split('.').pop()).toUpperCase()} disponible`;
       dlLink.href = item.file;
       dlLink.download = item.file.split('/').pop() || `${item.id}.mp4`;
@@ -495,12 +544,12 @@ document.addEventListener('DOMContentLoaded', () => {
             compareView.classList.remove('hidden');
             compare3D.src = baseUrl;
             compareGen.src = aiImage.file;
-            btnCompare.textContent = '🖼 Afficher une seule vue';
+            Icons.label(btnCompare, 'gallery', 'Afficher une seule vue');
           } else {
             compareView.classList.add('hidden');
             fullImg.classList.remove('hidden');
             fullImg.src = baseUrl;
-            btnCompare.textContent = '↔ Comparer Avant (3D) / Après (IA)';
+            Icons.label(btnCompare, 'compare', 'Comparer Avant (3D) / Après (IA)');
           }
         };
         btnCompare.onclick = () => toggleCompare(!isCompareActive);
@@ -593,7 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           if (!result || result.status !== 'completed') throw new Error('Délai de suivi dépassé ; vérifiez le statut depuis la galerie avant de relancer.');
           const realCost = Number.isFinite(Number(result.actualCost)) ? ` · coût réel ${Number(result.actualCost).toFixed(4)} $` : '';
-          status.textContent = `✨ ${clip.label} enregistrée en local${realCost}.`;
+          status.textContent = `${clip.label} enregistrée en local${realCost}.`;
           present.add(clip.id);
           galleryMediaCache = null;
           galleryInitialized = false;
@@ -681,7 +730,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function setPhotoMode(enabled) {
     photoModeEnabled = enabled;
     if (btnPhotoMode) {
-      btnPhotoMode.textContent = photoModeEnabled ? '✨ Mode photo : Actif' : '📷 Mode photo : Inactif';
+      Icons.label(btnPhotoMode, photoModeEnabled ? 'sparkle' : 'camera', photoModeEnabled ? 'Mode photo : actif' : 'Mode photo : inactif');
       btnPhotoMode.classList.toggle('is-active', photoModeEnabled);
       btnPhotoMode.setAttribute('aria-pressed', String(photoModeEnabled));
     }
@@ -755,12 +804,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnTimelapse) btnTimelapse.addEventListener('click', () => houseScene.playConstruction());
   function toggleSectionCut() {
     const active = houseScene.toggleSectionCut();
-    if (btnSection) { btnSection.classList.toggle('is-active', active); btnSection.setAttribute('aria-pressed', String(active)); btnSection.textContent = active ? '✂ Coupe : active' : '✂ Coupe'; }
+    if (btnSection) { btnSection.classList.toggle('is-active', active); btnSection.setAttribute('aria-pressed', String(active)); Icons.label(btnSection, 'section', active ? 'Coupe : active' : 'Coupe'); }
   }
   function toggleExploded() {
     const requested = !houseScene.explodedTarget;
     const active = houseScene.setExploded(requested);
-    if (btnExplode) { btnExplode.classList.toggle('is-active', active); btnExplode.setAttribute('aria-pressed', String(active)); btnExplode.textContent = active ? '↕ Vue éclatée : active' : '↕ Vue éclatée'; }
+    if (btnExplode) { btnExplode.classList.toggle('is-active', active); btnExplode.setAttribute('aria-pressed', String(active)); Icons.label(btnExplode, 'explode', active ? 'Vue éclatée : active' : 'Vue éclatée'); }
   }
   if (btnSection) btnSection.addEventListener('click', toggleSectionCut);
   if (btnExplode) {
@@ -798,6 +847,122 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   pdfButton.addEventListener('click', () => exportClientPDF());
+
+  // ---------- Cahier de plans : composer, approuver, puis assembler (architecte) ----------
+  const bookOpen = document.getElementById('book-open');
+  const bookDialog = document.getElementById('book-dialog');
+  const bookFiles = document.getElementById('book-files');
+  const bookStatus = document.getElementById('book-status');
+  const bookDialogStatus = document.getElementById('book-dialog-status');
+  const bookApproved = document.getElementById('book-approved');
+  const bookExport = document.getElementById('book-export');
+  const catalogButton = document.getElementById('catalog-pdf');
+  bookOpen.hidden = invited;
+  let bookViews = [];
+
+  // Toute modification de la composition retire l’approbation : on approuve ce que l’on voit.
+  function bookChanged() {
+    bookApproved.checked = false;
+    bookExport.disabled = true;
+    const sheets = [...document.querySelectorAll('#book-sheets input:checked')].map(input => input.closest('label').querySelector('strong').textContent);
+    const chosen = bookViews.filter(view => view.book).length;
+    const annexes = bookFiles.files.length;
+    document.getElementById('book-images-count').textContent = chosen ? `${chosen} sélectionnée${chosen > 1 ? 's' : ''}` : 'aucune sélection';
+    document.getElementById('book-summary').textContent = `Couverture et cartouche, ${sheets.length ? sheets.map(name => name.charAt(0).toLowerCase() + name.slice(1)).join(', ') : 'aucune autre planche'}`
+      + `${sheets.includes('Ambiances') ? ` (${chosen || Math.min(4, bookViews.length)} image${(chosen || Math.min(4, bookViews.length)) > 1 ? 's' : ''})` : ''}`
+      + `${annexes ? `, ${annexes} PDF en annexe` : ''}.`;
+  }
+  function renderBookImages() {
+    const grid = document.getElementById('book-images');
+    grid.replaceChildren(...bookViews.map(view => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'book-image';
+      button.setAttribute('aria-pressed', String(view.book));
+      const img = document.createElement('img');
+      img.src = view.preview || view.source; img.alt = ''; img.loading = 'lazy';
+      const label = document.createElement('span');
+      label.textContent = view.label;
+      button.append(img, label);
+      button.addEventListener('click', async () => {
+        const next = !view.book;
+        button.disabled = true;
+        try {
+          await setImageFlags(view.id, { book: next });
+          view.book = next;
+          button.setAttribute('aria-pressed', String(next));
+          bookChanged();
+        } catch (error) { bookDialogStatus.textContent = error.message; }
+        finally { button.disabled = false; }
+      });
+      return button;
+    }));
+    if (!bookViews.length) grid.textContent = 'Aucun rendu publié : les vues de la maquette seront utilisées.';
+  }
+  bookOpen.addEventListener('click', async () => {
+    if (invited) return;
+    document.getElementById('book-sheets').replaceChildren(...PlanBook.SECTIONS.map(section => {
+      const label = document.createElement('label');
+      label.innerHTML = `<input type="checkbox" data-section="${section.id}" ${section.off ? '' : 'checked'}><span><strong></strong><small></small></span>`;
+      label.querySelector('strong').textContent = section.label;
+      label.querySelector('small').textContent = section.hint;
+      label.querySelector('input').addEventListener('change', bookChanged);
+      return label;
+    }));
+    bookDialogStatus.textContent = 'Chargement des images…';
+    bookDialog.showModal();
+    bookViews = await PlanBook.publishedViews(HOUSE_DATA);
+    bookDialogStatus.textContent = '';
+    renderBookImages();
+    bookChanged();
+  });
+  bookFiles.addEventListener('change', () => {
+    document.getElementById('book-files-list').replaceChildren(...Array.from(bookFiles.files, file => {
+      const li = document.createElement('li');
+      li.innerHTML = '<span></span><small></small>';
+      li.firstChild.textContent = file.name;
+      li.lastChild.textContent = `${Math.round(file.size / 1024)} Ko`;
+      return li;
+    }));
+    bookChanged();
+  });
+  bookApproved.addEventListener('change', () => {
+    bookExport.disabled = !bookApproved.checked;
+    bookDialogStatus.textContent = bookApproved.checked ? 'Composition approuvée : vous pouvez exporter le PDF.' : '';
+  });
+  bookExport.addEventListener('click', async () => {
+    if (!bookApproved.checked || exportingPDF || tourRecording || exportVideoButton.disabled || invited) return;
+    const sections = Object.fromEntries([...document.querySelectorAll('#book-sheets input')].map(input => [input.dataset.section, input.checked]));
+    exportingPDF = bookExport.disabled = pdfButton.disabled = true;
+    try {
+      await assetsReady;
+      const result = await PlanBook.exportBook({ data: HOUSE_DATA, studio, files: bookFiles.files, sections,
+        onStatus: message => { bookDialogStatus.textContent = message; } });
+      const done = `Cahier de ${result.pages} planches téléchargé${result.annexes ? `, dont ${result.annexes} en annexe` : ''}.`;
+      Motion.success(bookDialogStatus, done);
+      Motion.success(bookStatus, done);
+    } catch (error) {
+      console.error(error);
+      Motion.error(bookDialogStatus, `Cahier impossible : ${error.message}`, bookExport);
+    } finally {
+      exportingPDF = pdfButton.disabled = false;
+      bookExport.disabled = !bookApproved.checked;
+    }
+  });
+
+  // ---------- Catalogue des intérieurs : ouvert aux clients ----------
+  catalogButton.addEventListener('click', async () => {
+    if (exportingPDF) return;
+    exportingPDF = catalogButton.disabled = true;
+    try {
+      const result = await PlanBook.exportCatalog({ data: HOUSE_DATA, onStatus: message => { bookStatus.textContent = message; } });
+      Motion.success(bookStatus, `Catalogue de ${result.images} image${result.images > 1 ? 's' : ''} téléchargé.`);
+    } catch (error) {
+      Motion.error(bookStatus, error.message, catalogButton);
+    } finally {
+      exportingPDF = catalogButton.disabled = false;
+    }
+  });
   function toggleNight() {
     const geo = houseScene.solarGeo;
     const nightPreset = geo ? 22 : SolarStudy.evening;
@@ -1073,7 +1238,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (saved.pinned) pinView(saved.pinned);
       lockedControls.forEach(control => { if (control) control.disabled = false; });
       exportVideoButton.disabled = false;
-      exportVideoButton.textContent = '🎥 Exporter l’animation vidéo';
+      Icons.label(exportVideoButton, 'video', 'Exporter l’animation vidéo');
       setVideoExportStatus(uploadStatus || '');
     }
   }

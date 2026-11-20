@@ -1,24 +1,6 @@
-@font-face {
-  font-family: Manrope;
-  src: url("../assets/fonts/manrope.woff2") format("woff2");
-  font-display: swap;
-  font-weight: 200 800;
-}
-@font-face {
-  font-family: "Source Serif";
-  src: url("../assets/fonts/source-serif-4.woff2") format("woff2");
-  font-display: swap;
-  font-weight: 200 900;
-}
 :root {
-  color-scheme: light;
-  --paper: #eeede6;
-  --ink: #22271f;
-  --rule: #cccec0;
-  --muted: #4b5346;
-  --acid: #dcf381;
-  --serif: "Source Serif", Georgia, serif;
-  --sans: Manrope, system-ui, sans-serif;
+  /* Les couleurs, polices et le mode sombre viennent de css/tokens.css. */
+  --acid: var(--accent-soft); /* ancien vert citron : désormais l'accent sable */
 }
 *,
 *::before,
@@ -52,11 +34,11 @@ img {
   display: none !important;
 }
 :focus-visible {
-  outline: 3px solid #396348;
+  outline: 3px solid var(--focus);
   outline-offset: 4px;
 }
 .cover :focus-visible {
-  outline-color: #ecffb1;
+  outline-color: var(--focus-on-night);
 }
 .sr-only,
 .skip:not(:focus) {
@@ -124,7 +106,7 @@ img {
   height: 33px;
 }
 .brand-slash {
-  color: #567347;
+  color: var(--accent-ink);
   margin-inline: 0.09em;
 }
 .masthead-links {
@@ -156,7 +138,7 @@ img {
   min-height: 44px;
   background: transparent;
   border: 0;
-  border-bottom: 1px solid #999f8f;
+  border-bottom: 1px solid var(--rule);
   font-weight: 750;
   font-size: 0.82rem;
   padding: 0 0.4rem;
@@ -174,7 +156,7 @@ img {
 }
 .folio i {
   display: inline-block;
-  background: #677a57;
+  background: var(--accent);
   width: 7px;
   height: 7px;
   margin-right: 0.48rem;
@@ -209,8 +191,8 @@ img {
 .cover-drawing {
   background-color: #303a2f;
   background-image:
-    linear-gradient(#dcead112 1px, transparent 1px),
-    linear-gradient(90deg, #dcead112 1px, transparent 1px);
+    linear-gradient(rgba(216, 199, 160, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(216, 199, 160, 0.07) 1px, transparent 1px);
   background-size: 28px 28px;
   display: flex;
   justify-content: flex-end;
@@ -219,7 +201,25 @@ img {
 .cover-drawing svg {
   width: 72%;
   height: 77%;
-  color: #d7e8af;
+  color: var(--accent-soft);
+  transition: opacity 0.4s ease;
+}
+/* Le plan n’apparaît qu’en l’absence de rendu, jamais en attendant la photo. */
+.cover:not([data-art="plan"]) .cover-drawing svg {
+  opacity: 0;
+}
+.footer-link {
+  color: inherit;
+  text-decoration: none;
+}
+.footer-link:hover,
+.footer-link:focus-visible {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+}
+.footer-link[hidden] {
+  display: none;
 }
 .cover-shade {
   z-index: -1;
@@ -243,7 +243,7 @@ img {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  color: #e7faac;
+  color: var(--accent-soft);
   font-size: 0.67rem;
   font-weight: 800;
   letter-spacing: 0.2em;
@@ -295,7 +295,7 @@ img {
   padding-left: 0.8rem;
 }
 .primary:hover {
-  background: #edf8b9;
+  background: #e8dbbb;
 }
 .cover-caption {
   position: absolute;
@@ -313,7 +313,7 @@ img {
 }
 .caption-key {
   color: var(--acid);
-  border: 1px solid #dceec5a5;
+  border: 1px solid rgba(216, 199, 160, 0.6);
   padding: 0.2rem 0.35rem;
 }
 .cover-index {
@@ -337,7 +337,7 @@ img {
   font-size: 1.12rem;
 }
 .cover-index button:hover {
-  background: #55684e;
+  background: var(--accent);
 }
 .cover-index span {
   min-width: 4.2rem;
@@ -366,7 +366,7 @@ img {
   display: none;
 }
 .load-status {
-  border-left: 3px solid #72805f;
+  border-left: 3px solid var(--accent);
   padding: 0.35rem 0.7rem;
   color: var(--muted);
   margin: 1rem 0 0;
@@ -386,7 +386,7 @@ img {
   color: var(--muted);
 }
 .section-kicker span {
-  color: #4a643d;
+  color: var(--accent-ink);
 }
 .dossier h2:not(.sr-only) {
   font: 470 clamp(2.25rem, 4.15vw, 4.5rem) / 0.98 var(--serif);
@@ -456,7 +456,7 @@ img {
 }
 .view-figure {
   aspect-ratio: 1.64;
-  background: #d8dbcb;
+  background: var(--paper-2);
   overflow: hidden;
   outline: 1px solid #0002;
   outline-offset: -1px;
@@ -470,7 +470,7 @@ img {
   transform: scale(1.04);
 }
 .view-card[aria-pressed="true"] .view-figure {
-  outline: 3px solid #526748;
+  outline: 3px solid var(--focus);
   outline-offset: -3px;
 }
 .view-name {
@@ -485,7 +485,7 @@ img {
   flex: none;
   white-space: nowrap;
   font-style: normal;
-  color: #4d6243;
+  color: var(--accent-ink);
   font-variant-numeric: tabular-nums;
 }
 .view-kind {
@@ -531,8 +531,9 @@ img {
   }
   .cover-drawing svg {
     width: 100%;
-    height: 69%;
+    height: 36%;
     align-self: start;
+    margin-top: 1.5rem;
   }
   .cover-shade {
     background:
@@ -603,6 +604,11 @@ img {
   }
   .footer {
     letter-spacing: 0.085em;
+    flex-wrap: wrap;
+  }
+  .footer > span:nth-child(2) {
+    order: 3;
+    flex-basis: 100%;
   }
   .more-link {
     font-size: 0.71rem;
@@ -615,4 +621,45 @@ img {
     scroll-behavior: auto !important;
     transition: none !important;
   }
+}
+
+/* Passage animé vers la maquette : la couverture et le canvas 3D partagent le même nom (css/motion.css). */
+#cover-image { view-transition-name: plan3d-hero; }
+
+/* ---------- 03 / Le projet : parti architectural et fiche technique ---------- */
+.project-sheet { border-top: 1px solid var(--rule); padding-block: clamp(1.8rem, 4vw, 3.6rem); }
+.project-sheet[hidden], .plan-section[hidden], .footer-signature[hidden], #footer-contact[hidden], .sheet-concept[hidden] { display: none; }
+.sheet-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr); gap: clamp(1.4rem, 5vw, 5rem); margin-top: 1.1rem; align-items: start; }
+.sheet-title { font: 470 clamp(1.9rem, 3.2vw, 3.1rem) / 1 var(--serif); letter-spacing: -0.04em; margin: 0 0 1rem; }
+.sheet-lead { font: 400 clamp(1.08rem, 1.5vw, 1.32rem) / 1.6 var(--serif); color: var(--ink-2); max-width: 62ch; margin: 0; }
+.sheet-facts { margin: 0; display: grid; border-top: 1px solid var(--ink); }
+.sheet-facts div { display: flex; justify-content: space-between; gap: 1rem; padding: 0.7rem 0; border-bottom: 1px solid var(--rule); }
+.sheet-facts dt { color: var(--muted); font-size: 0.82rem; }
+.sheet-facts dd { margin: 0; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---------- 04 / Le plan : dessin à proportions exactes ---------- */
+.plan-section { border-top: 1px solid var(--rule); padding-block: clamp(1.8rem, 4vw, 3.6rem); }
+.plan-figure { margin: 1.1rem 0 0; padding: clamp(1rem, 3vw, 2.4rem); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-lg); }
+.plan-drawing svg { display: block; width: 100%; max-height: min(72vh, 760px); }
+.plan-room { fill: var(--paper-2); }
+.plan-annex { fill: var(--accent-wash); }
+.plan-wall { stroke: var(--ink); stroke-linecap: square; }
+.plan-glass { stroke: var(--accent); stroke-width: 0.06; }
+.plan-label { font: 700 0.3px var(--sans); fill: var(--ink); text-anchor: middle; letter-spacing: 0.01em; }
+.plan-area { font: 500 0.26px var(--sans); fill: var(--muted); text-anchor: middle; font-variant-numeric: tabular-nums; }
+.plan-figure figcaption { margin-top: 1rem; font-size: 0.78rem; letter-spacing: 0.06em; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ---------- Signature de l'agence ---------- */
+.footer-signature { color: var(--ink); letter-spacing: 0.06em; }
+#footer-contact { color: var(--accent-ink); text-underline-offset: 0.3em; }
+
+@media (max-width: 740px) {
+  .sheet-grid { grid-template-columns: 1fr; }
+  .plan-label { font-size: 0.4px; }
+  .plan-area { font-size: 0.34px; }
+}
+
+/* Cibles tactiles : liens de section et de pied de page à 44 px sur écran tactile. */
+@media (pointer: coarse) {
+  .more-link, .footer-link, #footer-contact, .brand { display: inline-flex; align-items: center; min-height: var(--target); }
 }

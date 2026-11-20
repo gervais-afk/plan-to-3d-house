@@ -827,9 +827,12 @@ class HouseScene {
   playConstruction(duration = 9000) {
     if (this._constructionFrame) cancelAnimationFrame(this._constructionFrame);
     const start = performance.now();
+    // Mouvement réduit : le chantier avance par quatre états fixes au lieu d'un mouvement continu.
+    const stepped = matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.setElevation(0);
     const tick = now => {
-      const t = Math.min(1, (now - start) / duration);
+      const raw = Math.min(1, (now - start) / duration);
+      const t = stepped ? Math.floor(raw * 4) / 4 : raw;
       this.setElevation(t);
       if (t < 1) this._constructionFrame = requestAnimationFrame(tick);
       else this._constructionFrame = 0;

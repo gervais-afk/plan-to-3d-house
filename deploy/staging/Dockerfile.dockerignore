@@ -9,6 +9,8 @@
 !assets/fonts/
 !assets/fonts/*.woff2
 !assets/fonts/*.LICENSE.txt
+!assets/vendor/
+!assets/vendor/*.js
 !editor.html
 !portal.html
 !js/

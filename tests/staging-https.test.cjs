@@ -42,6 +42,22 @@ test('Recette HTTPS : rôles, avis, validation immuable et rendu refusé après 
   assert.equal(font.status, 200);
   assert.equal(font.headers['content-type'], 'font/woff2');
   assert.equal((await reader.request('/js/clientDecisions.js')).status, 200);
+  // Catalogue et cahier : bibliothèques servies au client, sélections réservées à l’architecte.
+  for (const file of ['/js/planBook.js', '/js/viewOrder.js', '/assets/vendor/jspdf-4.2.1.umd.min.js']) assert.equal((await reader.request(file)).status, 200);
+  // Système de design commun : servi aux invités, et au portail avant connexion (polices autorisées par la CSP).
+  for (const file of ['/css/tokens.css', '/css/motion.css', '/js/icons.js', '/js/motion.js', '/js/presentMode.js']) assert.equal((await reader.request(file)).status, 200);
+  for (const file of ['/css/tokens.css', '/assets/fonts/manrope.woff2']) assert.equal((await guest.request(file)).status, 200);
+  assert.equal((await guest.request('/js/icons.js')).status, 401);
+  assert.match((await guest.request('/portal.html')).headers['content-security-policy'], /font-src 'self'/);
+  const manifestFile = path.join(stage.root, 'projects', a, 'generated', 'manifest.json');
+  fs.writeFileSync(manifestFile, JSON.stringify({ version: 1, items: [{ id: 'facade', type: 'image', file: `projects/${a}/generated/images/facade.jpg` }] }));
+  const flags = `/api/gallery/flags?project=${a}`;
+  for (const client of [reader, commenter]) assert.equal((await client.request(flags, { body: { id: 'facade', catalog: true } })).status, 403);
+  assert.equal((await architect.request(flags, { body: { id: 'facade', catalog: 'oui' } })).status, 422);
+  assert.equal((await architect.request(flags, { body: { id: 'absente', catalog: true } })).status, 404);
+  const flagged = await architect.request(flags, { body: { id: 'facade', catalog: true, book: false } });
+  assert.equal(flagged.status, 200);
+  assert.deepEqual(JSON.parse(fs.readFileSync(manifestFile)).items[0], { id: 'facade', type: 'image', file: `projects/${a}/generated/images/facade.jpg`, catalog: true, book: false });
   const warm = await commenter.request(render(a));
   assert.equal(warm.status, 200);
   assert.equal(warm.headers['cache-control'], 'private, no-store');
@@ -130,6 +146,16 @@ test('Enregistrement projet : erreurs JSON utilisables et validation avant écri
   assert.equal(withImage.status, 200);
   assert.equal(withImage.json().planImage.url, `projects/${slug}/plan.jpg`);
   assert.deepEqual(fs.readFileSync(path.join(path.dirname(target), 'plan.jpg')), jpg);
+  const beforeEstimate = fs.readFileSync(target, 'utf8');
+  for (const estimate of [{ perM2: -1 }, { standing: '<script>' }, { prixSecret: 1 }, []]) {
+    const badEstimate = await architect.request(route, { body: { slug, project: { ...project, estimate } } });
+    assert.equal(badEstimate.status, 422);
+    assert.match(badEstimate.json().error, /estimation/);
+  }
+  assert.equal(fs.readFileSync(target, 'utf8'), beforeEstimate);
+  const estimated = { ...project, estimate: { version: 1, currency: 'XAF', standing: 'moyen', city: 'douala', perM2: null, contingency: 0.1 } };
+  assert.equal((await architect.request(route, { body: { slug, project: estimated } })).status, 200);
+  assert.deepEqual(JSON.parse(fs.readFileSync(target)).estimate, estimated.estimate);
   const raw = await architect.request(route, { method: 'POST', headers: { Origin: stage.origin, 'Content-Type': 'application/json' } });
   assert.equal(raw.status, 400);
   assert.match(raw.json().error, /JSON/);

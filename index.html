@@ -5,9 +5,8 @@
   <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Plan to 3D — Visite interactive</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/motion.css">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/clientTools.css">
 </head>
@@ -48,7 +47,8 @@
       <nav class="technical-stamp interactive" aria-label="Commandes de la visite">
         <div class="btn-row viewer-primary">
           <span id="mode-badge" class="mode-badge">Visite guidée</span>
-          <button id="btn-renders" type="button" class="btn-toggle btn-small" aria-haspopup="dialog">Galerie</button>
+          <button id="btn-renders" type="button" class="btn-toggle btn-small" aria-haspopup="dialog"><svg class="i" aria-hidden="true"><use href="#i-gallery"></use></svg> Galerie</button>
+          <button id="btn-present" type="button" class="btn-toggle btn-small" aria-pressed="false" title="Plein écran sans outils ; flèches pour avancer, Échap pour quitter"><svg class="i" aria-hidden="true"><use href="#i-present"></use></svg> <span>Présenter</span></button>
           <a id="portal-account" href="portal.html" class="btn-toggle btn-small" hidden>Espace privé</a>
         </div>
         <div class="btn-row client-panel-tabs">
@@ -87,12 +87,17 @@
                 </div>
               </div>
               <div class="btn-row client-actions">
-                <button type="button" id="client-measure" class="btn-toggle btn-small" aria-pressed="false" title="Touche M">📐 Mesurer</button>
+                <button type="button" id="client-measure" class="btn-toggle btn-small" aria-pressed="false" title="Touche M"><svg class="i" aria-hidden="true"><use href="#i-ruler"></use></svg> Mesurer</button>
                 <button type="button" id="client-clear" class="btn-toggle btn-small" disabled>Effacer les cotes</button>
                 <label class="client-check"><input id="client-hotspots" type="checkbox" checked> Pièces</label>
               </div>
-              <button type="button" id="client-pdf" class="btn-toggle btn-small">📄 Exporter la brochure PDF</button>
+              <button type="button" id="client-pdf" class="btn-toggle btn-small"><svg class="i" aria-hidden="true"><use href="#i-document"></use></svg> Exporter la brochure PDF</button>
               <span id="client-pdf-status" role="status"></span>
+              <div class="book-tools">
+                <button type="button" id="book-open" class="btn-toggle btn-small"><svg class="i" aria-hidden="true"><use href="#i-book"></use></svg> Composer le cahier A3</button>
+                <button type="button" id="catalog-pdf" class="btn-toggle btn-small"><svg class="i" aria-hidden="true"><use href="#i-gallery"></use></svg> Catalogue des intérieurs (PDF)</button>
+                <span id="book-status" role="status"></span>
+              </div>
             </fieldset>
           </details>
           <details id="client-variants" class="client-tools" name="viewer-panels">
@@ -159,7 +164,7 @@
               <button type="button" id="btn-toggle-mode" class="btn-toggle btn-small">Visite libre (clavier)</button>
               <label class="client-check"><input id="viewer-shortcuts" type="checkbox" checked> Raccourcis clavier (N, R…)</label>
               <div class="btn-row client-actions">
-                <button type="button" id="btn-night" class="btn-toggle btn-small" title="Touche N">☀ Jour</button>
+                <button type="button" id="btn-night" class="btn-toggle btn-small" title="Touche N"><svg class="i" aria-hidden="true"><use href="#i-sun"></use></svg> Jour</button>
                 <button type="button" id="btn-quality" class="btn-toggle btn-small" title="Touche H">Qualité : Haute</button>
                 <button type="button" id="btn-plan-style" class="btn-toggle btn-small" title="Touche B">Plan : Rendu</button>
                 <button type="button" id="btn-section" class="btn-toggle btn-small" title="Touche C" aria-pressed="false">Coupe</button>
@@ -234,6 +239,44 @@
     <p id="fps-hint" class="fps-hint">Cliquez dans la maquette pour tourner la caméra à la souris.<br>Appuyez sur <span class="key-badge">Échap</span> pour revenir à la visite guidée.</p>
   </div>
 
+  <!-- Composition du cahier de plans : choisir, vérifier, approuver, puis assembler -->
+  <dialog id="book-dialog" class="book-dialog" aria-labelledby="book-title">
+    <form method="dialog" class="book-form" id="book-form">
+      <header class="book-head">
+        <div>
+          <p class="book-kicker">Cahier de plans A3</p>
+          <h2 id="book-title">Composer le cahier</h2>
+          <p class="book-intro">Cochez les planches, ajoutez les images d’ambiance et vos PDF, puis approuvez la composition pour lancer l’assemblage.</p>
+        </div>
+        <button type="submit" value="close" class="btn-toggle btn-small" aria-label="Fermer la composition"><svg class="i" aria-hidden="true"><use href="#i-close"></use></svg></button>
+      </header>
+      <section class="book-block" aria-labelledby="book-sheets-title">
+        <h3 id="book-sheets-title"><span>1</span> Planches</h3>
+        <p class="book-note">La couverture avec cartouche est toujours incluse.</p>
+        <div id="book-sheets" class="book-sheets"></div>
+      </section>
+      <section class="book-block" aria-labelledby="book-images-title">
+        <h3 id="book-images-title"><span>2</span> Images d’ambiance <small id="book-images-count"></small></h3>
+        <p class="book-note">Cliquez une image pour l’ajouter au cahier ou l’en retirer. Sans sélection, les quatre premières vues sont reprises.</p>
+        <div id="book-images" class="book-images" role="group" aria-labelledby="book-images-title"></div>
+      </section>
+      <section class="book-block" aria-labelledby="book-annex-title">
+        <h3 id="book-annex-title"><span>3</span> Vos PDF en annexe <small>facultatif</small></h3>
+        <label class="btn-toggle btn-small book-files">＋ Ajouter des PDF<input id="book-files" type="file" accept="application/pdf,.pdf" multiple></label>
+        <ul id="book-files-list" class="book-files-list"></ul>
+      </section>
+      <section class="book-block book-approve" aria-labelledby="book-approve-title">
+        <h3 id="book-approve-title"><span>4</span> Approbation</h3>
+        <p id="book-summary" class="book-summary"></p>
+        <label class="book-check"><input id="book-approved" type="checkbox"> J’ai vérifié la composition et je l’approuve.</label>
+        <div class="book-actions">
+          <span id="book-dialog-status" role="status"></span>
+          <button type="button" id="book-export" class="btn-toggle book-primary" disabled>Assembler et exporter le PDF</button>
+        </div>
+      </section>
+    </form>
+  </dialog>
+
   <!-- Galerie des rendus grandeur nature & ultra-réalistes -->
   <dialog id="render-gallery" class="render-gallery hidden" aria-labelledby="rg-title">
     <div class="rg-header">
@@ -243,9 +286,9 @@
         <p id="rg-status" class="rg-status" role="status"></p>
       </div>
       <div class="rg-actions">
-        <button id="rg-regen" class="btn-toggle btn-small" title="Recapture gratuitement toutes les vues depuis la maquette Three.js">📷 Actualiser toutes les vues 3D</button>
-        <button id="rg-generate-videos" class="btn-toggle btn-small" title="Générer les deux clips Seedance après confirmation du coût">🎞 Générer les clips IA · estimation 0,67 $</button>
-        <button id="rg-close" class="btn-toggle btn-small" autofocus>Fermer ✕</button>
+        <button id="rg-regen" class="btn-toggle btn-small" title="Recapture gratuitement toutes les vues depuis la maquette Three.js"><svg class="i" aria-hidden="true"><use href="#i-camera"></use></svg> Actualiser toutes les vues 3D</button>
+        <button id="rg-generate-videos" class="btn-toggle btn-small" title="Générer les deux clips Seedance après confirmation du coût"><svg class="i" aria-hidden="true"><use href="#i-film"></use></svg> Générer les clips IA · estimation 0,67 $</button>
+        <button id="rg-close" class="btn-toggle btn-small" autofocus><svg class="i" aria-hidden="true"><use href="#i-close"></use></svg> Fermer</button>
       </div>
     </div>
 
@@ -280,7 +323,7 @@
           <span id="rg-meta" class="rg-meta"></span>
         </div>
         <div class="rg-actions">
-          <button id="rg-btn-compare" class="btn-toggle btn-small hidden">↔ Comparer Avant (3D) / Après (IA)</button>
+          <button id="rg-btn-compare" class="btn-toggle btn-small hidden"><svg class="i" aria-hidden="true"><use href="#i-compare"></use></svg> Comparer Avant (3D) / Après (IA)</button>
           <button id="rg-goto" class="btn-toggle btn-small">Aller à cette vue</button>
           <a id="rg-download" class="btn-toggle btn-small" download>Télécharger</a>
           <button id="rg-lb-close" class="btn-toggle btn-small" autofocus>Retour</button>
@@ -302,6 +345,8 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/environments/RoomEnvironment.js"></script>
 
   <!-- Scripts du projet -->
+  <script src="js/icons.js"></script>
+  <script src="js/motion.js"></script>
   <script src="js/portal-context.js"></script>
   <script src="js/houseDataCore.js"></script>
   <script src="js/data.js"></script>
@@ -323,7 +368,11 @@
   <script src="js/clientDecisions.js"></script>
   <script src="js/clientFeedback.js"></script>
   <script src="js/clientBrochure.js"></script>
+  <script src="js/viewOrder.js"></script>
+  <script src="js/costEstimate.js"></script>
+  <script src="js/planBook.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/presentMode.js"></script>
 
 </body>
 </html>

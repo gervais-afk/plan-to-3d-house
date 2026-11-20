@@ -8,7 +8,7 @@ const ClientBrochure = (() => {
     if (window.jspdf?.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
     return pendingLibrary ||= new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js';
+      script.src = 'assets/vendor/jspdf-4.2.1.umd.min.js'; // copie locale vérifiée : fonctionne hors ligne
     script.crossOrigin = 'anonymous';
     script.integrity = 'sha384-qovJwSBbRDPP5cEjCp8S0UP66wrvnjaa60XMOGzTNanrThcrGfXfnZkvgY8N1KT3';
       const timer = setTimeout(fail, 12000);

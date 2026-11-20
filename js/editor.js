@@ -221,7 +221,7 @@
   // ---------------------------------------------------------------------------
   // CHARGEMENT
   // ---------------------------------------------------------------------------
-  const EDITABLE = ['meta', 'config', 'walls', 'rooms', 'columns', 'canopies', 'furniture', 'stairwells', 'levels', 'tourWaypoints'];
+  const EDITABLE = ['meta', 'config', 'walls', 'rooms', 'columns', 'canopies', 'furniture', 'stairwells', 'levels', 'tourWaypoints', 'estimate'];
 
   function loadProject(data, { keepExtras = false } = {}) {
     const src = JSON.parse(JSON.stringify(data));
@@ -261,6 +261,7 @@
     });
 
     if (Array.isArray(src.tourWaypoints)) p.tourWaypoints = JSON.parse(JSON.stringify(src.tourWaypoints));
+    if (src.estimate && typeof src.estimate === 'object' && !Array.isArray(src.estimate)) p.estimate = src.estimate;
     const levelMetadata = Array.isArray(src.levels) ? src.levels : [];
     S.levelData = { 0: Object.fromEntries(LEVEL_ARRAYS.map(key => [key, []])), 1: Object.fromEntries(LEVEL_ARRAYS.map(key => [key, []])) };
     LEVEL_ARRAYS.forEach(key => (p[key] || []).forEach(item => {
@@ -456,7 +457,7 @@
       ctx.save();
       ctx.globalAlpha = 0.24;
       ctx.setLineDash([5, 4]);
-      ctx.strokeStyle = '#17796e';
+      ctx.strokeStyle = '#9a6f2a';
       ctx.lineWidth = 1.5;
       (S.levelData[0].rooms || []).forEach(r => { roomPath(r); ctx.stroke(); });
       (S.levelData[0].walls || []).forEach(w => {
@@ -563,7 +564,7 @@
           const sgn = op.hinge === 'end' ? -1 : 1, side = op.side || 1;
           const hx = op.hinge === 'end' ? op.at + op.w / 2 : op.at - op.w / 2;
           const hX = w.from[0] + dx * hx, hZ = w.from[1] + dz * hx;
-          ctx.strokeStyle = opSel ? '#d97706' : (op.entry ? '#17796e' : '#2b3440');
+          ctx.strokeStyle = opSel ? '#d97706' : (op.entry ? '#9a6f2a' : '#2b3440');
           ctx.lineWidth = opSel || op.entry ? 2 : 1.2;
           ctx.beginPath();
           for (let i = 0; i <= 20; i++) {
@@ -611,17 +612,17 @@
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(bpt.x, bpt.y); ctx.stroke();
       if (S.draft.kind === 'wall') {
         const L = Math.hypot(h.snap.x - S.draft.from.x, h.snap.z - S.draft.from.z);
-        label(`${L.toFixed(2)} m`, (a.x + bpt.x) / 2, (a.y + bpt.y) / 2 - 14, 12, '#17796e');
+        label(`${L.toFixed(2)} m`, (a.x + bpt.x) / 2, (a.y + bpt.y) / 2 - 14, 12, '#9a6f2a');
       }
     }
     if (S.draft && S.draft.kind === 'poly' && S.draft.pts.length) {
-      ctx.strokeStyle = '#17796e'; ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#9a6f2a'; ctx.lineWidth = 1.5;
       ctx.fillStyle = 'rgba(23,121,110,0.12)';
       ctx.beginPath();
       S.draft.pts.forEach((p, i) => { const s = toScreen(p[0], p[1]); i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y); });
       if (h) { const last = S.draft.pts[S.draft.pts.length - 1]; const sp = snapPoint(h.world, { x: last[0], z: last[1] }, {}); const s = toScreen(sp.x, sp.z); ctx.lineTo(s.x, s.y); }
       ctx.fill(); ctx.stroke();
-      S.draft.pts.forEach(p => { const s = toScreen(p[0], p[1]); ctx.fillStyle = '#17796e'; ctx.fillRect(s.x - 3, s.y - 3, 6, 6); });
+      S.draft.pts.forEach(p => { const s = toScreen(p[0], p[1]); ctx.fillStyle = '#9a6f2a'; ctx.fillRect(s.x - 3, s.y - 3, 6, 6); });
     }
     if (h && S.tool === 'room-auto') {
       ctx.fillStyle = 'rgba(23,121,110,0.85)';
@@ -633,10 +634,10 @@
       const p2 = toScreen(Math.max(S.draft.from.x, h.snap.x), Math.max(S.draft.from.z, h.snap.z));
       ctx.fillStyle = 'rgba(23,121,110,0.12)';
       ctx.fillRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
-      ctx.strokeStyle = '#17796e'; ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#9a6f2a'; ctx.lineWidth = 1.5;
       ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
       const w = Math.abs(h.snap.x - S.draft.from.x), d = Math.abs(h.snap.z - S.draft.from.z);
-      label(`${w.toFixed(2)} × ${d.toFixed(2)} m · ${(w * d).toFixed(1)} m²`, (p1.x + p2.x) / 2, p1.y - 12, 11, '#17796e');
+      label(`${w.toFixed(2)} × ${d.toFixed(2)} m · ${(w * d).toFixed(1)} m²`, (p1.x + p2.x) / 2, p1.y - 12, 11, '#9a6f2a');
     }
     // Aperçu ouverture sur le mur survolé
     if (h && ['door', 'window', 'open'].includes(S.tool)) {
@@ -649,18 +650,18 @@
         ctx.fillStyle = 'rgba(23,121,110,0.55)';
         ctx.fill();
         const m = toScreen(nw.pr.x, nw.pr.z);
-        label(`${at.toFixed(2)} m depuis le début du mur`, m.x, m.y - 16, 10, '#17796e', 600);
+        label(`${at.toFixed(2)} m depuis le début du mur`, m.x, m.y - 16, 10, '#9a6f2a', 600);
       }
     }
     if (h && S.tool === 'furniture' && S.libItem) {
       const it = S.libItem, c = toScreen(h.snap.x, h.snap.z);
-      ctx.strokeStyle = '#17796e'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#9a6f2a'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
       ctx.strokeRect(c.x - it.w * k / 2, c.y - it.d * k / 2, it.w * k, it.d * k);
       ctx.setLineDash([]);
     }
     if (h && S.tool !== 'select') {
       const s = toScreen(h.snap.x, h.snap.z);
-      ctx.strokeStyle = '#17796e'; ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#9a6f2a'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(s.x, s.y, 4, 0, Math.PI * 2); ctx.stroke();
     }
   }
@@ -1440,7 +1441,15 @@
       { key: 'name', label: 'Nom du projet', set: (o, v) => { o.name = String(v).toUpperCase(); if (!o.slugLocked) o.slug = slugify(v); } },
       { key: 'slug', label: 'Dossier', set: (o, v) => { o.slug = slugify(v); o.slugLocked = true; } },
       { key: 'subtitle', label: 'Sous-titre' },
-      { key: 'client', label: 'Client' }
+      { key: 'client', label: 'Client' },
+      // Cartouche du cahier de plans.
+      { key: 'architect', label: 'Maître d’œuvre', set: (o, v) => { o.architect = String(v).slice(0, 80); } },
+      { key: 'location', label: 'Lieu', set: (o, v) => { o.location = String(v).slice(0, 80); } },
+      { key: 'phase', label: 'Phase', type: 'select', options: { '': '—', ESQ: 'Esquisse', APS: 'Avant-projet sommaire', APD: 'Avant-projet définitif', PC: 'Permis de construire', DCE: 'Dossier de consultation', EXE: 'Exécution' } },
+      { key: 'revision', label: 'Indice', set: (o, v) => { o.revision = String(v).toUpperCase().slice(0, 4); } },
+      // Accueil « grand cabinet » : parti architectural et contact de l'agence.
+      { key: 'concept', label: 'Parti architectural', set: (o, v) => { o.concept = String(v).slice(0, 600); } },
+      { key: 'contact', label: 'Contact agence', set: (o, v) => { o.contact = String(v).slice(0, 120); } }
     ], null, `
       <div class="ed-field"><label>Opacité du plan</label><input type="range" id="rng-opacity" min="0" max="1" step="0.05" value="${S.planOpacity}"></div>
       <div class="ed-field"><label>Hauteur sous plafond</label><input type="number" id="num-height" step="0.05" value="${p.config.wallHeight}"></div>
@@ -1513,7 +1522,8 @@
     const furniture = JSON.parse(JSON.stringify(allLevelItems('furniture')));
     const stairwells = JSON.parse(JSON.stringify(allLevelItems('stairwells')));
     const out = {
-      meta: { name: p.meta.name, slug: p.meta.slug, subtitle: p.meta.subtitle || '', client: p.meta.client || '', updated },
+      meta: { name: p.meta.name, slug: p.meta.slug, subtitle: p.meta.subtitle || '', client: p.meta.client || '', updated,
+        ...Object.fromEntries(['architect', 'location', 'phase', 'revision', 'concept', 'contact'].filter(key => p.meta[key]).map(key => [key, String(p.meta[key])])) },
       config: { wallHeight: p.config.wallHeight, floorHeight: p.config.floorHeight || 3 },
       levels: [levelMeta(0), levelMeta(1)],
       walls: walls.map(w => ({ from: w.from, to: w.to, thick: w.thick, type: w.type, level: Number(w.level) || 0,
@@ -1538,6 +1548,7 @@
     };
     if (p.config.elevationEnd) out.config.elevationEnd = p.config.elevationEnd;
     if (Array.isArray(p.tourWaypoints) && p.tourWaypoints.length >= 2) out.tourWaypoints = p.tourWaypoints;
+    if (p.estimate && typeof CostEstimate !== 'undefined') out.estimate = CostEstimate.settings(p.estimate);
     const pi = p.config.planImage;
     if (pi && pi.url) out.config.planImage = { url: pi.url.startsWith('data:') ? '' : pi.url, pxPerMeter: pi.pxPerMeter, originPx: pi.originPx, calibrated: !!pi.calibrated };
     if (S.extras && S.keepExtras) Object.assign(out, JSON.parse(JSON.stringify(S.extras)));
@@ -1548,8 +1559,12 @@
   let saving = false;
   function setSaveState(message, error = false) {
     const state = $('ed-save-state');
-    state.textContent = message;
     state.classList.toggle('is-error', error);
+    // Retour animé : coche à l'enregistrement, secousse en cas de refus (css/motion.css).
+    if (!message || !window.Motion) { state.textContent = message; return; }
+    if (error) Motion.error(state, message, $('btn-save'));
+    else if (/enregistr/i.test(message) && !/non enregistr/i.test(message)) Motion.success(state, message);
+    else Motion.swap(state, message);
   }
 
   function downloadProject() {
@@ -1673,7 +1688,7 @@
   $('btn-import-villa').onclick = () => {
     if (!confirmLose()) return;
     const villa = JSON.parse(JSON.stringify(window.HOUSE_DATA));
-    villa.meta = { name: 'VILLA SERENA', slug: 'villa-serena', subtitle: 'Plan Eng Dollar — plain-pied 109 m²' };
+    villa.meta = { name: 'VILLA SERENA', slug: 'villa-serena', subtitle: 'Villa contemporaine de plain-pied — plan d’origine : Eng Dollar' };
     loadProject(villa, { keepExtras: true });
     toast('Villa Serena chargée depuis js/data.js');
   };
@@ -1737,5 +1752,5 @@
   toast('Importez l\'image d\'un plan, ou ouvrez l\'exemple Villa Serena');
   window.__editor = S; // débogage
   // API interne pour les modules complémentaires (lecture IA, caméras…)
-  window.EditorAPI = { S, commit, refreshPanel, draw, toast, fitView, setTool, select, FURNITURE, OPENINGS, wallLen, projectOnWall, slugify, r2, round };
+  window.EditorAPI = { S, commit, refreshPanel, draw, toast, fitView, setTool, select, FURNITURE, OPENINGS, wallLen, projectOnWall, slugify, r2, round, allLevelItems };
 })();

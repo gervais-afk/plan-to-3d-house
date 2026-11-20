@@ -5,9 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Éditeur de plan — Plan 2D vers visite 3D</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/motion.css">
   <link rel="stylesheet" href="css/editor.css">
 </head>
 <body>
@@ -23,35 +22,36 @@
       <button id="btn-open" title="Ouvrir un projet enregistré">Ouvrir…</button>
       <button id="btn-import-villa" title="Charger la Villa Serena (js/data.js) comme exemple">Exemple Villa Serena</button>
       <label class="ed-btn-file" title="Importer une image ou un PDF de plan">Plan PDF / image…<input id="file-plan" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,.png,.jpg,.jpeg"></label>
-      <button id="btn-ai-read" title="Lecture automatique du plan par IA (OpenRouter)">✨ Lecture IA</button>
+      <button id="btn-ai-read" title="Lecture automatique du plan par IA (OpenRouter)"><svg class="i" aria-hidden="true"><use href="#i-sparkle"></use></svg> Lecture IA</button>
       <button id="btn-undo" aria-label="Annuler" title="Annuler (Ctrl+Z)">↶</button>
       <button id="btn-redo" aria-label="Rétablir" title="Rétablir (Ctrl+Y)">↷</button>
       <button id="btn-save" class="ed-primary" title="Enregistrer dans projects/ (Ctrl+S)">Enregistrer</button>
       <button id="btn-export-json" type="button">Exporter le JSON</button>
-      <button id="btn-preview" title="Enregistrer puis ouvrir la visite 3D de ce projet">👁 Lancer la visite 3D</button>
+      <button id="btn-estimate" type="button" title="Métré et estimation indicative en FCFA">Estimation FCFA</button>
+      <button id="btn-preview" title="Enregistrer puis ouvrir la visite 3D de ce projet"><svg class="i" aria-hidden="true"><use href="#i-eye"></use></svg> Lancer la visite 3D</button>
     </div>
   </header>
 
   <aside class="ed-tools" id="ed-tools">
-    <button data-tool="select" title="Sélection / déplacement (V)"><b>⬚</b><span>Sélection</span><kbd>V</kbd></button>
-    <button data-tool="calibrate" title="Calibrer l'échelle : 2 clics sur une cote connue (K)"><b>⟷</b><span>Échelle</span><kbd>K</kbd></button>
+    <button data-tool="select" title="Sélection / déplacement (V)"><svg class="i" aria-hidden="true"><use href="#i-cursor"></use></svg><span>Sélection</span><kbd>V</kbd></button>
+    <button data-tool="calibrate" title="Calibrer l'échelle : 2 clics sur une cote connue (K)"><svg class="i" aria-hidden="true"><use href="#i-scale"></use></svg><span>Échelle</span><kbd>K</kbd></button>
     <hr>
-    <button data-tool="wall-ext" title="Mur extérieur 25 cm, clics successifs (M)"><b>▬</b><span>Mur ext.</span><kbd>M</kbd></button>
-    <button data-tool="wall-int" title="Cloison 15 cm, clics successifs (C)"><b>▭</b><span>Cloison</span><kbd>C</kbd></button>
-    <button data-tool="door" title="Porte : clic sur un mur (D)"><b>◜</b><span>Porte</span><kbd>D</kbd></button>
-    <button data-tool="window" title="Fenêtre : clic sur un mur (F)"><b>▤</b><span>Fenêtre</span><kbd>F</kbd></button>
-    <button data-tool="open" title="Passage libre : clic sur un mur (B)"><b>⊓</b><span>Passage</span><kbd>B</kbd></button>
+    <button data-tool="wall-ext" title="Mur extérieur 25 cm, clics successifs (M)"><svg class="i" aria-hidden="true"><use href="#i-wall-ext"></use></svg><span>Mur ext.</span><kbd>M</kbd></button>
+    <button data-tool="wall-int" title="Cloison 15 cm, clics successifs (C)"><svg class="i" aria-hidden="true"><use href="#i-wall-int"></use></svg><span>Cloison</span><kbd>C</kbd></button>
+    <button data-tool="door" title="Porte : clic sur un mur (D)"><svg class="i" aria-hidden="true"><use href="#i-door"></use></svg><span>Porte</span><kbd>D</kbd></button>
+    <button data-tool="window" title="Fenêtre : clic sur un mur (F)"><svg class="i" aria-hidden="true"><use href="#i-window"></use></svg><span>Fenêtre</span><kbd>F</kbd></button>
+    <button data-tool="open" title="Passage libre : clic sur un mur (B)"><svg class="i" aria-hidden="true"><use href="#i-passage"></use></svg><span>Passage</span><kbd>B</kbd></button>
     <hr>
-    <button data-tool="room-auto" title="Pièce auto : cliquer à l'intérieur d'un espace fermé par des murs (W)"><b>✦</b><span>Pièce auto</span><kbd>W</kbd></button>
-    <button data-tool="room" title="Pièce rectangle : glisser un rectangle (A)"><b>▦</b><span>Rectangle</span><kbd>A</kbd></button>
-    <button data-tool="room-poly" title="Pièce polygone : cliquer les sommets, Entrée pour fermer (P)"><b>⬠</b><span>Polygone</span><kbd>P</kbd></button>
-    <button data-tool="column" title="Colonne / poteau : clic (O)"><b>■</b><span>Colonne</span><kbd>O</kbd></button>
-    <button data-tool="slab" title="Auvent (dalle) : glisser un rectangle (U)"><b>⌸</b><span>Auvent</span><kbd>U</kbd></button>
-    <button data-tool="stairwell" title="Trémie d'escalier : glisser un rectangle sur le plan d'étage"><b>▱</b><span>Trémie</span></button>
-    <button data-tool="pergola" title="Pergola : glisser un rectangle (G)"><b>☰</b><span>Pergola</span><kbd>G</kbd></button>
-    <button data-tool="furniture" title="Mobilier : choisir dans la bibliothèque puis cliquer (E)"><b>🛋</b><span>Mobilier</span><kbd>E</kbd></button>
+    <button data-tool="room-auto" title="Pièce auto : cliquer à l'intérieur d'un espace fermé par des murs (W)"><svg class="i" aria-hidden="true"><use href="#i-room-auto"></use></svg><span>Pièce auto</span><kbd>W</kbd></button>
+    <button data-tool="room" title="Pièce rectangle : glisser un rectangle (A)"><svg class="i" aria-hidden="true"><use href="#i-rect"></use></svg><span>Rectangle</span><kbd>A</kbd></button>
+    <button data-tool="room-poly" title="Pièce polygone : cliquer les sommets, Entrée pour fermer (P)"><svg class="i" aria-hidden="true"><use href="#i-polygon"></use></svg><span>Polygone</span><kbd>P</kbd></button>
+    <button data-tool="column" title="Colonne / poteau : clic (O)"><svg class="i" aria-hidden="true"><use href="#i-column"></use></svg><span>Colonne</span><kbd>O</kbd></button>
+    <button data-tool="slab" title="Auvent (dalle) : glisser un rectangle (U)"><svg class="i" aria-hidden="true"><use href="#i-canopy"></use></svg><span>Auvent</span><kbd>U</kbd></button>
+    <button data-tool="stairwell" title="Trémie d'escalier : glisser un rectangle sur le plan d'étage"><svg class="i" aria-hidden="true"><use href="#i-stairs"></use></svg><span>Trémie</span></button>
+    <button data-tool="pergola" title="Pergola : glisser un rectangle (G)"><svg class="i" aria-hidden="true"><use href="#i-pergola"></use></svg><span>Pergola</span><kbd>G</kbd></button>
+    <button data-tool="furniture" title="Mobilier : choisir dans la bibliothèque puis cliquer (E)"><svg class="i" aria-hidden="true"><use href="#i-sofa"></use></svg><span>Mobilier</span><kbd>E</kbd></button>
     <hr>
-    <button data-tool="camera" title="Caméras du parcours : déplacer, orienter, ajouter (T)"><b>🎥</b><span>Caméras</span><kbd>T</kbd></button>
+    <button data-tool="camera" title="Caméras du parcours : déplacer, orienter, ajouter (T)"><svg class="i" aria-hidden="true"><use href="#i-video"></use></svg><span>Caméras</span><kbd>T</kbd></button>
   </aside>
 
   <main class="ed-stage" id="ed-stage">
@@ -88,7 +88,7 @@
   </dialog>
 
   <dialog id="dlg-ai" class="ed-dialog" aria-labelledby="dlg-ai-title">
-    <h3 id="dlg-ai-title">✨ Lecture automatique du plan</h3>
+    <h3 id="dlg-ai-title">Lecture automatique du plan</h3>
     <p class="ed-note">L'image du plan est envoyée au modèle choisi via OpenRouter. Il renvoie murs, portes, fenêtres, pièces et mobilier, que vous corrigez ensuite dans l'éditeur.</p>
     <div class="ed-field"><label for="ai-model">Modèle</label><select id="ai-model"></select></div>
     <p id="ai-cost-estimate" class="ed-note" aria-live="polite"></p>
@@ -103,14 +103,38 @@
       <button id="ai-run" class="ed-primary">Lancer la lecture</button>
     </div>
   </dialog>
+  <dialog id="dlg-estimate" class="ed-dialog ed-estimate" aria-labelledby="dlg-estimate-title">
+    <h3 id="dlg-estimate-title">Métré et estimation — Cameroun (FCFA)</h3>
+    <p class="ed-note">Quantités calculées depuis le plan ; prix indicatifs publics, modifiables. Ce n’est ni un devis ni un bordereau.</p>
+    <form id="est-form" class="ed-est-form">
+      <div class="ed-field"><label for="est-standing">Standing</label><select id="est-standing" name="standing"></select></div>
+      <div class="ed-field"><label for="est-city">Ville</label><select id="est-city" name="city"></select></div>
+      <div class="ed-field"><label for="est-perM2">Prix au m² (FCFA)</label><input id="est-perM2" name="perM2" type="number" min="0" step="5000" inputmode="numeric"></div>
+      <div class="ed-field"><label for="est-annexWeight">Annexes comptées à (%)</label><input id="est-annexWeight" name="annexWeight" type="number" min="0" max="100" step="5" data-percent></div>
+      <div class="ed-field"><label for="est-grossShare">Part gros œuvre (%)</label><input id="est-grossShare" name="grossShare" type="number" min="20" max="90" step="1" data-percent></div>
+      <div class="ed-field"><label for="est-contingency">Imprévus (%)</label><input id="est-contingency" name="contingency" type="number" min="0" max="50" step="1" data-percent></div>
+      <div class="ed-field" id="est-permit-row" hidden><label for="est-permitOther">Taxe de permis (FCFA)</label><input id="est-permitOther" name="permitOther" type="number" min="0" step="10000" inputmode="numeric"></div>
+      <div class="ed-field"><label for="est-blockPrice20">Parpaing de 20 (FCFA)</label><input id="est-blockPrice20" name="blockPrice20" type="number" min="0" step="5" inputmode="numeric"></div>
+      <div class="ed-field"><label for="est-blockPrice15">Parpaing de 15 (FCFA)</label><input id="est-blockPrice15" name="blockPrice15" type="number" min="0" step="5" inputmode="numeric"></div>
+    </form>
+    <div id="est-result" aria-live="polite"></div>
+    <div class="ed-dialog-actions">
+      <button id="est-reset" type="button">Valeurs par défaut</button>
+      <button id="est-close" type="button" class="ed-primary">Fermer</button>
+    </div>
+  </dialog>
 
   <div id="ed-toast" class="ed-toast" role="status"></div>
 
+  <script src="js/icons.js"></script>
+  <script src="js/motion.js"></script>
   <script src="js/houseDataCore.js"></script>
   <script src="js/data.js"></script>
   <script src="js/projectLoader.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="js/costEstimate.js"></script>
   <script src="js/editor.js"></script>
   <script src="js/editorAI.js"></script>
+  <script src="js/editorEstimate.js"></script>
 </body>
 </html>

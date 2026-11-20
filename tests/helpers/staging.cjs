@@ -30,6 +30,7 @@ async function start() {
       fs.cpSync(path.join(source, name), path.join(root, name), { recursive: true });
     }
     fs.cpSync(path.join(source, 'assets/fonts'), path.join(root, 'assets/fonts'), { recursive: true });
+    fs.cpSync(path.join(source, 'assets/vendor'), path.join(root, 'assets/vendor'), { recursive: true });
     fs.cpSync(path.join(source, 'deploy/staging/projects'), path.join(root, 'projects'), { recursive: true });
     fs.copyFileSync(path.join(source, 'deploy/staging/data.js'), path.join(root, 'js/data.js'));
     const keyFile = path.join(root, 'edge.key'), certFile = path.join(root, 'edge.crt');

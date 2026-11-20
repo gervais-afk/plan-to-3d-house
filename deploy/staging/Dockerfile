@@ -5,6 +5,7 @@ COPY --chown=node:node serve.js privatePortal.js feedbackStore.js decisionStore.
 COPY --chown=node:node js/ ./js/
 COPY --chown=node:node css/ ./css/
 COPY --chown=node:node assets/fonts/ ./assets/fonts/
+COPY --chown=node:node assets/vendor/ ./assets/vendor/
 COPY --chown=node:node deploy/staging/data.js ./js/data.js
 COPY --chown=node:node deploy/staging/projects/ ./projects/
 RUN mkdir -p /app/.private-portal && chown node:node /app/.private-portal

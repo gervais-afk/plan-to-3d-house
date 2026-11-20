@@ -53,7 +53,7 @@ class ClientTools {
     this.hourOutput.value = label;
     this.hour.setAttribute('aria-valuetext', label);
     this.solarOptions.updateReading();
-    document.getElementById('btn-night').textContent = this.hs.nightTarget > 0.5 ? '☾ Soir' : '☀ Jour';
+    Icons.label(document.getElementById('btn-night'), this.hs.nightTarget > 0.5 ? 'moon' : 'sun', this.hs.nightTarget > 0.5 ? 'Soir' : 'Jour');
     this.onLiveView();
   }
 
