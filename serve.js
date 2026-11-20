@@ -2,10 +2,11 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { randomUUID } = require('node:crypto');
+const { randomUUID, createHash } = require('node:crypto');
 const feedbackStore = require('./feedbackStore');
 const decisionStore = require('./decisionStore');
 const presentationStore = require('./presentationStore');
+const cabinetStore = require('./cabinetStore');
 const { createPortal, safePath } = require('./privatePortal');
 
 const PORT = Number(process.env.PORT) || 8000;
@@ -269,7 +270,7 @@ function saveVideo(req, res, url) {
 }
 
 // Galerie : ne renvoyer que les médias réellement présents dans le projet actif.
-function galleryMedia(res, url) {
+function galleryMedia(res, url, access = {}) {
   let media;
   try { media = ensureProjectMedia(projectSlug(url.searchParams.get('project'))); }
   catch (error) { return sendJson(res, 400, { error: error.message }); }
@@ -282,7 +283,7 @@ function galleryMedia(res, url) {
     if (Array.isArray(manifest.items)) manifestItems = manifest.items;
   } catch (e) { /* galerie vide si le manifeste est absent ou invalide */ }
 
-  const images = manifestItems.filter(item => item && item.type === 'image' && typeof item.file === 'string')
+  const images = manifestItems.filter(item => item && item.type === 'image' && item.status !== 'draft' && item.published !== false && typeof item.file === 'string')
     .filter(item => {
       const name = item.file.slice(imagePrefix.length);
       return item.file.startsWith(imagePrefix) && name === path.basename(name) && /^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp)$/i.test(name)
@@ -296,28 +297,31 @@ function galleryMedia(res, url) {
           && /^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp)$/i.test(item.reference.slice(renderPrefix.length)) ? item.reference : null,
         room: item.room || null, label: item.label || item.id || 'Image générée', cover: item.cover === true,
         catalog: item.catalog === true, book: item.book === true,
-        generator: item.generator || '', prompt: item.prompt || '', notes: item.notes || '',
+        ...(access.session?.role && access.session.role !== 'architect' ? {} : { generator: item.generator || '', prompt: item.prompt || '', notes: item.notes || '' }),
         width: item.width || null, height: item.height || null
       };
     });
 
-  let videoFiles = [];
-  try { videoFiles = fs.readdirSync(media.videos, { withFileTypes: true }).filter(entry => entry.isFile() && /\.(?:mp4|webm)$/i.test(entry.name)); } catch (e) { /* pas de dossier vidéo */ }
-  const videos = videoFiles.map(entry => {
-    const file = videoPrefix + entry.name;
-    const item = manifestItems.find(candidate => candidate && candidate.type === 'video' && candidate.file === file) || {};
+  const videos = manifestItems.filter(item => item && item.type === 'video' && item.status !== 'draft' && item.published !== false && typeof item.file === 'string')
+    .filter(item => item.file.startsWith(videoPrefix) && path.basename(item.file) === item.file.slice(videoPrefix.length) &&
+      /\.(?:mp4|webm)$/i.test(item.file) && fs.existsSync(path.join(media.videos, path.basename(item.file))))
+    .map(item => {
+    const file = item.file;
+    const entry = { name: path.basename(file) };
     const posterName = typeof item.poster === 'string' && item.poster.startsWith(imagePrefix) ? item.poster.slice(imagePrefix.length) : '';
     const poster = posterName && posterName === path.basename(posterName) && fs.existsSync(path.join(media.images, posterName))
       ? imagePrefix + posterName : null;
     const ext = path.extname(entry.name).slice(1).toLowerCase();
     return { id: String(item.id || path.parse(entry.name).name), type: 'video', file, poster, format: ext,
       duration: Number(item.duration) || null, label: item.label || path.parse(entry.name).name,
-      generator: String(item.generator || ''), sourceLabel: String(item.sourceLabel || ''), movement: item.movement || '' };
+      ...(access.session?.role && access.session.role !== 'architect' ? {} : { generator: String(item.generator || ''), sourceLabel: String(item.sourceLabel || ''), movement: item.movement || '' }) };
   });
 
   res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   let renders = [];
-  try { renders = fs.readdirSync(media.renders, { withFileTypes: true }).filter(entry => entry.isFile() && /^[a-z0-9_-]+\.(?:jpe?g|png|webp)$/i.test(entry.name)).map(entry => renderPrefix + entry.name); } catch { /* pas encore de rendu */ }
+  if (!access.session?.role || access.session.role === 'architect') {
+    try { renders = fs.readdirSync(media.renders, { withFileTypes: true }).filter(entry => entry.isFile() && /^[a-z0-9_-]+\.(?:jpe?g|png|webp)$/i.test(entry.name)).map(entry => renderPrefix + entry.name); } catch { /* pas encore de dossier rendu */ }
+  }
   let presentation = { slots: [null, null, null], focal: { x: 50, y: 50 }, orphanedSlots: 0 };
   try { presentation = presentationStore.get(PROJECTS, projectSlug(url.searchParams.get('project'))); } catch { /* réglages absents : comportement historique */ }
   res.end(JSON.stringify({ images, videos, renders, presentation }));
@@ -378,6 +382,8 @@ function projectProblem(project) {
   if (!isRecord(project) || !isRecord(project.meta) || typeof project.meta.name !== 'string' || !project.meta.name.trim() || !isRecord(project.config)) {
     return 'Le projet doit avoir un nom et une configuration.';
   }
+  if ((project.meta.clientVisible !== undefined && typeof project.meta.clientVisible !== 'boolean') ||
+      !cabinetStore.projectSheetsValid(project.meta.sheets)) return 'Vérifiez la visibilité client et les métadonnées des feuilles.';
   const { elevationEnd, wallHeight, floorHeight } = project.config;
   if ((elevationEnd !== undefined && (!Number.isFinite(elevationEnd) || elevationEnd <= 0 || elevationEnd > 1)) ||
       [wallHeight, floorHeight].some(value => value !== undefined && (!Number.isFinite(value) || value <= 0))) {
@@ -426,6 +432,16 @@ function atomicFile(file, data) {
   }
 }
 
+function cabinetApi(req, res) {
+  if (req.method === 'GET') return sendJson(res, 200, cabinetStore.read(ROOT));
+  if (req.method !== 'POST') return sendJson(res, 405, { error: 'Méthode non autorisée.' });
+  if (portal.enabled && portal.roleForProject(req) !== 'architect') return sendJson(res, 403, { error: 'Seul le cabinet peut modifier ce profil.' });
+  return readBody(req, res, 3 * 1024 * 1024, body => {
+    try { return sendJson(res, 200, cabinetStore.save(ROOT, body)); }
+    catch (error) { return sendJson(res, error.status || 500, { error: error.status ? error.message : 'Enregistrement du profil impossible.' }); }
+  });
+}
+
 function saveProject(req, res) {
   if (req.headers['content-type']?.split(';')[0].trim().toLowerCase() !== 'application/json') {
     return sendJson(res, 415, { error: 'Envoyez le projet au format JSON.' });
@@ -462,6 +478,20 @@ function saveProject(req, res) {
 // fichier local openrouter.key à la racine — ne jamais l'inclure dans le projet partagé) ---
 function openRouterKey() {
   if (process.env.OPENROUTER_API_KEY) return process.env.OPENROUTER_API_KEY.trim();
+  const f = path.join(ROOT, 'openrouter.key');
+  if (fs.existsSync(f)) {
+    const val = fs.readFileSync(f, 'utf8').trim();
+    if (val) return val;
+  }
+  const localEnv = path.join(ROOT, '.env');
+  if (fs.existsSync(localEnv)) {
+    try {
+      const raw = fs.readFileSync(localEnv, 'utf8');
+      const match = raw.match(/^\s*(?:export\s+)?OPENROUTER_API_KEY\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\r\n#]*))/m);
+      const value = match && (match[1] ?? match[2] ?? match[3]);
+      if (value && value.trim()) return value.trim();
+    } catch (e) { /* fichier local illisible */ }
+  }
   // Optional pointer to a private .env outside this project; the secret is never copied here.
   const envFile = process.env.OPENROUTER_ENV_FILE;
   if (envFile) {
@@ -472,8 +502,7 @@ function openRouterKey() {
       if (value && value.trim()) return value.trim();
     } catch (e) { /* fichier externe absent ou illisible : essayer les autres sources */ }
   }
-  const f = path.join(ROOT, 'openrouter.key');
-  return fs.existsSync(f) ? fs.readFileSync(f, 'utf8').trim() : '';
+  return '';
 }
 
 function aiStatus(res) {
@@ -783,6 +812,7 @@ http.createServer((req, res) => {
   if (!access) return;
   if (urlPath === '/api/client-feedback') return clientFeedback(req, res, requestUrl);
   if (urlPath === '/api/client-decisions') return clientDecisions(req, res, requestUrl);
+  if (urlPath === '/api/cabinet/profile') return cabinetApi(req, res);
   if (urlPath.startsWith('/api/presentation/')) return presentationApi(req, res, requestUrl, urlPath);
   if (req.method === 'GET' && urlPath === '/api/ai/status') return aiStatus(res);
   if (req.method === 'POST' && urlPath === '/api/ai/chat') return aiChat(req, res);
@@ -796,12 +826,24 @@ http.createServer((req, res) => {
   if (req.method === 'POST' && urlPath === '/api/save-generated') return saveGenerated(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/gallery/flags') return galleryFlags(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/save-video') return saveVideo(req, res, requestUrl);
-  if (req.method === 'GET' && urlPath === '/api/gallery/media') return galleryMedia(res, requestUrl);
+  if (req.method === 'GET' && urlPath === '/api/gallery/media') return galleryMedia(res, requestUrl, access);
   if (req.method === 'GET' && urlPath === '/api/projects') return listProjects(res, access.only);
   if (req.method === 'POST' && urlPath === '/api/save-project') return saveProject(req, res);
   if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405); return res.end(); }
   fs.realpath(file, (realErr, realFile) => {
     if (realErr || realFile !== file) { res.writeHead(404); return res.end('Not found'); }
+    if (/^projects\/[^/]+\/project\.json$/.test(relative) && access.session?.role !== 'architect') {
+      try {
+        const raw = fs.readFileSync(file, 'utf8');
+        const project = JSON.parse(raw);
+        if (project.meta && project.meta.clientVisible !== true) delete project.meta.client;
+        const body = Buffer.from(JSON.stringify(project));
+        const headers = { 'Content-Type': 'application/json', 'Content-Length': body.length, 'Cache-Control': 'private, no-store' };
+        if (access.session?.role) headers['X-Project-Model-Hash'] = createHash('sha256').update(raw).digest('hex');
+        res.writeHead(200, headers);
+        return req.method === 'HEAD' ? res.end() : res.end(body);
+      } catch { res.writeHead(500); return res.end('Project data unavailable'); }
+    }
     fs.stat(file, (err, stat) => {
       if (err || !stat.isFile()) { res.writeHead(404); return res.end('Not found'); }
       const ext = path.extname(file).toLowerCase();

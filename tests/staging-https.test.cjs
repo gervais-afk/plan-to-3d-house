@@ -59,10 +59,10 @@ test('Recette HTTPS : rôles, avis, validation immuable et rendu refusé après 
   assert.equal(flagged.status, 200);
   assert.deepEqual(JSON.parse(fs.readFileSync(manifestFile)).items[0], { id: 'facade', type: 'image', file: `projects/${a}/generated/images/facade.jpg`, catalog: true, book: false });
   const warm = await commenter.request(render(a));
-  assert.equal(warm.status, 200);
+  assert.equal(warm.status, 403, 'une capture brute non publiée reste inaccessible au client');
   assert.equal(warm.headers['cache-control'], 'private, no-store');
   assert.match(warm.headers['strict-transport-security'], /^max-age=/);
-  assert.equal((await commenter.request(render(a), { headers: { Range: 'bytes=0-99' } })).status, 206);
+  assert.equal((await commenter.request(render(a), { headers: { Range: 'bytes=0-99' } })).status, 403);
   assert.equal((await commenter.request(render(b))).status, 403);
   const draft = { text: 'Le bois est-il prévu ?', point: [0, 0, 0], pose };
   for (const origin of [undefined, 'https://ailleurs.test']) {
@@ -109,7 +109,7 @@ test('Recette HTTPS : rôles, avis, validation immuable et rendu refusé après 
   assert.equal(denied.status, 401);
   assert.equal(denied.headers['cache-control'], 'private, no-store');
   assert.equal((await commenter.request(decisions(a), { headers })).status, 401);
-  assert.equal((await reader.request(render(a))).status, 200, 'une autre invitation reste inchangée');
+  assert.equal((await reader.request(render(a))).status, 403, 'une autre invitation ne peut pas lire une capture non publiée');
 });
 
 test('Enregistrement projet : erreurs JSON utilisables et validation avant écriture', { skip: openssl ? false : 'OpenSSL absent' }, async t => {

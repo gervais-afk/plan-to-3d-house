@@ -21,6 +21,7 @@
       <button id="btn-new" title="Nouveau projet">Nouveau</button>
       <button id="btn-open" title="Ouvrir un projet enregistré">Ouvrir…</button>
       <button id="btn-import-villa" title="Charger la Villa Serena (js/data.js) comme exemple">Exemple Villa Serena</button>
+      <button id="btn-cabinet" type="button" title="Profil du cabinet">Profil Cabinet</button>
       <label class="ed-btn-file" title="Importer une image ou un PDF de plan">Plan PDF / image…<input id="file-plan" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,.png,.jpg,.jpeg"></label>
       <button id="btn-ai-read" title="Lecture automatique du plan par IA (OpenRouter)"><svg class="i" aria-hidden="true"><use href="#i-sparkle"></use></svg> Lecture IA</button>
       <button id="btn-undo" aria-label="Annuler" title="Annuler (Ctrl+Z)">↶</button>
@@ -143,6 +144,18 @@
       <button id="est-csv" type="button">Bordereau CSV</button>
       <button id="est-close" type="button" class="ed-primary">Fermer</button>
     </div>
+  </dialog>
+
+  <dialog id="dlg-cabinet" class="ed-dialog" aria-labelledby="dlg-cabinet-title">
+    <h3 id="dlg-cabinet-title">Profil Cabinet</h3>
+    <p class="ed-note">Renseignez votre identité éditoriale. Le logo est utilisé sans recadrage ; sans logo, le nom du cabinet sert de signature.</p>
+    <div class="ed-field"><label for="cabinet-name">Nom du cabinet</label><input id="cabinet-name" maxlength="120" autocomplete="organization"></div>
+    <div class="ed-field"><label for="cabinet-architect">Architecte par défaut</label><input id="cabinet-architect" maxlength="120" autocomplete="name"></div>
+    <div class="ed-field"><label for="cabinet-logo">Logo transparent (PNG)</label><input id="cabinet-logo" type="file" accept="image/png,.png"></div>
+    <img id="cabinet-logo-preview" class="cabinet-logo-preview" alt="Aperçu du logo du cabinet" hidden>
+    <button id="cabinet-remove-logo" type="button">Retirer le logo — utiliser le nom du cabinet</button>
+    <p id="cabinet-status" class="ed-note" role="status"></p>
+    <div class="ed-dialog-actions"><button id="cabinet-close" type="button">Fermer</button><button id="cabinet-save" type="button" class="ed-primary">Enregistrer le profil</button></div>
   </dialog>
 
   <div id="ed-toast" class="ed-toast" role="status"></div>

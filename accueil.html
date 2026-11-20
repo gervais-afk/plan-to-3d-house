@@ -48,11 +48,15 @@
       <div class="cover-shade" aria-hidden="true"></div>
       <span class="registration registration-top" aria-hidden="true"></span><span class="registration registration-bottom" aria-hidden="true"></span>
       <div class="cover-copy">
-        <p class="plate-label"><span></span> PRÉSENTATION DU PROJET</p>
+        <p class="plate-label"><span></span> CATALOGUE D’IMAGES</p>
         <h1 id="cover-title">L’architecture<br>en volume.</h1>
         <p class="cover-description" id="cover-description">Du dessin à l’espace : découvrez le projet à votre rythme dans la maquette interactive.</p>
+        <p id="cover-client" class="cover-client" hidden></p>
+        <div class="cover-signature" id="cover-signature" aria-label="Signature du cabinet"><img id="cover-logo" alt="" hidden><span id="cover-cabinet-name">Plan / 3D</span></div>
+        <div class="cover-edition"><span>Édition</span><time id="cover-edition-date"></time></div>
         <div class="cover-actions">
           <a id="cover-enter" class="primary" href="index.html">Entrer dans la maquette <span aria-hidden="true">↗</span></a>
+          <button class="cover-print" type="button" data-print="catalog">Imprimer l’aperçu A4</button>
         </div>
       </div>
       <div class="cover-index" id="cover-index" hidden aria-label="Navigation entre les vues">
@@ -106,15 +110,27 @@
 
     <section class="planbook-preview" id="planbook-preview" aria-labelledby="planbook-title">
       <p class="section-kicker"><span>03</span> / CAHIER DE PLANS</p>
-      <div class="planbook-cover">
-        <div class="planbook-drawing" id="planbook-drawing" aria-label="Dessin au trait du projet"></div>
-        <div class="planbook-copy"><p class="planbook-mark">DOSSIER TECHNIQUE · APERÇU</p>
-          <h2 id="planbook-title">Cahier de plans</h2><p id="planbook-project">Projet</p>
-          <dl><div><dt>Indice</dt><dd id="planbook-revision">A</dd></div><div><dt>Date</dt><dd id="planbook-date"></dd></div><div><dt>Statut</dt><dd id="planbook-status">Aperçu de travail</dd></div></dl>
-          <p class="no-scale">Sans échelle</p>
+      <div class="planbook-cover" id="planbook-cover">
+        <div class="planbook-heading">
+          <div class="planbook-signature" aria-label="Signature du cabinet"><img id="planbook-logo" alt="" hidden><span id="planbook-cabinet-name">Plan / 3D</span></div>
+          <span class="planbook-rule"></span><p class="planbook-mark">DOSSIER TECHNIQUE · APERÇU</p><button class="cover-print" type="button" data-print="planbook">Imprimer l’aperçu A4</button>
         </div>
-        <div class="planbook-contents"><h3>Sommaire des éléments disponibles</h3><ol id="planbook-contents"></ol><p id="planbook-empty" hidden>Aucun document ni plan de niveau disponible.</p></div>
+        <div class="planbook-drawing" id="planbook-drawing" aria-label="Dessin au trait issu du projet"></div>
+        <div class="planbook-copy">
+          <p class="section-kicker">CAHIER DE PLANS</p><h2 id="planbook-title">Cahier de plans</h2><p id="planbook-project">Projet</p><p id="planbook-subtitle" class="planbook-subtitle"></p>
+          <dl class="planbook-cartouche" id="planbook-cartouche">
+            <div id="planbook-cabinet-row"><dt>Cabinet</dt><dd id="planbook-cabinet"></dd></div>
+            <div id="planbook-architect-row"><dt>Architecte responsable</dt><dd id="planbook-architect"></dd></div>
+            <div id="planbook-client-row" hidden><dt>Maître d’ouvrage</dt><dd id="planbook-client"></dd></div>
+            <div id="planbook-reference-row"><dt>Référence</dt><dd id="planbook-reference"></dd></div>
+            <div id="planbook-revision-row"><dt>Révision</dt><dd id="planbook-revision"></dd></div>
+            <div id="planbook-date-row"><dt>Date</dt><dd id="planbook-date"></dd></div>
+            <div id="planbook-status-row"><dt>Statut</dt><dd id="planbook-status"></dd></div>
+          </dl>
+          <p class="no-scale" id="planbook-scale-notice">Aperçu — sans échelle</p>
+        </div>
       </div>
+      <div class="planbook-contents" id="planbook-contents-page"><p class="section-kicker">DOCUMENTS DISPONIBLES</p><h3>Sommaire</h3><ol id="planbook-contents"></ol><p id="planbook-empty" hidden>Aucun document ni plan de niveau disponible.</p></div>
     </section>
 
     <section class="project-sheet" id="project-sheet" aria-labelledby="sheet-title" hidden>

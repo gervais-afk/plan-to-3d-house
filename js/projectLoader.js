@@ -363,10 +363,14 @@ window.HouseAuto = HouseAuto;
   }
   try { localStorage.setItem('lastProject', name); } catch { /* stockage facultatif */ }
   if (window.PORTAL_CONTEXT?.role && globalThis.crypto?.subtle) {
-    const bytes = new TextEncoder().encode(xhr.responseText);
-    window.PROJECT_MODEL_HASH = crypto.subtle.digest('SHA-256', bytes)
-      .then(buffer => Array.from(new Uint8Array(buffer), byte => byte.toString(16).padStart(2, '0')).join(''))
-      .catch(() => null);
+    const serverHash = xhr.getResponseHeader('X-Project-Model-Hash');
+    if (serverHash && /^[a-f0-9]{64}$/.test(serverHash)) window.PROJECT_MODEL_HASH = Promise.resolve(serverHash);
+    else {
+      const bytes = new TextEncoder().encode(xhr.responseText);
+      window.PROJECT_MODEL_HASH = crypto.subtle.digest('SHA-256', bytes)
+        .then(buffer => Array.from(new Uint8Array(buffer), byte => byte.toString(16).padStart(2, '0')).join(''))
+        .catch(() => null);
+    }
   }
   const baseConfig = Object.assign({}, HOUSE_DATA.config);
   delete baseConfig.walkStart; delete baseConfig.walkBounds; delete baseConfig.planImage;

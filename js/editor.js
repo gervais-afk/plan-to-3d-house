@@ -67,6 +67,9 @@
   const canvas = document.getElementById('ed-canvas');
   const ctx = canvas.getContext('2d');
   const $ = id => document.getElementById(id);
+  const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+  let cabinetProfile = { name: '', architect: '', logoUrl: '' };
+  let pendingCabinetLogo;
 
   const S = {
     p: null,              // projet en cours d'édition
@@ -227,6 +230,8 @@
     const src = JSON.parse(JSON.stringify(data));
     const p = emptyProject();
     p.meta = Object.assign(p.meta, src.meta || {});
+    if (!p.meta.architect && cabinetProfile.architect) p.meta.architect = cabinetProfile.architect;
+    if (typeof p.meta.clientVisible !== 'boolean') p.meta.clientVisible = false;
     p.config = Object.assign(p.config, { wallHeight: (src.config && src.config.wallHeight) || 2.8, floorHeight: (src.config && src.config.floorHeight) || 3, planImage: src.config && src.config.planImage || null });
     if (src.config && src.config.elevationEnd) p.config.elevationEnd = src.config.elevationEnd;
     p.walls = (src.walls || []).map(w => {
@@ -1462,6 +1467,7 @@
     const hab = p.rooms.filter(r => r.habitable).reduce((s, r) => s + roomArea(r), 0);
     const nOps = p.walls.reduce((s, w) => s + w.openings.length, 0);
     const pi = p.config.planImage;
+    const sheet = p.meta.sheets?.[S.activeLevel] || {};
     const extrasNote = S.extras ? `<div class="ed-field"><label>Garder caméras & abords</label><input type="checkbox" id="chk-extras" ${S.keepExtras ? 'checked' : ''}></div>
       <p class="ed-note">Décochez pour régénérer automatiquement le parcours caméra, les vues de rendu, les lampes et le jardin après des modifications importantes.</p>` : '';
     const warn = !p.walls.some(w => w.openings.some(o => o.type === 'door' && w.type === 'ext')) && p.walls.length
@@ -1470,16 +1476,30 @@
       { key: 'name', label: 'Nom du projet', set: (o, v) => { o.name = String(v).toUpperCase(); if (!o.slugLocked) o.slug = slugify(v); } },
       { key: 'slug', label: 'Dossier', set: (o, v) => { o.slug = slugify(v); o.slugLocked = true; } },
       { key: 'subtitle', label: 'Sous-titre' },
-      { key: 'client', label: 'Client' },
+      { key: 'client', label: 'Client / maître d’ouvrage' },
+      { key: 'clientVisible', label: 'Afficher le client sur les couvertures partagées', type: 'checkbox' },
+      { key: 'reference', label: 'Référence projet', set: (o, v) => { o.reference = String(v).slice(0, 80); } },
       // Cartouche du cahier de plans.
-      { key: 'architect', label: 'Maître d’œuvre', set: (o, v) => { o.architect = String(v).slice(0, 80); } },
+      { key: 'architect', label: 'Architecte responsable', set: (o, v) => { o.architect = String(v).slice(0, 120); } },
       { key: 'location', label: 'Lieu', set: (o, v) => { o.location = String(v).slice(0, 80); } },
       { key: 'phase', label: 'Phase', type: 'select', options: { '': '—', ESQ: 'Esquisse', APS: 'Avant-projet sommaire', APD: 'Avant-projet définitif', PC: 'Permis de construire', DCE: 'Dossier de consultation', EXE: 'Exécution' } },
-      { key: 'revision', label: 'Indice', set: (o, v) => { o.revision = String(v).toUpperCase().slice(0, 4); } },
-      // Accueil « grand cabinet » : parti architectural et contact de l'agence.
+      { key: 'revision', label: 'Indice du dossier', set: (o, v) => { o.revision = String(v).toUpperCase().slice(0, 4); } },
+      { key: 'issueDate', label: 'Date d’édition', type: 'date' },
+      { key: 'status', label: 'Statut du dossier', set: (o, v) => { o.status = String(v).slice(0, 80); } },
+      // Accueil et signature : parti architectural et contact de l'agence.
       { key: 'concept', label: 'Parti architectural', set: (o, v) => { o.concept = String(v).slice(0, 600); } },
       { key: 'contact', label: 'Contact agence', set: (o, v) => { o.contact = String(v).slice(0, 120); } }
     ], null, `
+      <fieldset class="ed-sheet-fields"><legend>Métadonnées manuelles — feuille ${S.activeLevel + 1}</legend>
+        <div class="ed-field"><label for="sheet-title">Titre du plan</label><input id="sheet-title" maxlength="160" value="${escapeHtml(sheet.title)}"></div>
+        <div class="ed-field"><label for="sheet-number">Numéro de feuille</label><input id="sheet-number" maxlength="80" value="${escapeHtml(sheet.number)}"></div>
+        <div class="ed-field"><label for="sheet-level">Niveau indiqué</label><input id="sheet-level" maxlength="80" value="${escapeHtml(sheet.level)}"></div>
+        <div class="ed-field"><label for="sheet-revision">Révision</label><input id="sheet-revision" maxlength="80" value="${escapeHtml(sheet.revision)}"></div>
+        <div class="ed-field"><label for="sheet-date">Date</label><input id="sheet-date" type="date" value="${escapeHtml(sheet.date)}"></div>
+        <div class="ed-field"><label for="sheet-status">Statut</label><input id="sheet-status" maxlength="80" value="${escapeHtml(sheet.status)}"></div>
+        <div class="ed-field"><label for="sheet-scale">Échelle connue (saisie manuelle)</label><input id="sheet-scale" maxlength="80" placeholder="Ex. 1:100" value="${escapeHtml(sheet.scale)}"></div>
+        <p class="ed-note">Aucune échelle n’est déduite du nom du fichier. Les champs laissés vides restent absents du cartouche.</p>
+      </fieldset>
       <div class="ed-field"><label>Opacité du plan</label><input type="range" id="rng-opacity" min="0" max="1" step="0.05" value="${S.planOpacity}"></div>
       <div class="ed-field"><label>Hauteur sous plafond</label><input type="number" id="num-height" step="0.05" value="${p.config.wallHeight}"></div>
       ${extrasNote}
@@ -1494,6 +1514,18 @@
       <div class="ed-row"><button id="btn-fit">Cadrer la vue</button><button id="btn-center">Centrer sur l'origine</button></div>
       <section class="ed-checks" aria-labelledby="ed-checks-title"><h4 id="ed-checks-title">Vérifications</h4><ul id="ed-checks-list"></ul>
         <p class="ed-note">Repères d'habitabilité indicatifs, non réglementaires : ils signalent, ils ne bloquent pas.</p></section>`);
+    ['title', 'number', 'level', 'revision', 'date', 'status', 'scale'].forEach(key => {
+      const input = $(`sheet-${key}`);
+      input.onchange = () => {
+        commit();
+        const sheets = p.meta.sheets || (p.meta.sheets = []);
+        const current = Object.assign({}, sheets[S.activeLevel] || {});
+        if (input.value.trim()) current[key] = input.value.trim(); else delete current[key];
+        sheets[S.activeLevel] = current;
+        if (!Object.keys(current).length && sheets.every(value => !value || !Object.keys(value).length)) delete p.meta.sheets;
+        refreshPanel();
+      };
+    });
     renderChecks();
     $('rng-opacity').oninput = e => { S.planOpacity = parseFloat(e.target.value); draw(); };
     $('num-height').onchange = e => { const v = parseFloat(e.target.value); if (v > 2) { commit(); p.config.wallHeight = v; refreshPanel(); } };
@@ -1554,8 +1586,9 @@
     const furniture = JSON.parse(JSON.stringify(allLevelItems('furniture')));
     const stairwells = JSON.parse(JSON.stringify(allLevelItems('stairwells')));
     const out = {
-      meta: { name: p.meta.name, slug: p.meta.slug, subtitle: p.meta.subtitle || '', client: p.meta.client || '', updated,
-        ...Object.fromEntries(['architect', 'location', 'phase', 'revision', 'concept', 'contact'].filter(key => p.meta[key]).map(key => [key, String(p.meta[key])])) },
+      meta: { name: p.meta.name, slug: p.meta.slug, subtitle: p.meta.subtitle || '', client: p.meta.client || '', clientVisible: p.meta.clientVisible === true, updated,
+        ...Object.fromEntries(['architect', 'location', 'phase', 'revision', 'reference', 'issueDate', 'status', 'concept', 'contact'].filter(key => p.meta[key]).map(key => [key, String(p.meta[key])])),
+        ...(Array.isArray(p.meta.sheets) ? { sheets: p.meta.sheets.map(sheet => Object.fromEntries(['title', 'number', 'level', 'revision', 'date', 'status', 'scale'].filter(key => sheet?.[key]).map(key => [key, String(sheet[key])]))) } : {}) },
       config: { wallHeight: p.config.wallHeight, floorHeight: p.config.floorHeight || 3 },
       levels: [levelMeta(0), levelMeta(1)],
       walls: walls.map(w => ({ from: w.from, to: w.to, thick: w.thick, type: w.type, level: Number(w.level) || 0,
@@ -1776,6 +1809,67 @@
   // ---------------------------------------------------------------------------
   // DÉMARRAGE
   // ---------------------------------------------------------------------------
+  async function fetchCabinetProfile() {
+    try {
+      const response = await fetch('api/cabinet/profile', { cache: 'no-store' });
+      if (!response.ok) return;
+      cabinetProfile = await response.json();
+      if (S.p && !S.p.meta.architect && cabinetProfile.architect) {
+        S.p.meta.architect = cabinetProfile.architect;
+        refreshPanel();
+      }
+    } catch { /* profil facultatif en mode hors ligne */ }
+  }
+  $('btn-cabinet').onclick = async () => {
+    await fetchCabinetProfile();
+    $('cabinet-name').value = cabinetProfile.name || '';
+    $('cabinet-architect').value = cabinetProfile.architect || '';
+    const preview = $('cabinet-logo-preview');
+    preview.hidden = !cabinetProfile.logoUrl;
+    if (cabinetProfile.logoUrl) preview.src = cabinetProfile.logoUrl;
+    pendingCabinetLogo = undefined;
+    $('cabinet-logo').value = '';
+    $('cabinet-status').textContent = '';
+    $('dlg-cabinet').showModal();
+  };
+  $('cabinet-logo').onchange = async event => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'image/png' || file.size > 2 * 1024 * 1024) {
+      $('cabinet-status').textContent = 'Choisissez un PNG transparent de moins de 2 Mo.';
+      event.target.value = '';
+      return;
+    }
+    pendingCabinetLogo = await new Promise(resolve => {
+      const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => resolve(null); reader.readAsDataURL(file);
+    });
+    if (pendingCabinetLogo) { $('cabinet-logo-preview').src = pendingCabinetLogo; $('cabinet-logo-preview').hidden = false; }
+  };
+  $('cabinet-remove-logo').onclick = () => {
+    pendingCabinetLogo = '';
+    $('cabinet-logo-preview').hidden = true;
+    $('cabinet-logo').value = '';
+    $('cabinet-status').textContent = 'Le nom du cabinet sera utilisé à la place du logo.';
+  };
+  $('cabinet-close').onclick = () => $('dlg-cabinet').close();
+  $('cabinet-save').onclick = async () => {
+    const button = $('cabinet-save'); button.disabled = true;
+    try {
+      const body = { name: $('cabinet-name').value, architect: $('cabinet-architect').value };
+      if (pendingCabinetLogo !== undefined) body.logo = pendingCabinetLogo;
+      const response = await fetch('api/cabinet/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Profil non enregistré.');
+      const previousArchitect = cabinetProfile.architect;
+      cabinetProfile = result;
+      if (!S.p.meta.architect || S.p.meta.architect === previousArchitect) {
+        commit(); S.p.meta.architect = cabinetProfile.architect; refreshPanel();
+      }
+      $('cabinet-status').textContent = 'Profil Cabinet enregistré.';
+    } catch (error) { $('cabinet-status').textContent = error.message; }
+    finally { button.disabled = false; }
+  };
+  $('dlg-cabinet').addEventListener('close', () => { pendingCabinetLogo = undefined; });
+  void fetchCabinetProfile();
   buildLibrary();
   window.addEventListener('resize', resize);
   loadProject(emptyProject());

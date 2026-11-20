@@ -30,6 +30,36 @@
   let presentationCatalog = [];
   let currentMedia = { images: [], renders: [] };
   let currentProject = null;
+  let loadedProjectRecord = null;
+  let loadedProjectData = null;
+  let loadedProjectMedia = null;
+  let currentCabinet = { name: '', architect: '', logoUrl: '' };
+  const formatDate = value => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+    const date = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : value ? new Date(value) : null;
+    return date && Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }).format(date) : '';
+  };
+  function renderCabinet() {
+    const logos = [el('cover-logo'), el('planbook-logo')];
+    const names = [el('cover-cabinet-name'), el('planbook-cabinet-name')];
+    for (const name of names) {
+      name.textContent = currentCabinet.name || 'Plan / 3D';
+      name.hidden = Boolean(currentCabinet.logoUrl);
+    }
+    for (const logo of logos) {
+      logo.hidden = !currentCabinet.logoUrl;
+      if (currentCabinet.logoUrl) logo.src = currentCabinet.logoUrl;
+      else logo.removeAttribute('src');
+    }
+  }
+  json('api/cabinet/profile').then(profile => {
+    currentCabinet = profile; renderCabinet();
+    if (loadedProjectRecord) {
+      renderPlanBook(loadedProjectRecord, loadedProjectData, loadedProjectMedia);
+      projectSheet(loadedProjectRecord, loadedProjectData);
+    }
+  }).catch(() => renderCabinet());
+  el('cover-edition-date').textContent = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date());
 
   el('home-account').hidden = !context?.role;
   // L’outil de saisie n’apparaît dans l’en-tête que pour l’architecte connecté ; en démo il reste en pied de page.
@@ -62,11 +92,9 @@
   }
   // L’ordre historique reste le repli ; les sélections ne sont appliquées que si disponibles.
   const makeViews = (media, slug) => {
-    const automatic = ViewOrder.views(media, slug, 3);
     const published = ViewOrder.views({ images: media?.images || [], renders: [] }, slug);
-    const captures = ViewOrder.views({ images: [], renders: media?.renders || [] }, slug);
-    const catalog = [...published, ...captures].filter((view, index, all) => all.findIndex(item => item.source === view.source) === index);
-    return ViewOrder.selectSlots(automatic, media?.presentation?.slots, catalog);
+    const automatic = published.slice(0, 3);
+    return ViewOrder.selectSlots(automatic, media?.presentation?.slots, published);
   };
   async function showView(index) {
     if (!activeViews.length) return;
@@ -75,6 +103,13 @@
     const shot = activeViews[current];
     const focal = current === 0 ? presentation.focal : { x: 50, y: 50 };
     image.style.objectPosition = `${focal.x}% ${focal.y}%`;
+    if (!shot.published) {
+      image.hidden = true;
+      cover.dataset.art = 'plan';
+      el('cover-caption').textContent = shot.label;
+      el('cover-number').textContent = `${counter(current + 1)} / ${counter(activeViews.length)}`;
+      return;
+    }
     const original = new URL(shot.source, url).href;
     const source = new URL(shot.preview || shot.source, url).href;
     el('cover-number').textContent = `${counter(current + 1)} / ${counter(activeViews.length)}`;
@@ -204,7 +239,9 @@
     const annex = rooms.filter(r => !r.habitable).reduce((s, r) => s + r.area, 0);
     const updated = Date.parse(meta.updated);
     const rows = [
-      ['Lieu', meta.location], ['Maître d’ouvrage', meta.client], ['Maître d’œuvre', meta.architect], ['Phase', PHASES[meta.phase] || meta.phase],
+      ['Lieu', meta.location], ['Référence projet', meta.reference],
+      ['Maître d’ouvrage', meta.clientVisible === true ? meta.client : ''],
+      ['Architecte responsable', meta.architect || currentCabinet.architect], ['Phase', PHASES[meta.phase] || meta.phase],
       ['Surface habitable', data?.totals?.habitable ? `${number.format(data.totals.habitable)} m²` : ''],
       ['Annexes', annex ? `${number.format(annex)} m²` : ''],
       ['Pièces de vie', String(rooms.filter(r => r.habitable).length || '')],
@@ -289,13 +326,11 @@
   }
 
   function allCandidates(media, slug) {
-    const published = ViewOrder.views({ images: media?.images || [], renders: [] }, slug);
-    const captures = ViewOrder.views({ images: [], renders: media?.renders || [] }, slug);
-    return [...published, ...captures].filter((view, index, all) => all.findIndex(item => item.source === view.source) === index);
+    return ViewOrder.views({ images: media?.images || [], renders: [] }, slug);
   }
   function coverCandidate() {
     const reference = presentation.slots?.[0];
-    return presentationCatalog.find(view => view.source === reference) || ViewOrder.views(currentMedia, currentProject, 1)[0] || presentationCatalog[0];
+    return presentationCatalog.find(view => view.source === reference) || ViewOrder.views({ images: currentMedia.images || [], renders: [] }, currentProject, 1)[0] || presentationCatalog[0];
   }
   function updateCropPreview() {
     const shot = coverCandidate();
@@ -408,28 +443,59 @@
     const bookProject = currentProject;
     const meta = project?.meta || {};
     el('planbook-project').textContent = nameForDisplay(meta.name || 'Projet');
-    el('planbook-revision').textContent = String(meta.revision || 'A');
-    const date = Date.parse(meta.updated) || Date.now();
-    el('planbook-date').textContent = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }).format(date);
-    el('planbook-status').textContent = String(meta.status || 'Aperçu de travail');
+    el('planbook-subtitle').textContent = String(meta.subtitle || '').trim();
+    el('planbook-subtitle').hidden = !el('planbook-subtitle').textContent;
+    el('planbook-cabinet').textContent = currentCabinet.name || '';
+    el('planbook-cabinet-row').hidden = !currentCabinet.name;
+    const architect = String(meta.architect || currentCabinet.architect || '').trim();
+    el('planbook-architect').textContent = architect;
+    el('planbook-architect-row').hidden = !architect;
+    const clientVisible = meta.clientVisible === true && String(meta.client || '').trim();
+    el('planbook-client').textContent = clientVisible ? String(meta.client).trim() : '';
+    el('planbook-client-row').hidden = !clientVisible;
+    const reference = String(meta.reference || '').trim();
+    el('planbook-reference').textContent = reference;
+    el('planbook-reference-row').hidden = !reference;
+    const coverSheet = meta.sheets?.[0] || {};
+    const revision = String(meta.revision || coverSheet.revision || '').trim();
+    el('planbook-revision').textContent = revision;
+    el('planbook-revision-row').hidden = !revision;
+    const issueDate = formatDate(meta.issueDate || coverSheet.date);
+    el('planbook-date').textContent = issueDate;
+    el('planbook-date-row').hidden = !issueDate;
+    const projectStatus = String(meta.status || coverSheet.status || '').trim();
+    el('planbook-status').textContent = projectStatus;
+    el('planbook-status-row').hidden = !projectStatus;
     const drawing = el('cover-drawing').querySelector('svg');
     el('planbook-drawing').replaceChildren(...(drawing ? [drawing.cloneNode(true)] : []));
     const contents = el('planbook-contents'); contents.replaceChildren();
     const levels = [...new Set((data?.walls || []).map(wall => Number(wall.level) || 0))].sort((a, b) => a - b);
     for (const level of levels) {
-      const item = document.createElement('li'); item.textContent = `Plan du niveau ${level ? `+${level}` : 'principal'} · dessin issu de la maquette · Sans échelle`;
+      const item = document.createElement('li');
+      const sheet = meta.sheets?.[level] || {};
+      const parts = [sheet.number, sheet.title || `Plan du niveau ${level ? `+${level}` : 'principal'}`].filter(Boolean);
+      if (sheet.level) parts.push(String(sheet.level));
+      if (sheet.revision) parts.push(`Rév. ${sheet.revision}`);
+      if (sheet.date) parts.push(formatDate(sheet.date));
+      if (sheet.status) parts.push(String(sheet.status));
+      parts.push('dessin issu de la maquette · aperçu sans échelle');
+      item.textContent = parts.join(' · ');
       contents.append(item);
     }
     const planUrl = project?.config?.planImage?.url;
     if (typeof planUrl === 'string' && planUrl.startsWith(`projects/${currentProject}/`) && !planUrl.split('/').includes('..')) {
       fetch(new URL(planUrl, url), { method: 'HEAD', cache: 'no-store' }).then(response => {
         if (!response.ok || currentProject !== bookProject) return;
-        const item = document.createElement('li'); item.textContent = 'Document source du plan · fichier présent dans le dossier'; contents.append(item);
+        const item = document.createElement('li');
+        const sheet = meta.sheets?.[0] || {};
+        item.textContent = [sheet.number, sheet.title || 'Plan source importé', sheet.scale ? `échelle déclarée ${sheet.scale}` : 'échelle non renseignée'].filter(Boolean).join(' · ');
+        contents.append(item);
         el('planbook-empty').hidden = contents.children.length > 0;
       }).catch(() => {});
     }
-    if ((media?.images || []).length) {
-      const item = document.createElement('li'); item.textContent = `${media.images.length} image${media.images.length === 1 ? '' : 's'} publiée${media.images.length === 1 ? '' : 's'} disponible${media.images.length === 1 ? '' : 's'} en annexe`;
+    const bookImages = (media?.images || []).filter(item => item.book === true);
+    if (bookImages.length) {
+      const item = document.createElement('li'); item.textContent = `${bookImages.length} image${bookImages.length === 1 ? '' : 's'} publiée${bookImages.length === 1 ? '' : 's'} sélectionnée${bookImages.length === 1 ? '' : 's'} en annexe`;
       contents.append(item);
     }
     el('planbook-empty').hidden = contents.children.length > 0;
@@ -447,6 +513,9 @@
     cover.dataset.art = 'loading';
     renderViews([]);
     el('cover-empty').hidden = true;
+    loadedProjectRecord = loadedProjectData = loadedProjectMedia = null;
+    el('cover-client').hidden = true;
+    el('cover-client').textContent = '';
     projectDrawing([]);
     projectFacts(null);
     projectSheet(null, null);
@@ -463,6 +532,10 @@
     if (model.status === 'fulfilled') {
       projectRecord = model.value;
       if (typeof projectRecord?.meta?.subtitle === 'string' && projectRecord.meta.subtitle.trim()) el('cover-description').textContent = projectRecord.meta.subtitle;
+      if (projectRecord?.meta?.clientVisible === true && String(projectRecord.meta.client || '').trim()) {
+        el('cover-client').textContent = `Maître d’ouvrage · ${String(projectRecord.meta.client).trim()}`;
+        el('cover-client').hidden = false;
+      }
       projectDrawing(projectRecord?.walls);
       projectFacts(projectRecord);
       projectData = normalized(projectRecord);
@@ -471,12 +544,19 @@
       signature(projectRecord);
     } else status.textContent = 'Les informations du projet sont indisponibles pour le moment.';
     const media = gallery.status === 'fulfilled' ? gallery.value : { images: [], renders: [], presentation: { slots: [null, null, null], focal: { x: 50, y: 50 } } };
+    loadedProjectRecord = projectRecord; loadedProjectData = projectData; loadedProjectMedia = media;
     renderPresentationEditor(media, item.slug);
     renderViews(makeViews(media, item.slug));
     renderPlanBook(projectRecord, projectData, media);
     if (gallery.status === 'rejected') el('cover-empty').textContent = 'Les rendus sont momentanément indisponibles. Vous pouvez toujours ouvrir la maquette.';
     else el('cover-empty').textContent = 'Aucun rendu publié. Explorez le plan et les volumes dans la maquette.';
   }
+
+  document.querySelectorAll('[data-print]').forEach(button => button.addEventListener('click', () => {
+    document.body.dataset.print = button.dataset.print;
+    window.print();
+  }));
+  window.addEventListener('afterprint', () => { delete document.body.dataset.print; });
 
   el('cover-prev').addEventListener('click', () => void showView(current - 1));
   el('cover-next').addEventListener('click', () => void showView(current + 1));

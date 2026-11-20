@@ -23,5 +23,6 @@ projects/**/temp*
 # Retours privés par lien, hors du serveur statique
 .client-feedback/
 
-# Sessions et invitations du portail privé
+# Sessions, invitations et configuration locale du cabinet
 .private-portal/
+.cabinet/

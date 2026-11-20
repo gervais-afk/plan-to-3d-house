@@ -62,3 +62,69 @@
   .planbook-drawing { min-height: 180mm; }
   .planbook-contents ol { columns: 2; }
 }
+/* Couvertures éditoriales Catalogue / Cahier : grille commune, signature en marge, sans filigrane. */
+.cover-signature { position: absolute; z-index: 2; inset: clamp(1rem, 3vw, 2rem) auto auto clamp(1rem, 3vw, 2rem); display: flex; align-items: center; justify-content: center; min-width: 3.2rem; min-height: 2.7rem; max-width: 12rem; padding: .4rem .65rem; background: #f5f1e6; color: #172018; border: 1px solid #d3cdbd; box-shadow: 0 4px 18px #07100b26; }
+.cover-signature img { display: block; max-width: 10rem; max-height: 2.4rem; width: auto; height: auto; object-fit: contain; }
+.cover-signature span { font: 750 .72rem/1.2 var(--sans); letter-spacing: .08em; text-transform: uppercase; overflow-wrap: anywhere; }
+.cover-signature [hidden] { display: none; }
+.cover-client { margin: -.7rem 0 1rem; color: #fff; font-size: .83rem; font-weight: 700; }
+.cover-edition { display: flex; justify-content: space-between; align-items: center; gap: 1rem; max-width: 28rem; margin-top: 1.1rem; padding-top: .65rem; border-top: 1px solid #f7f5e380; color: #f7f5e3; font-size: .67rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.cover-edition time { text-align: right; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+.cover-print { min-height: 42px; padding: .55rem .8rem; border: 1px solid currentColor; background: transparent; color: inherit; font: 750 .75rem/1.2 var(--sans); cursor: pointer; }
+.cover-print:hover, .cover-print:focus-visible { background: #ffffff1c; }
+.cover-actions { flex-wrap: wrap; align-items: center; }
+.planbook-heading { grid-column: 1 / -1; display: flex; align-items: center; gap: .85rem; min-height: 2.4rem; }
+.planbook-heading .cover-print { margin-left: auto; color: var(--ink); }
+.planbook-rule { width: 2.2rem; height: 2px; background: var(--accent); }
+.planbook-heading .planbook-mark { margin: 0; }
+.planbook-signature { display: flex; align-items: center; justify-content: center; min-width: 2.7rem; min-height: 2.2rem; max-width: 9rem; padding: .3rem .5rem; background: #f5f1e6; color: #172018; border: 1px solid #d3cdbd; }
+.planbook-signature img { display: block; max-width: 7rem; max-height: 1.65rem; width: auto; height: auto; object-fit: contain; }
+.planbook-signature span { font: 750 .62rem/1.15 var(--sans); letter-spacing: .07em; text-transform: uppercase; overflow-wrap: anywhere; }
+.planbook-signature [hidden] { display: none; }
+.planbook-subtitle { color: var(--muted); font-size: .86rem; line-height: 1.45; overflow-wrap: anywhere; }
+.planbook-copy .section-kicker { margin: 0; color: var(--accent-ink); font-size: .68rem; font-weight: 850; letter-spacing: .16em; }
+.planbook-cartouche { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 1rem; }
+.planbook-copy .planbook-cartouche div { display: block; min-width: 0; }
+.planbook-copy .planbook-cartouche dt { font-size: .65rem; text-transform: uppercase; letter-spacing: .08em; }
+.planbook-copy .planbook-cartouche dd { margin-top: .18rem; text-align: left; overflow-wrap: anywhere; }
+.planbook-contents { margin-top: 1.2rem; padding: clamp(1rem, 3vw, 2rem); border: 1px solid var(--rule); background: var(--surface); }
+.planbook-contents .section-kicker { margin: 0 0 .35rem; color: var(--accent-ink); font-size: .68rem; font-weight: 850; letter-spacing: .16em; }
+.planbook-contents h3 { font: 500 clamp(1.5rem, 3vw, 2.2rem)/1.1 var(--serif); }
+.planbook-contents li { line-height: 1.55; overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .cover-signature { inset: 1rem auto auto 1rem; max-width: 9.5rem; min-height: 2.5rem; }
+  .cover-signature img { max-width: 8rem; max-height: 2rem; }
+  .cover-edition { align-items: flex-start; font-size: .6rem; }
+  .planbook-cartouche { grid-template-columns: 1fr; }
+  .planbook-heading { flex-wrap: wrap; }
+  .planbook-heading .cover-print { margin-left: 0; }
+}
+@page { size: A4 portrait; margin: 0; }
+@media print {
+  body[data-print="catalog"] { background: #fff; }
+  body[data-print="catalog"] #contenu,
+  body[data-print="planbook"] #contenu { width: 210mm; max-width: 210mm; margin: 0; }
+  body[data-print="catalog"] .masthead,
+  body[data-print="catalog"] .shell > :not(#home-cover),
+  body[data-print="catalog"] .footer,
+  body[data-print="catalog"] .skip { display: none !important; }
+  body[data-print="catalog"] #home-cover { display: grid !important; width: 210mm; height: 297mm; min-height: 297mm; margin: 0; break-after: page; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  body[data-print="catalog"] #home-cover .cover-copy { max-width: 74%; padding: 30mm 22mm; }
+  body[data-print="catalog"] #home-cover .cover-signature { top: 18mm; left: 18mm; }
+  body[data-print="catalog"] #home-cover .cover-print,
+  body[data-print="catalog"] #home-cover .cover-actions,
+  body[data-print="catalog"] #home-cover .cover-index { display: none !important; }
+  body[data-print="catalog"] #home-cover .cover-description { max-width: 115mm; }
+  body[data-print="planbook"] .masthead,
+  body[data-print="planbook"] .shell > :not(#planbook-preview),
+  body[data-print="planbook"] .footer,
+  body[data-print="planbook"] .skip { display: none !important; }
+  body[data-print="planbook"] #planbook-preview { display: block !important; width: 210mm; margin: 0; padding: 14mm; border: 0; break-inside: auto; }
+  body[data-print="planbook"] .planbook-cover { height: 260mm; grid-template-columns: 1.2fr .85fr; grid-template-rows: auto 1fr; gap: 8mm; padding: 10mm; border: 1px solid #999; box-shadow: none; break-after: page; }
+  body[data-print="planbook"] .planbook-drawing { min-height: 0; height: 100%; }
+  body[data-print="planbook"] .planbook-drawing svg { max-height: 100%; }
+  body[data-print="planbook"] .planbook-copy { align-self: end; }
+  body[data-print="planbook"] .planbook-contents { margin: 0; min-height: 240mm; padding: 12mm; border: 1px solid #999; }
+  body[data-print="planbook"] .planbook-heading .cover-print { display: none !important; }
+  body[data-print="planbook"] .planbook-contents ol { columns: 1; }
+}

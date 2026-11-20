@@ -26,7 +26,7 @@ async function start() {
     fs.rmSync(root, { recursive: true, force: true });
   };
   try {
-    for (const name of ['serve.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'accueil.html', 'index.html', 'editor.html', 'portal.html', 'js', 'css']) {
+    for (const name of ['serve.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'presentationStore.js', 'cabinetStore.js', 'accueil.html', 'index.html', 'editor.html', 'portal.html', 'js', 'css']) {
       fs.cpSync(path.join(source, name), path.join(root, name), { recursive: true });
     }
     fs.cpSync(path.join(source, 'assets/fonts'), path.join(root, 'assets/fonts'), { recursive: true });
