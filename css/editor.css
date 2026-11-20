@@ -266,3 +266,11 @@ button:disabled { opacity: .6; cursor: default; }
 .ed-est-materials small { color: var(--muted); }
 .ed-est-group .ed-field { grid-template-columns: minmax(0, 1fr) minmax(150px, 250px); }
 .ed-est-group .ed-field select { min-width: 0; width: 100%; text-overflow: ellipsis; }
+
+/* Vérifications d'habitabilité (js/habitability.js) */
+.ed-checks { margin-top: var(--space-3); border-top: 1px solid var(--line); padding-top: var(--space-2); }
+.ed-checks h4 { margin: 0 0 var(--space-2); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent-ink); }
+.ed-checks ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.ed-checks button { width: 100%; text-align: left; font-size: 12px; line-height: 1.4; padding: 6px 8px; border: 1px solid rgba(168, 100, 28, 0.35); background: rgba(168, 100, 28, 0.08); color: var(--ink); border-radius: var(--radius-sm); }
+.ed-checks button:hover:not(:disabled) { background: rgba(168, 100, 28, 0.16); }
+.ed-checks .is-ok { font-size: 12px; color: var(--success); }

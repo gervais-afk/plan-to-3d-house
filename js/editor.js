@@ -1428,6 +1428,35 @@
     Object.assign(r.bounds, best);
   }
 
+  // Contrôles d'habitabilité (js/habitability.js) : un avertissement cliquable par point à vérifier.
+  function renderChecks() {
+    const list = $('ed-checks-list');
+    if (!list || typeof Habitability === 'undefined') return;
+    const warnings = Habitability.check({ config: S.p.config, walls: allLevelItems('walls'), rooms: allLevelItems('rooms') });
+    $('ed-checks-title').textContent = warnings.length ? `Vérifications (${warnings.length})` : 'Vérifications';
+    if (!warnings.length) {
+      const ok = document.createElement('li');
+      ok.className = 'is-ok';
+      ok.textContent = 'Aucun point à signaler sur les repères vérifiés.';
+      list.replaceChildren(ok);
+      return;
+    }
+    list.replaceChildren(...warnings.map(warning => {
+      const item = document.createElement('li');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = warning.message;
+      if (warning.level !== S.activeLevel) button.textContent += warning.level ? ` (étage ${warning.level})` : ' (rez-de-chaussée)';
+      button.disabled = !warning.target;
+      button.onclick = () => {
+        if (warning.level !== S.activeLevel) switchLevel(warning.level);
+        select(warning.target);
+      };
+      item.append(button);
+      return item;
+    }));
+  }
+
   function projectPanel() {
     const p = S.p;
     const hab = p.rooms.filter(r => r.habitable).reduce((s, r) => s + roomArea(r), 0);
@@ -1462,9 +1491,12 @@
         <div class="ed-stat"><strong>${p.rooms.length}</strong><span>pièces</span></div>
         <div class="ed-stat"><strong>${hab.toFixed(1).replace('.', ',')} m²</strong><span>habitables</span></div>
       </div>
-      <div class="ed-row"><button id="btn-fit">Cadrer la vue</button><button id="btn-center">Centrer sur l'origine</button></div>`);
+      <div class="ed-row"><button id="btn-fit">Cadrer la vue</button><button id="btn-center">Centrer sur l'origine</button></div>
+      <section class="ed-checks" aria-labelledby="ed-checks-title"><h4 id="ed-checks-title">Vérifications</h4><ul id="ed-checks-list"></ul>
+        <p class="ed-note">Repères d'habitabilité indicatifs, non réglementaires : ils signalent, ils ne bloquent pas.</p></section>`);
+    renderChecks();
     $('rng-opacity').oninput = e => { S.planOpacity = parseFloat(e.target.value); draw(); };
-    $('num-height').onchange = e => { const v = parseFloat(e.target.value); if (v > 2) { commit(); p.config.wallHeight = v; } };
+    $('num-height').onchange = e => { const v = parseFloat(e.target.value); if (v > 2) { commit(); p.config.wallHeight = v; refreshPanel(); } };
     const chk = $('chk-extras');
     if (chk) chk.onchange = e => { S.keepExtras = e.target.checked; };
     $('btn-fit').onclick = () => { fitView(); draw(); };
