@@ -708,9 +708,13 @@ function clientDecisions(req, res, url) {
   if (!portal.enabled) return sendJson(res, 403, { error: 'Le suivi des décisions requiert le portail privé.' });
   const project = url.searchParams.get('project'), channel = req.headers['x-feedback-channel'];
   const respondError = error => sendJson(res, error.status || 500, { error: error.status ? error.message : 'Stockage des décisions indisponible.' });
+  const target = portal.decisionTargetFor(req, project);
+  if (target && channel !== target.channel) return sendJson(res, 403, { error: 'Ce lien est limité à une proposition précise.' });
   if (req.method === 'GET') {
-    try { return sendJson(res, 200, { proposals: decisionStore.list(PROJECTS, project, channel) }); }
-    catch (error) { return respondError(error); }
+    try {
+      const proposals = decisionStore.list(PROJECTS, project, channel);
+      return sendJson(res, 200, { proposals: target ? proposals.filter(item => item.id === target.proposalId) : proposals });
+    } catch (error) { return respondError(error); }
   }
   if (req.method !== 'POST') return sendJson(res, 405, { error: 'Méthode non autorisée.' });
   if (req.headers['content-type']?.split(';')[0] !== 'application/json') return sendJson(res, 415, { error: 'JSON requis.' });
@@ -720,8 +724,9 @@ function clientDecisions(req, res, url) {
       if (data?.action === 'propose' && role === 'architect') {
         return sendJson(res, 201, { item: decisionStore.propose(PROJECTS, project, channel, data.variant, data.modelHash) });
       }
-      if (data?.action === 'approve' && role === 'comment') {
-        return sendJson(res, 200, { item: decisionStore.approve(PROJECTS, project, channel, data.id, data.modelHash) });
+      if (['approve', 'request-changes'].includes(data?.action) && role === 'comment') {
+        if (target && data.id !== target.proposalId) return sendJson(res, 403, { error: 'Ce lien ne permet de décider que sur sa proposition.' });
+        return sendJson(res, 200, { item: decisionStore.decide(PROJECTS, project, channel, data.id, data.modelHash, data.action, data.comment) });
       }
       return sendJson(res, 403, { error: 'Ce rôle ne peut pas effectuer cette action.' });
     } catch (error) { return respondError(error); }

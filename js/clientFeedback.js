@@ -4,7 +4,8 @@ class ClientFeedback {
     this.tools = tools;
     this.variants = variants;
     const role = window.PORTAL_CONTEXT?.role;
-    this.canComment = role !== 'read';
+    this.decisionTarget = window.PORTAL_CONTEXT?.decision || null;
+    this.canComment = role !== 'read' && !this.decisionTarget;
     this.canReview = role === 'architect';
     const el = id => document.getElementById(`feedback-${id}`);
     this.panel = document.getElementById('client-feedback');
@@ -25,8 +26,10 @@ class ClientFeedback {
     this.nextCheck = 0;
     this.decisions = new ClientDecisions(this);
     this.key = `plan3d:retours:v1:${variants.project}`;
-    try { channel ||= localStorage.getItem(this.key); } catch { /* lien uniquement */ }
+    if (this.decisionTarget) channel = this.decisionTarget.channel;
+    else { try { channel ||= localStorage.getItem(this.key); } catch { /* lien uniquement */ } }
     this.setChannel(VariantState.channelPattern.test(channel || '') ? channel : null);
+    if (this.decisionTarget) this.panel.hidden = true;
     if (!this.canComment) {
       el('create').hidden = this.start.hidden = true;
       this.status.textContent = 'Lecture seule : vous pouvez consulter les dossiers dont vous avez reçu le lien.';
@@ -47,7 +50,8 @@ class ClientFeedback {
     this.form.addEventListener('submit', event => { event.preventDefault(); void this.post(el('submit')); });
     tools.canvas.addEventListener('click', event => this.pick(event));
     this.panel.addEventListener('toggle', () => { if (this.panel.open && this.channel) void this.refresh(false); });
-    if (this.channel) void this.refresh(false);
+    if (this.channel && !this.decisionTarget) void this.refresh(false);
+    else if (this.channel && this.decisionTarget) void this.decisions.refresh();
   }
 
   setChannel(channel) {
@@ -57,7 +61,7 @@ class ClientFeedback {
     document.getElementById('feedback-create').textContent = channel ? 'Nouveau dossier' : 'Créer un dossier';
     this.selected = null;
     this.render([]);
-    if (channel) { try { localStorage.setItem(this.key, channel); } catch { /* lien uniquement */ } }
+    if (channel && !this.decisionTarget) { try { localStorage.setItem(this.key, channel); } catch { /* lien uniquement */ } }
   }
 
   async request(note, method = note ? 'POST' : 'GET', endpoint = 'client-feedback') {

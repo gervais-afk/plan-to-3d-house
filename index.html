@@ -181,6 +181,26 @@
       </nav>
     </header>
 
+    <section id="approval-card" class="approval-card interactive" aria-labelledby="approval-heading" hidden>
+      <div>
+        <p class="approval-kicker">Validation de projet</p>
+        <h2 id="approval-heading">Proposition à examiner</h2>
+        <p id="approval-project" class="approval-project"></p>
+        <p id="approval-version" class="approval-version"></p>
+      </div>
+      <div id="approval-actions" class="approval-actions">
+        <button id="approval-approve" type="button" class="approval-primary">Valider cette version</button>
+        <button id="approval-request-toggle" type="button">Demander une modification</button>
+      </div>
+      <form id="approval-request-form" class="approval-request" hidden>
+        <label for="approval-comment">Commentaire obligatoire</label>
+        <textarea id="approval-comment" maxlength="700" rows="3" required></textarea>
+        <button id="approval-submit" type="submit">Envoyer la demande</button>
+      </form>
+      <button id="approval-return" type="button" class="approval-return" hidden>Revenir à la vue proposée</button>
+      <p id="approval-status" role="status" aria-live="polite"></p>
+    </section>
+
     <!-- Pied de page : Infos de la pièce active & Radar 2D -->
     <footer class="bottom-bar">
       <nav id="guided-controls" class="guided-controls interactive" aria-label="Étapes de la visite">

@@ -64,7 +64,7 @@
         title.textContent = item.label || item.project;
         const project = document.createElement('div');
         project.className = 'muted';
-        project.textContent = [item.label && item.project, roleLabel(item.role)].filter(Boolean).join(' · ');
+        project.textContent = [item.label && item.project, item.kind === 'decision' ? 'Lien de validation · proposition ciblée' : roleLabel(item.role)].filter(Boolean).join(' · ');
         const date = document.createElement('span');
         date.className = 'muted';
         const format = timestamp => new Date(timestamp).toLocaleString('fr-FR');
@@ -136,7 +136,9 @@
     void run(event.currentTarget, async () => {
       const session = await api('accept', { token: invite });
       history.replaceState(null, '', location.pathname);
-      location.replace(visit(session.project));
+      const destination = new URL(visit(session.project), location.href);
+      if (session.decision?.proposalId) destination.searchParams.set('decision', session.decision.proposalId);
+      location.replace(destination.pathname + destination.search);
     });
   });
   el('login').addEventListener('submit', event => {

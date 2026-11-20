@@ -20,6 +20,12 @@ function list(projects, project, channel) {
   return items.map(item => ({ ...item, modelChanged: item.modelHash !== currentModel }));
 }
 
+function get(projects, project, channel, id) {
+  const item = list(projects, project, channel).find(entry => entry.id === id);
+  if (!item) throw fail(404, 'Proposition introuvable dans ce dossier.');
+  return item;
+}
+
 function propose(projects, project, channel, input, seenModel) {
   const variant = schema.validate(input, project);
   if (!variant?.name) throw fail(400, 'Une variante nommée et valide est requise.');
@@ -32,16 +38,31 @@ function propose(projects, project, channel, input, seenModel) {
   return item;
 }
 
-function approve(projects, project, channel, id, seenModel) {
+function decide(projects, project, channel, id, seenModel, action, comment = '') {
   const { model, storage, file, items } = open(projects, project, channel);
   const item = items.find(entry => entry.id === id);
   if (!item) throw fail(404, 'Proposition introuvable dans ce dossier.');
   if (seenModel !== item.modelHash) throw fail(409, 'La maquette affichée ne correspond pas à cette proposition. Rechargez la visite.');
-  if (item.approval) return item; // Réessayer ne modifie ni la date ni l’instantané.
+  if (!['approve', 'request-changes'].includes(action)) throw fail(400, 'Décision invalide.');
+  const text = typeof comment === 'string' ? comment.trim().replace(/[\u0000-\u001f\u007f]+/g, ' ').slice(0, 700) : '';
+  if (action === 'request-changes' && !text) throw fail(400, 'Un commentaire est requis pour demander une modification.');
+  const prior = item.decision || (item.approval ? { type: 'approved', decidedAt: item.approval.approvedAt,
+    snapshot: item.approval.snapshot, modelHash: item.approval.modelHash } : null);
+  const type = action === 'approve' ? 'approved' : 'changes-requested';
+  if (prior) {
+    if (prior.type !== type) throw fail(409, 'Une décision a déjà été enregistrée pour cette proposition. Publiez une nouvelle version pour décider à nouveau.');
+    return item; // Les répétitions idempotentes ne changent ni l’heure, ni le commentaire, ni l’instantané.
+  }
   if (item.modelHash !== fingerprint(model)) throw fail(409, 'La maquette a changé. Demandez une nouvelle proposition.');
-  item.approval = { approvedAt: new Date().toISOString(), snapshot: item.variant, modelHash: item.modelHash };
+  const decidedAt = new Date().toISOString();
+  item.decision = { type, decidedAt, comment: action === 'request-changes' ? text : '', snapshot: item.variant, modelHash: item.modelHash };
+  if (action === 'approve') item.approval = { approvedAt: decidedAt, snapshot: item.variant, modelHash: item.modelHash };
   writeItems(storage, file, items);
   return item;
 }
 
-module.exports = { list, propose, approve };
+function approve(projects, project, channel, id, seenModel) {
+  return decide(projects, project, channel, id, seenModel, 'approve');
+}
+
+module.exports = { list, get, propose, decide, approve };

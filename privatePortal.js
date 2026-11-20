@@ -2,7 +2,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { createHash, randomBytes, randomUUID, timingSafeEqual } = require('node:crypto');
-const { projectPattern, label } = require('./js/variantState');
+const { projectPattern, label, channelPattern } = require('./js/variantState');
+const decisionStore = require('./decisionStore');
 
 const directory = '.private-portal';
 const hours = 3600000;
@@ -102,13 +103,15 @@ function createPortal({ root, projects, send, read, env = process.env, now = Dat
     if (sessions.size >= 1000) return send(res, 503, { error: 'Trop de sessions actives. Réessayez plus tard.' });
     const value = token();
     const expiresAt = Math.min(now() + 12 * hours, invite?.expiresAt ?? Infinity);
-    const session = { role, project: invite?.project || null, expiresAt, inviteId: invite?.id };
+    const session = { role, project: invite?.project || null, expiresAt, inviteId: invite?.id,
+      decision: invite?.target ? { channel: invite.target.channel, proposalId: invite.target.proposalId } : null };
     sessions.set(digest(value), session);
     setCookie(res, value, expiresAt - now());
     return send(res, 200, describe(session));
   }
 
-  const describe = s => s ? { role: s.role, project: s.project, expiresAt: s.expiresAt } : { role: null };
+  const describe = s => s ? { role: s.role, project: s.project, expiresAt: s.expiresAt,
+    decision: s.decision ? { ...s.decision } : null } : { role: null };
   const deny = (res, session) => send(res, session ? 403 : 401, { error: session ? 'Accès non autorisé.' : 'Invitation ou connexion requise.' });
   const inviteInfo = ({ secretHash, ...info }) => info;
 
@@ -145,6 +148,28 @@ function createPortal({ root, projects, send, read, env = process.env, now = Dat
           sessions.delete(cookie(req));
           setCookie(res, '', 0);
           return send(res, 200, { ok: true });
+        case '/api/portal/decision-links': {
+          if (sessionFor(cookie(req))?.role !== 'architect') return deny(res, null);
+          const { project, channel, proposalId, validHours } = body || {};
+          if (typeof project !== 'string' || !projectPattern.test(project) || !channelPattern.test(channel || '') ||
+              typeof proposalId !== 'string' || !/^[0-9a-f-]{36}$/i.test(proposalId) ||
+              !Number.isInteger(validHours) || validHours < 1 || validHours > 720) {
+            return send(res, 400, { error: 'Projet, dossier, proposition ou durée invalide (1 à 720 heures).' });
+          }
+          let proposal;
+          try { proposal = decisionStore.get(projects, project, channel, proposalId); }
+          catch (error) { return send(res, error.status || 500, { error: error.status ? error.message : 'Proposition indisponible.' }); }
+          if (proposal.modelChanged) return send(res, 409, { error: 'La maquette a changé. Publiez une nouvelle proposition avant de créer un lien.' });
+          if (proposal.decision || proposal.approval) return send(res, 409, { error: 'Cette proposition a déjà reçu une décision.' });
+          const retained = invitations.filter(invite => active(invite) || invite.expiresAt > now() - 30 * 24 * hours);
+          if (retained.length >= 1000) return send(res, 409, { error: 'Limite d’invitations atteinte.' });
+          const secret = token();
+          const invite = { id: randomUUID(), project, role: 'comment', label: `${label(proposal.variant.name)} · ${proposal.id.slice(0, 8)}`,
+            target: { channel, proposalId }, kind: 'decision', secretHash: digest(secret), createdAt: now(),
+            expiresAt: now() + validHours * hours, revokedAt: null };
+          persist([...retained, invite]);
+          return send(res, 201, { invitation: inviteInfo(invite), token: secret });
+        }
         case '/api/portal/invitations': {
           // Réévalue la session après lecture du corps : elle a pu être fermée entre-temps.
           if (sessionFor(cookie(req))?.role !== 'architect') return deny(res, null);
@@ -196,7 +221,12 @@ function createPortal({ root, projects, send, read, env = process.env, now = Dat
       if (isClient(session)) {
         const project = url.searchParams.get('project');
         if (relative === 'editor.html' || (project && project !== session.project)) { deny(res, session); return false; }
-        if (!project) { res.writeHead(302, { Location: `/${relative}?project=${session.project}` }); res.end(); return false; }
+        if (session.decision) {
+          const expected = `/index.html?project=${encodeURIComponent(session.project)}&decision=${encodeURIComponent(session.decision.proposalId)}`;
+          if (relative !== 'index.html' || project !== session.project || url.searchParams.get('decision') !== session.decision.proposalId) {
+            res.writeHead(302, { Location: expected }); res.end(); return false;
+          }
+        } else if (!project) { res.writeHead(302, { Location: `/${relative}?project=${session.project}` }); res.end(); return false; }
       }
       if (session.role === 'architect' && relative === 'index.html' && defaultProject && !url.searchParams.has('project')) {
         res.writeHead(302, { Location: `/index.html?project=${defaultProject}` }); res.end(); return false;
@@ -213,6 +243,13 @@ function createPortal({ root, projects, send, read, env = process.env, now = Dat
       res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' });
       return void res.end('const HOUSE_DATA = { config: { ...HOUSE_DEFAULT_CONFIG }, assets: HOUSE_DEFAULT_ASSETS }; window.HOUSE_DATA = HOUSE_DATA;');
     }
+    if (session.decision) {
+      const project = url.searchParams.get('project');
+      const channel = req.headers['x-feedback-channel'];
+      if (relative === 'api/client-decisions' && project === session.project && channel === session.decision.channel &&
+          ['GET', 'POST'].includes(req.method)) return { session, decision: session.decision };
+      if (relative === 'api/client-feedback') { deny(res, session); return false; }
+    }
     if (relative === 'api/projects' && req.method === 'GET') return { session, only: session.project };
     if (url.searchParams.get('project') === session.project &&
       ((relative === 'api/gallery/media' && req.method === 'GET') || (['api/client-feedback', 'api/client-decisions'].includes(relative) &&
@@ -225,6 +262,9 @@ function createPortal({ root, projects, send, read, env = process.env, now = Dat
   return { enabled, guard, roleForProject(req, project) {
     const current = sessionFor(cookie(req));
     return current?.role === 'architect' || current?.project === project ? current?.role : null;
+  }, decisionTargetFor(req, project) {
+    const current = sessionFor(cookie(req));
+    return current?.project === project ? current.decision : null;
   } };
 }
 

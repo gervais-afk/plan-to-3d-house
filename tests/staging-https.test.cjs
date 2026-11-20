@@ -160,3 +160,95 @@ test('Enregistrement projet : erreurs JSON utilisables et validation avant écri
   assert.equal(raw.status, 400);
   assert.match(raw.json().error, /JSON/);
 });
+
+test('Lien de validation ciblé : accès direct, décisions, immutabilité, expiration et révocation', { skip: openssl ? false : 'OpenSSL absent' }, async t => {
+  const stage = await start();
+  t.after(stage.stop);
+  const architect = actor(stage), v2Client = actor(stage), v3Client = actor(stage), revokedClient = actor(stage), expiredClient = actor(stage), changedClient = actor(stage);
+  assert.equal((await architect.api('login', { password: stage.password })).status, 200);
+  const projectFile = path.join(stage.root, 'projects', a, 'project.json');
+  const hash = () => createHash('sha256').update(fs.readFileSync(projectFile)).digest('hex');
+  const channel = 'c'.repeat(32), decisionHeaders = { 'X-Feedback-Channel': channel };
+  const publish = async (name, floor = 'oak') => {
+    const result = await architect.request(decisions(a), { headers: decisionHeaders, body: {
+      action: 'propose', variant: { ...variant, name, floor }, modelHash: hash()
+    } });
+    assert.equal(result.status, 201);
+    return result.json().item;
+  };
+  const makeLink = async proposal => {
+    const result = await architect.api('decision-links', { project: a, channel, proposalId: proposal.id, validHours: 24 });
+    assert.equal(result.status, 201, result.body.toString());
+    return result.json();
+  };
+  const accept = async (client, link) => {
+    const result = await client.api('accept', { token: link.token });
+    assert.equal(result.status, 200);
+    assert.deepEqual(result.json().decision, { channel, proposalId: link.invitation.target.proposalId });
+  };
+
+  const v2 = await publish('V2 · Façade bois');
+  const v2Link = await makeLink(v2);
+  const savedInvites = fs.readFileSync(path.join(stage.root, '.private-portal', 'invitations.json'), 'utf8');
+  assert(!savedInvites.includes(v2Link.token), 'le jeton est conservé uniquement haché');
+  await accept(v2Client, v2Link);
+  const canonical = `/index.html?project=${a}&decision=${v2.id}`;
+  assert.equal((await v2Client.request(canonical)).status, 200, 'l’invitation mène directement à la version ciblée');
+  const changedTarget = await v2Client.request(`/index.html?project=${a}&decision=00000000-0000-4000-8000-000000000000`);
+  assert.equal(changedTarget.status, 302);
+  assert.equal(changedTarget.headers.location, canonical, 'le serveur rétablit la cible inscrite dans la session');
+  assert.equal((await v2Client.request(`/index.html?project=atelier-controle&decision=${v2.id}`)).status, 403);
+  const exactV2 = await v2Client.request(decisions(a), { headers: decisionHeaders });
+  assert.deepEqual(exactV2.json().proposals.map(item => item.id), [v2.id]);
+  assert.equal((await v2Client.request(decisions(a), { headers: { 'X-Feedback-Channel': 'd'.repeat(32) } })).status, 403);
+  assert.equal((await v2Client.request(notes(a), { headers: decisionHeaders })).status, 403, 'un lien ciblé ne donne pas accès au dossier de remarques');
+  const wrongTarget = await v2Client.request(decisions(a), { headers: decisionHeaders, body: { action: 'approve', id: '00000000-0000-4000-8000-000000000000', modelHash: hash() } });
+  assert.equal(wrongTarget.status, 403);
+
+  const missingComment = await v2Client.request(decisions(a), { headers: decisionHeaders, body: { action: 'request-changes', id: v2.id, modelHash: hash(), comment: '   ' } });
+  assert.equal(missingComment.status, 400);
+  const requested = await v2Client.request(decisions(a), { headers: decisionHeaders, body: { action: 'request-changes', id: v2.id, modelHash: hash(), comment: 'Changer la finition de façade.' } });
+  assert.equal(requested.status, 200);
+  const immutableDecision = requested.json().item.decision;
+  assert.equal(immutableDecision.type, 'changes-requested');
+  assert.equal(immutableDecision.comment, 'Changer la finition de façade.');
+  assert.ok(Number.isFinite(Date.parse(immutableDecision.decidedAt)));
+  const repeated = await v2Client.request(decisions(a), { headers: decisionHeaders, body: { action: 'request-changes', id: v2.id, modelHash: hash(), comment: 'Autre texte ignoré.' } });
+  assert.deepEqual(repeated.json().item.decision, immutableDecision, 'un double envoi ne crée ni ne remplace la décision');
+  assert.equal((await v2Client.request(decisions(a), { headers: decisionHeaders, body: { action: 'approve', id: v2.id, modelHash: hash() } })).status, 409);
+  const architectList = (await architect.request(decisions(a), { headers: decisionHeaders })).json().proposals;
+  assert.deepEqual(architectList[0].decision, immutableDecision, 'l’architecte retrouve la demande et son commentaire');
+
+  const v3 = await publish('V3 · Pierre', 'tile');
+  const v3Link = await makeLink(v3);
+  await accept(v3Client, v3Link);
+  assert.deepEqual((await v3Client.request(decisions(a), { headers: decisionHeaders })).json().proposals.map(item => item.id), [v3.id]);
+  const approved = await v3Client.request(decisions(a), { headers: decisionHeaders, body: { action: 'approve', id: v3.id, modelHash: hash() } });
+  assert.equal(approved.status, 200);
+  const approval = approved.json().item.decision;
+  assert.equal(approval.type, 'approved');
+  assert.equal(approved.json().item.approval.snapshot.floor, 'tile');
+  assert.deepEqual((await v3Client.request(decisions(a), { headers: decisionHeaders, body: { action: 'approve', id: v3.id, modelHash: hash() } })).json().item.decision, approval);
+  assert.equal((await v3Client.request(decisions(a), { headers: decisionHeaders, body: { action: 'request-changes', id: v3.id, modelHash: hash(), comment: 'Non.' } })).status, 409);
+  const afterV3 = (await architect.request(decisions(a), { headers: decisionHeaders })).json().proposals;
+  assert.deepEqual(afterV3.find(item => item.id === v2.id).decision, immutableDecision, 'publier et décider V3 ne change pas V2');
+  assert.deepEqual(afterV3.find(item => item.id === v3.id).decision, approval);
+  assert.equal((await architect.api('revoke', { id: v3Link.invitation.id })).status, 200);
+  assert.equal((await v3Client.request(decisions(a), { headers: decisionHeaders })).status, 401, 'la révocation ferme la session déjà ouverte');
+
+  const v4 = await publish('V4 · Révocation');
+  const v4Link = await makeLink(v4);
+  assert.equal((await architect.api('revoke', { id: v4Link.invitation.id })).status, 200);
+  assert.equal((await expiredClient.api('accept', { token: v4Link.token })).status, 403, 'un lien révoqué ne peut pas ouvrir de session');
+
+  const v5 = await publish('V5 · Maquette vérifiée');
+  const v5Link = await makeLink(v5);
+  await accept(changedClient, v5Link);
+  fs.appendFileSync(projectFile, '\n');
+  const stale = await changedClient.request(decisions(a), { headers: decisionHeaders });
+  assert.equal(stale.status, 200);
+  assert.equal(stale.json().proposals[0].modelChanged, true);
+  const refused = await changedClient.request(decisions(a), { headers: decisionHeaders, body: { action: 'approve', id: v5.id, modelHash: hash() } });
+  assert.equal(refused.status, 409, 'même une empreinte client substituée ne permet pas de décider sur la maquette modifiée');
+  assert.equal((await architect.request(decisions(a), { headers: decisionHeaders })).json().proposals.find(item => item.id === v5.id).decision, undefined);
+});

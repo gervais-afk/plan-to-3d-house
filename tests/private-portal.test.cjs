@@ -107,10 +107,15 @@ test('Invitations : portée projet, rôles, accès direct, expiration et révoca
   fixture(root);
   const password = randomBytes(24).toString('hex');
   const expiredToken = randomBytes(32).toString('base64url');
+  const expiredDecisionToken = randomBytes(32).toString('base64url');
   const store = path.join(root, '.private-portal');
   fs.mkdirSync(store);
-  fs.writeFileSync(path.join(store, 'invitations.json'), JSON.stringify([{ id: 'expired', project: 'plan-a', role: 'read',
-    expiresAt: Date.now() - 5000, secretHash: createHash('sha256').update(expiredToken).digest('hex') }]));
+  fs.writeFileSync(path.join(store, 'invitations.json'), JSON.stringify([
+    { id: 'expired', project: 'plan-a', role: 'read', expiresAt: Date.now() - 5000,
+      secretHash: createHash('sha256').update(expiredToken).digest('hex') },
+    { id: 'expired-decision', project: 'plan-a', role: 'comment', kind: 'decision', target: { channel: 'a'.repeat(32), proposalId: '00000000-0000-4000-8000-000000000000' },
+      expiresAt: Date.now() - 5000, secretHash: createHash('sha256').update(expiredDecisionToken).digest('hex') }
+  ]));
   const server = track(await serve(root, { PRIVATE_PORTAL: '1', PORTAL_INSECURE_LOCAL: '1', PORTAL_PASSWORD: password }));
   const guest = actor(server.origin), architect = actor(server.origin), reader = actor(server.origin), commenter = actor(server.origin);
   const a = '/projects/plan-a', b = '/projects/plan-b';
@@ -122,6 +127,7 @@ test('Invitations : portée projet, rôles, accès direct, expiration et révoca
   assert.equal((await guest.request(a + render)).status, 401);
   assert.equal((await guest.request('/js/data.js')).status, 401);
   assert.equal((await guest.api('accept', { token: expiredToken })).status, 403);
+  assert.equal((await guest.api('accept', { token: expiredDecisionToken })).status, 403, 'un lien de validation expiré est refusé à l’acceptation');
   assert.equal((await guest.api('login', { password }, { Origin: 'https://autre.test' })).status, 403);
   const login = await architect.api('login', { password });
   assert.equal(login.status, 200);
@@ -169,4 +175,81 @@ test('Invitations : portée projet, rôles, accès direct, expiration et révoca
   assert.equal((await reader.request(a + '/project.json')).status, 401);
   assert.equal((await reader.api('accept', { token: read.token })).status, 403);
   assert.equal((await commenter.request(a + render)).status, 200, 'une autre invitation reste valide');
+});
+
+test('Lien de validation ciblé : accès direct à V2, décision immuable et V3 indépendante', async t => {
+  const { root, track } = workspace(t);
+  fixture(root);
+  const password = randomBytes(24).toString('hex');
+  const server = track(await serve(root, { PRIVATE_PORTAL: '1', PORTAL_INSECURE_LOCAL: '1', PORTAL_PASSWORD: password }));
+  const architect = actor(server.origin), clientV2 = actor(server.origin), clientV3 = actor(server.origin), clientStale = actor(server.origin);
+  assert.equal((await architect.api('login', { password })).status, 200);
+  const project = 'plan-a', otherProject = 'plan-b', channel = 'e'.repeat(32);
+  const headers = { 'X-Feedback-Channel': channel };
+  const modelFile = path.join(root, 'projects', project, 'project.json');
+  const hash = () => createHash('sha256').update(fs.readFileSync(modelFile)).digest('hex');
+  const variant = name => ({ v: 1, project, name, floor: 'oak', facade: 'timber', hour: 13,
+    pose: { p: [0, 8, 0.01], q: [0, 0, 0, 1], f: 42, e: 1 } });
+  const publish = async name => {
+    const response = await architect.request(`/api/client-decisions?project=${project}`, { headers, body: { action: 'propose', variant: variant(name), modelHash: hash() } });
+    const result = await response.json();
+    assert.equal(response.status, 201, result.error);
+    assert.ok(result.item?.id, JSON.stringify(result));
+    return result.item;
+  };
+  const createLink = async item => {
+    const response = await architect.api('decision-links', { project, channel, proposalId: item.id, validHours: 72 });
+    const result = await response.json();
+    assert.equal(response.status, 201, result.error);
+    return result;
+  };
+  const v2 = await publish('V2 · Bois');
+  const linkV2 = await createLink(v2);
+  assert.equal((await clientV2.api('accept', { token: linkV2.token })).status, 200);
+  assert.deepEqual((await (await clientV2.request('/api/portal/session')).json()).decision, { channel, proposalId: v2.id });
+  const direct = `/index.html?project=${project}&decision=${v2.id}`;
+  assert.equal((await clientV2.request(direct)).status, 200);
+  const altered = await clientV2.request(`/index.html?project=${project}&decision=00000000-0000-4000-8000-000000000000`);
+  assert.equal(altered.status, 302);
+  assert.equal(altered.headers.get('location'), direct);
+  assert.equal((await clientV2.request(`/index.html?project=${otherProject}&decision=${v2.id}`)).status, 403);
+  assert.deepEqual((await (await clientV2.request(`/api/client-decisions?project=${project}`, { headers })).json()).proposals.map(item => item.id), [v2.id]);
+  assert.equal((await clientV2.request(`/api/client-decisions?project=${project}`, { headers: { 'X-Feedback-Channel': 'f'.repeat(32) } })).status, 403);
+  assert.equal((await clientV2.request(`/api/client-feedback?project=${project}`, { headers })).status, 403);
+  assert.equal((await clientV2.request(`/api/client-decisions?project=${otherProject}`, { headers })).status, 403);
+  assert.equal((await clientV2.request(`/api/client-decisions?project=${project}`, { headers, body: { action: 'approve', id: '00000000-0000-4000-8000-000000000000', modelHash: hash() } })).status, 403);
+  assert.equal((await clientV2.request(`/api/client-decisions?project=${project}`, { headers, body: { action: 'request-changes', id: v2.id, modelHash: hash(), comment: '' } })).status, 400);
+
+  const decisionResponse = await clientV2.request(`/api/client-decisions?project=${project}`, { headers, body: {
+    action: 'request-changes', id: v2.id, modelHash: hash(), comment: 'Merci de revoir la façade.'
+  } });
+  assert.equal(decisionResponse.status, 200);
+  const v2Decision = (await decisionResponse.json()).item.decision;
+  assert.equal(v2Decision.type, 'changes-requested');
+  assert.equal(v2Decision.comment, 'Merci de revoir la façade.');
+  assert.ok(Number.isFinite(Date.parse(v2Decision.decidedAt)));
+  const duplicate = await clientV2.request(`/api/client-decisions?project=${project}`, { headers, body: {
+    action: 'request-changes', id: v2.id, modelHash: hash(), comment: 'Tentative de remplacement.'
+  } });
+  assert.deepEqual((await duplicate.json()).item.decision, v2Decision);
+  assert.equal((await clientV2.request(`/api/client-decisions?project=${project}`, { headers, body: { action: 'approve', id: v2.id, modelHash: hash() } })).status, 409);
+
+  const v3 = await publish('V3 · Pierre');
+  const linkV3 = await createLink(v3);
+  assert.equal((await clientV3.api('accept', { token: linkV3.token })).status, 200);
+  assert.deepEqual((await (await clientV3.request(`/api/client-decisions?project=${project}`, { headers })).json()).proposals.map(item => item.id), [v3.id]);
+  const approved = await clientV3.request(`/api/client-decisions?project=${project}`, { headers, body: { action: 'approve', id: v3.id, modelHash: hash() } });
+  assert.equal(approved.status, 200);
+  assert.equal((await approved.json()).item.decision.type, 'approved');
+  assert.deepEqual((await (await architect.request(`/api/client-decisions?project=${project}`, { headers })).json()).proposals.find(item => item.id === v2.id).decision, v2Decision);
+  assert.equal((await architect.api('revoke', { id: linkV3.invitation.id })).status, 200);
+  assert.equal((await clientV3.request(`/api/client-decisions?project=${project}`, { headers })).status, 401);
+
+  const staleProposal = await publish('V4 · Empreinte');
+  const staleLink = await createLink(staleProposal);
+  assert.equal((await clientStale.api('accept', { token: staleLink.token })).status, 200);
+  fs.appendFileSync(modelFile, '\n');
+  assert.equal((await (await clientStale.request(`/api/client-decisions?project=${project}`, { headers })).json()).proposals[0].modelChanged, true);
+  assert.equal((await clientStale.request(`/api/client-decisions?project=${project}`, { headers, body: { action: 'approve', id: staleProposal.id, modelHash: hash() } })).status, 409);
+  assert.equal((await (await architect.request(`/api/client-decisions?project=${project}`, { headers })).json()).proposals.find(item => item.id === staleProposal.id).decision, undefined);
 });

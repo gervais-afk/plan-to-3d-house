@@ -307,3 +307,30 @@ body.is-presenting .guided-controls { background: color-mix(in srgb, var(--night
 body.is-presenting .guided-controls .btn-toggle { color: var(--on-night); }
 body.is-presenting .guided-controls .guided-next { background: var(--accent-soft); color: var(--ink); border-color: var(--accent-soft); }
 body.is-presenting .guided-kicker { color: var(--accent-soft); }
+
+/* Validation dédiée : reste visible pendant l’exploration, sans modal bloquant. */
+.approval-card, .approval-card[hidden] {
+  position: fixed; z-index: 12; top: 92px; right: clamp(10px, 1.6vw, 22px); display: grid; gap: .65rem;
+  width: min(390px, calc(100vw - 24px)); padding: 1rem; border: 1px solid var(--rule); border-radius: var(--radius-lg);
+  background: var(--surface); color: var(--ink); box-shadow: var(--shadow-2);
+}
+.approval-card[hidden] { display: none; }
+.approval-card h2, .approval-card p { margin: 0; }
+.approval-card h2 { font: 600 1.2rem var(--serif); }
+.approval-kicker { color: var(--accent-ink); font-size: .68rem; font-weight: 800; letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.approval-project { font-weight: 750; }
+.approval-version { color: var(--muted); font-size: .84rem; overflow-wrap: anywhere; }
+.approval-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; }
+.approval-card button { min-height: var(--target); padding: .55rem .65rem; border: 1px solid var(--rule); border-radius: var(--radius-sm); background: var(--paper); color: var(--ink); font: 700 .82rem var(--sans); cursor: pointer; }
+.approval-card .approval-primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.approval-request { display: grid; gap: .45rem; }
+.approval-request label { font-weight: 700; }
+.approval-request textarea { width: 100%; min-height: 5rem; padding: .55rem; border: 1px solid var(--rule); border-radius: var(--radius-sm); background: var(--paper); color: var(--ink); font: inherit; resize: vertical; }
+.approval-return { justify-self: start; }
+#approval-status:empty { display: none; }
+#approval-status { color: var(--muted); font-size: .82rem; line-height: 1.45; }
+@media (max-width: 720px) {
+  .approval-card, .approval-card[hidden] { top: auto; right: 8px; bottom: 8px; left: 8px; width: auto; gap: .5rem; padding: .75rem; }
+  .approval-card h2 { font-size: 1.05rem; }
+  .approval-card button { min-height: 44px; }
+}
