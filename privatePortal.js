@@ -20,7 +20,7 @@ const viewerFiles = new Set(['js/portal-context.js', 'js/houseDataCore.js', 'js/
   'js/renderStudio.js', 'js/scrollTour.js', 'js/walkController.js', 'js/minimap.js', 'js/solarOptions.js',
   'js/clientFinishes.js', 'js/clientTools.js', 'js/clientVariants.js', 'js/clientFeedback.js', 'js/clientBrochure.js',
   'js/app.js', 'js/clientDecisions.js', 'css/style.css', 'css/clientTools.css',
-  'css/tokens.css', 'css/motion.css', 'js/icons.js', 'js/motion.js', 'js/presentMode.js', 'js/viewOrder.js', 'js/costEstimate.js', 'js/planBook.js', 'assets/vendor/jspdf-4.2.1.umd.min.js', 'js/home.js', 'css/accueil.css', 'assets/fonts/manrope.woff2', 'assets/fonts/source-serif-4.woff2']);
+  'css/tokens.css', 'css/motion.css', 'js/icons.js', 'js/motion.js', 'js/presentMode.js', 'js/viewOrder.js', 'js/costEstimate.js', 'js/planBook.js', 'assets/vendor/jspdf-4.2.1.umd.min.js', 'js/home.js', 'css/accueil.css', 'css/presentation.css', 'assets/fonts/manrope.woff2', 'assets/fonts/source-serif-4.woff2']);
 const publicFiles = new Set(['portal.html', 'js/portal.js', 'css/portal.css', 'css/tokens.css', 'assets/fonts/manrope.woff2', 'assets/fonts/source-serif-4.woff2']);
 
 function safePath(relative) {
@@ -239,6 +239,12 @@ function createPortal({ root, projects, send, read, env = process.env, now = Dat
       return void res.end('window.PORTAL_CONTEXT = ' + JSON.stringify(describe(session)) + ';');
     }
     if (!isClient(session)) return { session };
+    if (/^projects\/[^/]+\/generated\/drafts(?:\/|\.json$)/i.test(relative)) { deny(res, session); return false; }
+    if (urlPath.startsWith('/api/presentation/')) {
+      if (relative === 'api/presentation/settings' && req.method === 'GET' && url.searchParams.get('project') === session.project) return { session };
+      deny(res, session);
+      return false;
+    }
     if (relative === 'js/data.js' && reading) {
       res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' });
       return void res.end('const HOUSE_DATA = { config: { ...HOUSE_DEFAULT_CONFIG }, assets: HOUSE_DEFAULT_ASSETS }; window.HOUSE_DATA = HOUSE_DATA;');

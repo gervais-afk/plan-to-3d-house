@@ -5,6 +5,7 @@ const path = require('path');
 const { randomUUID } = require('node:crypto');
 const feedbackStore = require('./feedbackStore');
 const decisionStore = require('./decisionStore');
+const presentationStore = require('./presentationStore');
 const { createPortal, safePath } = require('./privatePortal');
 
 const PORT = Number(process.env.PORT) || 8000;
@@ -117,6 +118,34 @@ function galleryFlags(req, res, url) {
     atomicFile(media.manifest, JSON.stringify(manifest, null, 2));
     return sendJson(res, 200, { ok: true, id, catalog: item.catalog === true, book: item.book === true });
   });
+}
+
+function presentationApi(req, res, url, pathname) {
+  let project;
+  try { project = projectSlug(url.searchParams.get('project')); }
+  catch (error) { return sendJson(res, 400, { error: error.message }); }
+  try {
+    if (req.method === 'GET' && pathname === '/api/presentation/settings') return sendJson(res, 200, presentationStore.get(PROJECTS, project));
+    if (req.method === 'GET' && pathname === '/api/presentation/drafts') return sendJson(res, 200, { drafts: presentationStore.listDrafts(PROJECTS, project) });
+    if (req.method === 'GET' && pathname === '/api/presentation/draft-image') {
+      const image = presentationStore.draftImage(PROJECTS, project, url.searchParams.get('id'));
+      const ext = image.ext === 'jpg' ? '.jpg' : `.${image.ext}`;
+      res.writeHead(200, { 'Content-Type': TYPES[ext] || 'application/octet-stream', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+      return fs.createReadStream(image.file).on('error', () => res.destroy()).pipe(res);
+    }
+    if (req.method === 'POST' && pathname.startsWith('/api/presentation/')) {
+      const limit = pathname.endsWith('/settings') ? 16 * 1024 : 8 * 1024;
+      return readBody(req, res, limit, body => {
+        try {
+          if (pathname === '/api/presentation/settings') return sendJson(res, 200, presentationStore.save(PROJECTS, project, body));
+          if (pathname === '/api/presentation/drafts') return sendJson(res, 201, { draft: presentationStore.createDraft(PROJECTS, project, body) });
+          if (pathname === '/api/presentation/publish-draft') return sendJson(res, 200, { item: presentationStore.publishDraft(PROJECTS, project, body) });
+          return sendJson(res, 404, { error: 'Route introuvable.' });
+        } catch (error) { return sendJson(res, error.status || 500, { error: error.status ? error.message : 'Opération de présentation impossible.' }); }
+      });
+    }
+    return sendJson(res, 405, { error: 'Méthode non autorisée.' });
+  } catch (error) { return sendJson(res, error.status || 500, { error: error.status ? error.message : 'Opération de présentation impossible.' }); }
 }
 
 // Modèles de photoréalisation autorisés (identifiants vérifiés sur l'API publique OpenRouter, novembre 2026).
@@ -289,7 +318,9 @@ function galleryMedia(res, url) {
   res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   let renders = [];
   try { renders = fs.readdirSync(media.renders, { withFileTypes: true }).filter(entry => entry.isFile() && /^[a-z0-9_-]+\.(?:jpe?g|png|webp)$/i.test(entry.name)).map(entry => renderPrefix + entry.name); } catch { /* pas encore de rendu */ }
-  res.end(JSON.stringify({ images, videos, renders }));
+  let presentation = { slots: [null, null, null], focal: { x: 50, y: 50 }, orphanedSlots: 0 };
+  try { presentation = presentationStore.get(PROJECTS, projectSlug(url.searchParams.get('project'))); } catch { /* réglages absents : comportement historique */ }
+  res.end(JSON.stringify({ images, videos, renders, presentation }));
 }
 
 // --- Projets de l'éditeur de plan : projects/<slug>/project.json (+ plan.jpg|png) ---
@@ -752,6 +783,7 @@ http.createServer((req, res) => {
   if (!access) return;
   if (urlPath === '/api/client-feedback') return clientFeedback(req, res, requestUrl);
   if (urlPath === '/api/client-decisions') return clientDecisions(req, res, requestUrl);
+  if (urlPath.startsWith('/api/presentation/')) return presentationApi(req, res, requestUrl, urlPath);
   if (req.method === 'GET' && urlPath === '/api/ai/status') return aiStatus(res);
   if (req.method === 'POST' && urlPath === '/api/ai/chat') return aiChat(req, res);
   if (req.method === 'POST' && urlPath === '/api/ai/images') return aiImage(req, res);

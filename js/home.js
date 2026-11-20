@@ -26,6 +26,10 @@
   let activeViews = [];
   let current = 0;
   let pictureVersion = 0;
+  let presentation = { slots: [null, null, null], focal: { x: 50, y: 50 } };
+  let presentationCatalog = [];
+  let currentMedia = { images: [], renders: [] };
+  let currentProject = null;
 
   el('home-account').hidden = !context?.role;
   // L’outil de saisie n’apparaît dans l’en-tête que pour l’architecte connecté ; en démo il reste en pied de page.
@@ -56,13 +60,21 @@
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.json();
   }
-  // Ouverture : les trois premières vues dans l’ordre de présentation partagé (js/viewOrder.js).
-  const makeViews = (media, slug) => ViewOrder.views(media, slug, 3);
+  // L’ordre historique reste le repli ; les sélections ne sont appliquées que si disponibles.
+  const makeViews = (media, slug) => {
+    const automatic = ViewOrder.views(media, slug, 3);
+    const published = ViewOrder.views({ images: media?.images || [], renders: [] }, slug);
+    const captures = ViewOrder.views({ images: [], renders: media?.renders || [] }, slug);
+    const catalog = [...published, ...captures].filter((view, index, all) => all.findIndex(item => item.source === view.source) === index);
+    return ViewOrder.selectSlots(automatic, media?.presentation?.slots, catalog);
+  };
   async function showView(index) {
     if (!activeViews.length) return;
     current = (index + activeViews.length) % activeViews.length;
     const version = ++pictureVersion;
     const shot = activeViews[current];
+    const focal = current === 0 ? presentation.focal : { x: 50, y: 50 };
+    image.style.objectPosition = `${focal.x}% ${focal.y}%`;
     const original = new URL(shot.source, url).href;
     const source = new URL(shot.preview || shot.source, url).href;
     el('cover-number').textContent = `${counter(current + 1)} / ${counter(activeViews.length)}`;
@@ -276,6 +288,153 @@
     el('footer-signature').hidden = !parts.length && !contact;
   }
 
+  function allCandidates(media, slug) {
+    const published = ViewOrder.views({ images: media?.images || [], renders: [] }, slug);
+    const captures = ViewOrder.views({ images: [], renders: media?.renders || [] }, slug);
+    return [...published, ...captures].filter((view, index, all) => all.findIndex(item => item.source === view.source) === index);
+  }
+  function coverCandidate() {
+    const reference = presentation.slots?.[0];
+    return presentationCatalog.find(view => view.source === reference) || ViewOrder.views(currentMedia, currentProject, 1)[0] || presentationCatalog[0];
+  }
+  function updateCropPreview() {
+    const shot = coverCandidate();
+    const focal = presentation.focal || { x: 50, y: 50 };
+    for (const id of ['crop-desktop-image', 'crop-mobile-image']) {
+      const img = el(id);
+      if (!img) continue;
+      img.style.objectPosition = `${focal.x}% ${focal.y}%`;
+      if (shot) img.src = shot.preview || shot.source;
+      else img.removeAttribute('src');
+    }
+    el('focal-x-value').value = `${focal.x} %`;
+    el('focal-y-value').value = `${focal.y} %`;
+    el('focal-x').value = focal.x;
+    el('focal-y').value = focal.y;
+  }
+  function renderPresentationEditor(media, slug) {
+    const admin = el('presentation-admin'), retouch = el('retouch-admin');
+    const isArchitect = context?.role === 'architect';
+    admin.hidden = !isArchitect;
+    retouch.hidden = !isArchitect;
+    presentation = media.presentation || presentation;
+    presentationCatalog = allCandidates(media, slug);
+    currentMedia = media;
+    currentProject = slug;
+    const container = el('presentation-slots');
+    container.replaceChildren();
+    const labels = ['01 · Couverture', '02 · Vue complémentaire', '03 · Vue complémentaire'];
+    for (let index = 0; index < 3; index++) {
+      const row = document.createElement('div'); row.className = 'slot-row';
+      const label = document.createElement('label'); label.htmlFor = `presentation-slot-${index}`; label.textContent = labels[index];
+      const choice = document.createElement('select'); choice.id = `presentation-slot-${index}`;
+      choice.append(new Option('Automatique — ordre habituel', ''));
+      for (const view of presentationCatalog) choice.append(new Option(view.label, view.source));
+      choice.value = presentation.slots?.[index] || '';
+      choice.addEventListener('change', () => {
+        presentation.slots[index] = choice.value || null;
+        updateCropPreview();
+        renderViews(ViewOrder.selectSlots(ViewOrder.views(media, slug, 3), presentation.slots, presentationCatalog));
+      });
+      row.append(label, choice); container.append(row);
+    }
+    for (const axis of ['x', 'y']) el(`focal-${axis}`).oninput = event => {
+      presentation.focal[axis] = Number(event.currentTarget.value);
+      updateCropPreview();
+      image.style.objectPosition = `${presentation.focal.x}% ${presentation.focal.y}%`;
+    };
+    el('presentation-save').onclick = async () => {
+      const button = el('presentation-save'); button.disabled = true;
+      try {
+        const response = await fetch(`api/presentation/settings?project=${encodeURIComponent(slug)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(presentation) });
+        const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Enregistrement impossible.');
+        presentation = result; el('presentation-status').textContent = 'Sélection, ordre et point focal enregistrés pour ce projet.';
+      } catch (error) { el('presentation-status').textContent = error.message; }
+      finally { button.disabled = false; }
+    };
+    updateCropPreview();
+    const source = el('retouch-source'); source.replaceChildren();
+    const captures = ViewOrder.views({ images: [], renders: media.renders || [] }, slug);
+    if (!captures.length) source.append(new Option('Aucune capture disponible', ''));
+    for (const view of captures) source.append(new Option(view.label, view.source));
+    el('retouch-create').onclick = async () => {
+      const button = el('retouch-create'); button.disabled = true;
+      try {
+        const response = await fetch(`api/presentation/drafts?project=${encodeURIComponent(slug)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: source.value, prompt: el('retouch-prompt').value }) });
+        const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Création du brouillon impossible.');
+        el('retouch-status').textContent = 'Brouillon simulé créé localement ; aucune image n’a quitté ce serveur.';
+        await loadDrafts(slug);
+      } catch (error) { el('retouch-status').textContent = error.message; }
+      finally { button.disabled = false; }
+    };
+    if (isArchitect) void loadDrafts(slug);
+  }
+  async function loadDrafts(slug) {
+    const host = el('draft-list'); host.replaceChildren();
+    try {
+      const { drafts = [] } = await json(`api/presentation/drafts?project=${encodeURIComponent(slug)}`);
+      if (!drafts.length) { host.textContent = 'Aucun brouillon privé à examiner.'; return; }
+      for (const draft of drafts) {
+        const card = document.createElement('article'); card.className = 'draft-card';
+        const heading = document.createElement('h3'); heading.textContent = 'Retouche proposée · brouillon';
+        const state = document.createElement('span'); state.className = 'draft-state'; state.textContent = 'BROUILLON · NON PUBLIÉ';
+        const prompt = document.createElement('p'); prompt.textContent = `${draft.prompt} — ${draft.model}`;
+        const pair = document.createElement('div'); pair.className = 'draft-pair';
+        for (const [src, label] of [[draft.source, 'Capture source'], [draft.imageUrl, 'Résultat simulé']]) {
+          const figure = document.createElement('figure'), img = document.createElement('img'), caption = document.createElement('figcaption');
+          img.src = src; img.alt = `${label} — comparaison du brouillon`; img.loading = 'lazy'; caption.textContent = label; figure.append(img, caption); pair.append(figure);
+        }
+        const checklist = document.createElement('div'); checklist.className = 'draft-review';
+        const geom = document.createElement('label'), same = document.createElement('label'), checked = document.createElement('input'), unchanged = document.createElement('input');
+        checked.type = unchanged.type = 'checkbox'; geom.append(checked, document.createTextNode(' J’ai vérifié portes, fenêtres, poteaux, volumes, toiture et cadrage.'));
+        same.append(unchanged, document.createTextNode(' Aucun écart de géométrie : le résultat peut être publié.'));
+        const approve = document.createElement('button'); approve.type = 'button'; approve.className = 'primary'; approve.textContent = 'Approuver pour publication';
+        approve.addEventListener('click', async () => {
+          approve.disabled = true;
+          try {
+            const response = await fetch(`api/presentation/publish-draft?project=${encodeURIComponent(slug)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: draft.id, geometryReviewed: checked.checked, geometryPass: unchanged.checked }) });
+            const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Publication refusée.');
+            el('retouch-status').textContent = 'Retouche publiée après validation géométrique de l’architecte.';
+            await loadDrafts(slug);
+          } catch (error) { el('retouch-status').textContent = error.message; approve.disabled = false; }
+        });
+        checklist.append(geom, same); card.append(heading, state, prompt, pair, checklist, approve); host.append(card);
+      }
+    } catch { host.textContent = 'Impossible de charger les brouillons privés.'; }
+  }
+  function renderPlanBook(project, data, media) {
+    const bookProject = currentProject;
+    const meta = project?.meta || {};
+    el('planbook-project').textContent = nameForDisplay(meta.name || 'Projet');
+    el('planbook-revision').textContent = String(meta.revision || 'A');
+    const date = Date.parse(meta.updated) || Date.now();
+    el('planbook-date').textContent = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }).format(date);
+    el('planbook-status').textContent = String(meta.status || 'Aperçu de travail');
+    const drawing = el('cover-drawing').querySelector('svg');
+    el('planbook-drawing').replaceChildren(...(drawing ? [drawing.cloneNode(true)] : []));
+    const contents = el('planbook-contents'); contents.replaceChildren();
+    const levels = [...new Set((data?.walls || []).map(wall => Number(wall.level) || 0))].sort((a, b) => a - b);
+    for (const level of levels) {
+      const item = document.createElement('li'); item.textContent = `Plan du niveau ${level ? `+${level}` : 'principal'} · dessin issu de la maquette · Sans échelle`;
+      contents.append(item);
+    }
+    const planUrl = project?.config?.planImage?.url;
+    if (typeof planUrl === 'string' && planUrl.startsWith(`projects/${currentProject}/`) && !planUrl.split('/').includes('..')) {
+      fetch(new URL(planUrl, url), { method: 'HEAD', cache: 'no-store' }).then(response => {
+        if (!response.ok || currentProject !== bookProject) return;
+        const item = document.createElement('li'); item.textContent = 'Document source du plan · fichier présent dans le dossier'; contents.append(item);
+        el('planbook-empty').hidden = contents.children.length > 0;
+      }).catch(() => {});
+    }
+    if ((media?.images || []).length) {
+      const item = document.createElement('li'); item.textContent = `${media.images.length} image${media.images.length === 1 ? '' : 's'} publiée${media.images.length === 1 ? '' : 's'} disponible${media.images.length === 1 ? '' : 's'} en annexe`;
+      contents.append(item);
+    }
+    el('planbook-empty').hidden = contents.children.length > 0;
+  }
+
   async function loadProject(item) {
     request?.abort();
     const controller = new AbortController();
@@ -300,17 +459,21 @@
     if (controller.signal.aborted) return;
     cover.removeAttribute('aria-busy');
     cover.dataset.art = 'ready';
+    let projectRecord = null, projectData = null;
     if (model.status === 'fulfilled') {
-      const project = model.value;
-      if (typeof project?.meta?.subtitle === 'string' && project.meta.subtitle.trim()) el('cover-description').textContent = project.meta.subtitle;
-      projectDrawing(project?.walls);
-      projectFacts(project);
-      const data = normalized(project);
-      projectSheet(project, data);
-      planFigure(data, item.slug);
-      signature(project);
+      projectRecord = model.value;
+      if (typeof projectRecord?.meta?.subtitle === 'string' && projectRecord.meta.subtitle.trim()) el('cover-description').textContent = projectRecord.meta.subtitle;
+      projectDrawing(projectRecord?.walls);
+      projectFacts(projectRecord);
+      projectData = normalized(projectRecord);
+      projectSheet(projectRecord, projectData);
+      planFigure(projectData, item.slug);
+      signature(projectRecord);
     } else status.textContent = 'Les informations du projet sont indisponibles pour le moment.';
-    renderViews(gallery.status === 'fulfilled' ? makeViews(gallery.value, item.slug) : []);
+    const media = gallery.status === 'fulfilled' ? gallery.value : { images: [], renders: [], presentation: { slots: [null, null, null], focal: { x: 50, y: 50 } } };
+    renderPresentationEditor(media, item.slug);
+    renderViews(makeViews(media, item.slug));
+    renderPlanBook(projectRecord, projectData, media);
     if (gallery.status === 'rejected') el('cover-empty').textContent = 'Les rendus sont momentanément indisponibles. Vous pouvez toujours ouvrir la maquette.';
     else el('cover-empty').textContent = 'Aucun rendu publié. Explorez le plan et les volumes dans la maquette.';
   }

@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/motion.css">
   <link rel="stylesheet" href="css/accueil.css">
+  <link rel="stylesheet" href="css/presentation.css">
   <script src="js/portal-context.js" defer></script>
   <script src="js/motion.js" defer></script>
   <script src="js/houseDataCore.js" defer></script>
@@ -74,11 +75,50 @@
         <h2 id="view-title" class="sr-only">Aperçus du projet</h2>
         <div id="cover-views" class="views-grid"></div>
         <p id="cover-empty" class="empty-views" hidden>Aucun rendu publié. Explorez le plan et les volumes dans la maquette.</p>
+        <div class="author-panel" id="presentation-admin" hidden>
+          <h3>01 · Choisir les trois vues d’accueil</h3>
+          <p>Les images restent à leur emplacement d’origine. Laissez « Automatique » pour conserver l’ordre habituel.</p>
+          <div class="slot-controls" id="presentation-slots"></div>
+          <fieldset class="focal-controls"><legend>Point focal de la couverture</legend>
+            <label>Horizontal <input id="focal-x" type="range" min="0" max="100" value="50"><output id="focal-x-value">50 %</output></label>
+            <label>Vertical <input id="focal-y" type="range" min="0" max="100" value="50"><output id="focal-y-value">50 %</output></label>
+          </fieldset>
+          <div class="crop-previews" aria-label="Aperçus du cadrage">
+            <figure><div class="crop-preview crop-desktop"><img id="crop-desktop-image" alt="Aperçu ordinateur de la couverture"></div><figcaption>Ordinateur</figcaption></figure>
+            <figure><div class="crop-preview crop-mobile"><img id="crop-mobile-image" alt="Aperçu téléphone de la couverture"></div><figcaption>Téléphone</figcaption></figure>
+          </div>
+          <button class="primary" id="presentation-save" type="button">Enregistrer la présentation</button>
+          <p class="author-status" id="presentation-status" role="status"></p>
+        </div>
       </section>
     </div>
 
+    <section class="retouch-section author-panel" id="retouch-admin" hidden aria-labelledby="retouch-title">
+      <p class="section-kicker"><span>02</span> / RETOUCHE FACULTATIVE</p>
+      <h2 id="retouch-title">Une proposition, jamais publiée d’office.</h2>
+      <p>Source obligatoire : capture de la maquette 3D. Modifications limitées à la lumière, aux textures, aux reflets ou à la végétation. Ici, les réponses sont simulées localement : aucune image n’est envoyée et aucun coût n’est engagé.</p>
+      <label for="retouch-source">Capture source</label><select id="retouch-source"></select>
+      <label for="retouch-prompt">Ajustement souhaité</label><textarea id="retouch-prompt" rows="3" maxlength="1000" placeholder="Ex. : adoucir la lumière du soir, sans modifier la maison ni le cadrage."></textarea>
+      <button class="primary" id="retouch-create" type="button">Créer un brouillon simulé</button>
+      <p class="author-status" id="retouch-status" role="status"></p>
+      <div id="draft-list" class="draft-list"></div>
+    </section>
+
+    <section class="planbook-preview" id="planbook-preview" aria-labelledby="planbook-title">
+      <p class="section-kicker"><span>03</span> / CAHIER DE PLANS</p>
+      <div class="planbook-cover">
+        <div class="planbook-drawing" id="planbook-drawing" aria-label="Dessin au trait du projet"></div>
+        <div class="planbook-copy"><p class="planbook-mark">DOSSIER TECHNIQUE · APERÇU</p>
+          <h2 id="planbook-title">Cahier de plans</h2><p id="planbook-project">Projet</p>
+          <dl><div><dt>Indice</dt><dd id="planbook-revision">A</dd></div><div><dt>Date</dt><dd id="planbook-date"></dd></div><div><dt>Statut</dt><dd id="planbook-status">Aperçu de travail</dd></div></dl>
+          <p class="no-scale">Sans échelle</p>
+        </div>
+        <div class="planbook-contents"><h3>Sommaire des éléments disponibles</h3><ol id="planbook-contents"></ol><p id="planbook-empty" hidden>Aucun document ni plan de niveau disponible.</p></div>
+      </div>
+    </section>
+
     <section class="project-sheet" id="project-sheet" aria-labelledby="sheet-title" hidden>
-      <p class="section-kicker"><span>03</span> / LE PROJET</p>
+      <p class="section-kicker"><span>04</span> / LE PROJET</p>
       <div class="sheet-grid">
         <div class="sheet-concept" id="sheet-concept-block">
           <h2 id="sheet-title" class="sheet-title">Le parti architectural</h2>
@@ -89,7 +129,7 @@
     </section>
 
     <section class="plan-section" id="plan-section" aria-labelledby="plan-title" hidden>
-      <div class="views-heading"><p class="section-kicker"><span>04</span> / LE PLAN</p><a id="plan-enter" class="more-link" href="index.html">Explorer en 3D <span aria-hidden="true">↗</span></a></div>
+      <div class="views-heading"><p class="section-kicker"><span>05</span> / LE PLAN</p><a id="plan-enter" class="more-link" href="index.html">Explorer en 3D <span aria-hidden="true">↗</span></a></div>
       <h2 id="plan-title" class="sr-only">Plan du projet</h2>
       <figure class="plan-figure"><div id="plan-figure" class="plan-drawing"></div><figcaption id="plan-caption"></figcaption></figure>
     </section>

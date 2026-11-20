@@ -50,7 +50,7 @@ async function serve(root, variables = {}) {
 }
 
 function fixture(root) {
-  for (const file of ['serve.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'portal.html', 'accueil.html', 'index.html', 'editor.html']) fs.copyFileSync(path.join(source, file), path.join(root, file));
+  for (const file of ['serve.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'presentationStore.js', 'portal.html', 'accueil.html', 'index.html', 'editor.html']) fs.copyFileSync(path.join(source, file), path.join(root, file));
   fs.mkdirSync(path.join(root, 'js'));
   for (const file of ['variantState.js', 'data.js']) fs.copyFileSync(path.join(source, 'js', file), path.join(root, 'js', file));
   for (const project of ['plan-a', 'plan-b']) {
@@ -132,6 +132,13 @@ test('Invitations : portée projet, rôles, accès direct, expiration et révoca
   const login = await architect.api('login', { password });
   assert.equal(login.status, 200);
   assert.match(login.headers.get('set-cookie'), /HttpOnly; SameSite=Lax/);
+  const draftResponse = await architect.request('/api/presentation/drafts?project=plan-a', { body: {
+    source: 'projects/plan-a/generated/renders/facade.jpg', prompt: 'Simuler une lumière plus douce sans changer la géométrie.'
+  } });
+  assert.equal(draftResponse.status, 201);
+  const privateDraft = (await draftResponse.json()).draft;
+  assert.equal(privateDraft.simulated, true);
+  assert.match(privateDraft.model, /Simulation locale/);
   const invite = async (role) => {
     const response = await architect.api('invitations', { project: 'plan-a', role, validHours: 24 });
     assert.equal(response.status, 201);
@@ -145,6 +152,17 @@ test('Invitations : portée projet, rôles, accès direct, expiration et révoca
   const accepted = await commenter.api('accept', { token: comment.token });
   assert.equal((await accepted.json()).role, 'comment');
   assert.equal((await reader.request('/index.html?project=plan-a')).status, 200);
+  assert.equal((await reader.request('/api/presentation/settings?project=plan-a')).status, 200);
+  assert.equal((await reader.request('/api/presentation/drafts?project=plan-a')).status, 403);
+  assert.equal((await reader.request(`/api/presentation/draft-image?project=plan-a&id=${privateDraft.id}`)).status, 403);
+  assert.equal((await reader.request(`/projects/plan-a/generated/drafts/${privateDraft.id}.jpg`)).status, 403);
+  const architectDrafts = await architect.request('/api/presentation/drafts?project=plan-a');
+  assert.equal(architectDrafts.status, 200);
+  assert.equal((await architect.request(`/api/presentation/draft-image?project=plan-a&id=${privateDraft.id}`)).status, 200);
+  assert.equal((await architect.request('/api/presentation/publish-draft?project=plan-a', { body: { id: privateDraft.id } })).status, 422);
+  const publishedDraft = await architect.request('/api/presentation/publish-draft?project=plan-a', { body: { id: privateDraft.id, geometryReviewed: true, geometryPass: true } });
+  assert.equal(publishedDraft.status, 200);
+  assert.equal((await reader.request(`/api/presentation/draft-image?project=plan-a&id=${privateDraft.id}`)).status, 403);
   const cover = await reader.request('/accueil.html?project=plan-a');
   assert.equal(cover.status, 200);
   assert.equal(cover.headers.get('cache-control'), 'private, no-store');

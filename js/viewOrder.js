@@ -40,6 +40,22 @@ const ViewOrder = (() => {
     return value.startsWith(prefix) && /^(?:images|renders)\/[a-z0-9_-]+\.(?:jpe?g|png|webp)$/i.test(value.slice(prefix.length)) ? value : null;
   }
 
+  /** Trois emplacements explicites, les autres restant en sélection automatique. */
+  function selectSlots(candidates, slots, catalog = candidates) {
+    const automatic = (Array.isArray(candidates) ? candidates : []).slice();
+    if (!Array.isArray(slots) || !slots.some(Boolean)) return automatic.slice(0, 3);
+    const bySource = new Map((Array.isArray(catalog) ? catalog : []).map(view => [view.source, view]));
+    const used = new Set();
+    const ordered = Array.from({ length: 3 }, (_, index) => {
+      const selected = typeof slots[index] === 'string' ? bySource.get(slots[index]) : null;
+      if (selected && !used.has(selected.source)) { used.add(selected.source); return selected; }
+      const fallback = automatic.find(view => !used.has(view.source));
+      if (fallback) used.add(fallback.source);
+      return fallback || null;
+    }).filter(Boolean);
+    return ordered;
+  }
+
   /** Vues publiées (manifeste) ou, à défaut, captures de la maquette, dans l’ordre de présentation. */
   function views(media, slug, limit = Infinity, options = {}) {
     const published = (media?.images || []).flatMap(item => {
@@ -64,7 +80,7 @@ const ViewOrder = (() => {
     return order(published.length ? published : captures, options).slice(0, limit);
   }
 
-  return { RANK, KIND, category, order, views, accentuate, pathInProject };
+  return { RANK, KIND, category, order, views, selectSlots, accentuate, pathInProject };
 })();
 
 if (typeof module !== 'undefined') module.exports = ViewOrder;
