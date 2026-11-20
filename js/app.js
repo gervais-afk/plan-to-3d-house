@@ -159,14 +159,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const modelChoice = document.createElement('select');
       modelChoice.className = 'rg-model-choice';
       modelChoice.setAttribute('aria-label', `Modèle de photoréalisation — ${shot.label}`);
-      modelChoice.innerHTML = '<option value="google/gemini-3.1-flash-image">Gemini 3.1 Flash Image — ≈ 0,068 $</option><option value="microsoft/mai-image-2.7-flash">MAI-Image 2.7 Flash — coût variable par jeton</option>';
+      modelChoice.replaceChildren(...Object.entries(IMAGE_MODELS).map(([id, m]) => new Option(m.label, id)));
       const estimate = document.createElement('span');
       estimate.className = 'rg-cost-estimate';
-      const updateEstimate = () => {
-        estimate.textContent = modelChoice.value === 'google/gemini-3.1-flash-image'
-          ? 'Estimation indicative : ≈ 0,068 $ / image ; le coût réel OpenRouter sera affiché après l’appel.'
-          : 'Estimation variable : 1,75 $/M jetons texte + 2,50 $/M jetons image en entrée + 10 $/M jetons image en sortie. Total exact inconnu avant génération.';
-      };
+      const updateEstimate = () => { estimate.textContent = `${IMAGE_MODELS[modelChoice.value].estimate} Le coût réel OpenRouter sera affiché après l’appel.`; };
       modelChoice.addEventListener('change', updateEstimate);
       modelChoice.addEventListener('click', event => event.stopPropagation());
       updateEstimate();
@@ -317,10 +313,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /**
+   * Modèles de photoréalisation proposés (identifiants vérifiés sur l'API publique OpenRouter, novembre 2026).
+   * La liste autorisée côté serveur est IMAGE_MODELS dans serve.js : garder les deux alignées.
+   */
+  const IMAGE_MODELS = {
+    'google/gemini-3.1-flash-image': { label: 'Gemini 3.1 Flash Image — rendu final, ≈ 0,068 $', estimate: 'Estimation indicative : ≈ 0,068 $ pour une image (coût observé).' },
+    'microsoft/mai-image-2.7-flash': { label: 'MAI-Image 2.7 Flash — coût variable par jeton', estimate: 'Estimation variable : 1,75 $/M jetons texte, 10 $/M jetons image ; total exact inconnu avant génération.' },
+    'bytedance-seed/seedream-5-0-flash': { label: 'Seedream 5.0 Flash — brouillon rapide, ≈ 0,018 $', estimate: 'Brouillon rapide : ≈ 0,018 $ pour une image 1K (4,31 $ par million de jetons image). Pour comparer des ambiances avant le rendu final.' }
+  };
+
   async function photorealize(item, button, model) {
-    const costEstimate = model === 'google/gemini-3.1-flash-image'
-      ? 'Estimation indicative : environ 0,068 $ pour une image (coût observé ; variable selon l’endpoint).'
-      : 'Estimation variable, sans montant fixe : 1,75 $/M jetons texte + 2,50 $/M jetons image en entrée + 10 $/M jetons image en sortie. Le nombre de jetons dépend du traitement.';
+    const costEstimate = IMAGE_MODELS[model]?.estimate || 'Coût variable selon le modèle.';
     if (!confirm(`Générer un rendu IA pour « ${item.label} » avec ${model} ?\n\n${costEstimate}\n\nL’appel est facturable ; le coût réel sera affiché après génération. Continuer ?`)) return;
     button.disabled = true;
     button.textContent = '⏳ Génération…';

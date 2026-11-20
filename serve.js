@@ -119,6 +119,10 @@ function galleryFlags(req, res, url) {
   });
 }
 
+// Modèles de photoréalisation autorisés (identifiants vérifiés sur l'API publique OpenRouter, novembre 2026).
+// Garder aligné avec IMAGE_MODELS dans js/app.js.
+const IMAGE_MODELS = ['google/gemini-3.1-flash-image', 'microsoft/mai-image-2.7-flash', 'bytedance-seed/seedream-5-0-flash'];
+
 // Enregistre une photoréalisation en ajoutant/remplaçant uniquement son entrée dans le manifeste.
 function saveGenerated(req, res, url) {
   readBody(req, res, 30 * 1024 * 1024, body => {
@@ -147,7 +151,7 @@ function saveGenerated(req, res, url) {
         label: String(metadata.label || id).slice(0, 120),
         width: Math.max(1, Math.min(8192, Number(metadata.width) || 1920)),
         height: Math.max(1, Math.min(8192, Number(metadata.height) || 1080)),
-        generator: ['google/gemini-3.1-flash-image', 'microsoft/mai-image-2.7-flash'].includes(metadata.model)
+        generator: IMAGE_MODELS.includes(metadata.model)
           ? `OpenRouter · ${metadata.model}` : 'OpenRouter · google/gemini-3.1-flash-image',
         prompt: String(metadata.prompt || '').slice(0, 6000),
         notes: 'Image issue du rendu Three.js ; géométrie à vérifier visuellement.'
@@ -481,7 +485,7 @@ function aiImage(req, res) {
   readBody(req, res, 25 * 1024 * 1024, body => {
     (async () => {
       const key = openRouterKey();
-      const allowedModels = ['google/gemini-3.1-flash-image', 'microsoft/mai-image-2.7-flash'];
+      const allowedModels = IMAGE_MODELS;
       if (!key) return sendJson(res, 401, { error: 'Clé OpenRouter absente.' });
       if (!allowedModels.includes(body.model) || typeof body.prompt !== 'string' || body.prompt.length > 6000
         || !Array.isArray(body.input_references) || body.input_references.length < 1 || body.input_references.length > 5
