@@ -391,23 +391,4 @@ window.HouseAuto = HouseAuto;
     return;
   }
 
-  // index.html?project=…#wp=3 : ouvre directement le parcours sur l'étape 3 (aperçu depuis l'éditeur)
-  window.addEventListener('load', () => {
-    const m = /wp=(\d+)/.exec(location.hash);
-    if (!m) return;
-    const n = HOUSE_DATA.tourWaypoints.length - 1;
-    setTimeout(() => {
-      const h = document.documentElement.scrollHeight - innerHeight;
-      window.scrollTo(0, (h * Math.min(n, +m[1])) / n);
-    }, 400);
-  });
-
-  document.addEventListener('DOMContentLoaded', () => {
-    const m = HOUSE_DATA.meta;
-    document.title = `${m.name} — Visite 3D interactive`;
-    const t = document.querySelector('.project-title');
-    if (t) t.textContent = m.name;
-    const meta = document.querySelector('.project-meta');
-    if (meta && m.subtitle) meta.textContent = m.subtitle;
-  });
 })();

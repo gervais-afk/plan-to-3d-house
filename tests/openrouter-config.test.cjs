@@ -8,7 +8,7 @@ test('Vérification de la configuration OpenRouter et protection des secrets', a
   const PORT = 8011;
   const serverProcess = spawn(process.execPath, ['serve.js'], {
     cwd: process.cwd(),
-    env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1' }
+    env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', OPENROUTER_API_KEY: 'test-fixture-not-a-real-key' }
   });
 
   t.after(async () => {

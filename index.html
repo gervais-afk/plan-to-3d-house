@@ -1,16 +1,36 @@
-<!DOCTYPE html>
-<html lang="fr">
+<!doctype html>
+<html lang="fr" data-scheme="auto">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Plan to 3D — Visite interactive</title>
+  <meta name="theme-color" content="#f4f2eb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141a16" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Le dossier architectural, du plan à la visite 3D.">
+  <title>Plan to 3D — Dossier architectural</title>
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="fr_FR">
+  <meta property="og:title" content="Dossier architectural — du plan à la visite 3D">
+  <meta property="og:description" content="Plans, rendus et maquette interactive du projet.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Crect width='36' height='36' rx='6' fill='%231f2a1f'/%3E%3Cg fill='none' stroke='%23dcea9f'%3E%3Cpath d='M6 28V8h24v20H6Zm0-11h14V8m0 9v11m0-5h10' stroke-width='1.9'/%3E%3Cpath d='M9 11h8v3H9zm14 15h4' stroke-width='1.3'/%3E%3C/g%3E%3C/svg%3E">
+  <meta name="color-scheme" content="light dark">
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/motion.css">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/clientTools.css">
+  <link rel="stylesheet" href="css/accueil.css">
+  <link rel="stylesheet" href="css/presentation.css">
+  <link rel="stylesheet" href="css/workspace.css">
+  <script src="js/portal-context.js" defer></script>
+  <script src="js/workspace.js" defer></script>
 </head>
-<body>
+<body data-workspace-view="cover">
+  <div id="editorial-workspace"></div>
+  <p id="workspace-status" class="workspace-status" role="status">Chargement du dossier…</p>
+  <noscript><p class="workspace-status">Activez JavaScript pour parcourir le dossier et la maquette.</p></noscript>
+  <template id="viewer-template">
+  <section id="visit-workspace" aria-label="Visite 3D" hidden>
+
 
   <!-- Conteneur 3D WebGL fixé en arrière-plan -->
   <div id="webgl-container" tabindex="-1" role="group" aria-label="Maquette 3D" aria-describedby="fps-hint"></div>
@@ -35,16 +55,17 @@
   <div class="ui-layer">
     <!-- En-tête / Cartouche d'architecte -->
     <header class="top-bar">
-      <div class="architect-header interactive">
-        <div class="brand-tag">
-          <span class="brand-dot"></span>
-          <span>Atelier Architecture & IA</span>
-        </div>
-        <h1 class="project-title">VISITE ARCHITECTURALE</h1>
-        <p class="project-meta">MAQUETTE 3D INTERACTIVE</p>
+      <div class="viewer-identity interactive">
+        <p class="brand-tag">MAQUETTE INTERACTIVE</p>
+        <p class="project-title">Visite architecturale</p>
+        <p class="project-meta" hidden></p>
       </div>
 
-      <nav class="technical-stamp interactive" aria-label="Commandes de la visite">
+      <div class="tool-trigger interactive">
+        <button type="button" id="variant-resume" class="btn-toggle btn-small" hidden>Reprendre la visite</button>
+        <button type="button" id="viewer-command-toggle" class="btn-toggle btn-small" aria-expanded="false" aria-controls="viewer-commands"><svg class="i" aria-hidden="true"><use href="#i-cube"></use></svg> Outils</button>
+      </div>
+      <nav id="viewer-commands" class="technical-stamp interactive" aria-label="Commandes de la visite" hidden>
         <div class="btn-row viewer-primary">
           <span id="mode-badge" class="mode-badge">Visite guidée</span>
           <button id="btn-renders" type="button" class="btn-toggle btn-small" aria-haspopup="dialog"><svg class="i" aria-hidden="true"><use href="#i-gallery"></use></svg> Galerie</button>
@@ -157,9 +178,7 @@
           <details id="viewer-options" class="client-tools" name="viewer-panels">
             <summary class="btn-toggle btn-small">Options</summary>
             <div class="client-tool-fields viewer-options-fields">
-              <label class="client-field project-picker-label" for="project-picker">Projet</label>
-              <select id="project-picker" class="project-picker"><option value="">Chargement…</option></select>
-              <a id="viewer-home" class="btn-toggle btn-small" href="accueil.html">Présentation du projet ↗</a>
+              <a id="viewer-home" data-view="cover" class="btn-toggle btn-small" href="accueil.html">Présentation du projet ↗</a>
               <label class="client-field" id="guided-select-label">Aller à une étape <select id="guided-select"></select></label>
               <button type="button" id="btn-toggle-mode" class="btn-toggle btn-small">Visite libre (clavier)</button>
               <label class="client-check"><input id="viewer-shortcuts" type="checkbox" checked> Raccourcis clavier (N, R…)</label>
@@ -167,8 +186,6 @@
                 <button type="button" id="btn-night" class="btn-toggle btn-small" title="Touche N"><svg class="i" aria-hidden="true"><use href="#i-sun"></use></svg> Jour</button>
                 <button type="button" id="btn-quality" class="btn-toggle btn-small" title="Touche H">Qualité : Haute</button>
                 <button type="button" id="btn-plan-style" class="btn-toggle btn-small" title="Touche B">Plan : Rendu</button>
-                <button type="button" id="btn-section" class="btn-toggle btn-small" title="Touche C" aria-pressed="false">Coupe</button>
-                <button type="button" id="btn-explode" class="btn-toggle btn-small" title="Touche X" aria-pressed="false">Vue éclatée</button>
                 <button type="button" id="btn-timelapse" class="btn-toggle btn-small">Chantier 4D</button>
                 <button type="button" id="btn-photo-mode" class="btn-toggle btn-small is-active" title="Touche F" aria-pressed="true">Mode photo</button>
                 <button type="button" id="btn-export-video" class="btn-toggle btn-small">Exporter l’animation vidéo</button>
@@ -176,7 +193,6 @@
             </div>
           </details>
         </div>
-        <button type="button" id="variant-resume" class="btn-toggle btn-small" hidden>Reprendre la visite au scroll</button>
         <span id="video-export-status" class="video-export-status" role="status" aria-live="polite"></span>
       </nav>
     </header>
@@ -201,38 +217,33 @@
       <p id="approval-status" role="status" aria-live="polite"></p>
     </section>
 
-    <!-- Pied de page : Infos de la pièce active & Radar 2D -->
     <footer class="bottom-bar">
-      <nav id="guided-controls" class="guided-controls interactive" aria-label="Étapes de la visite">
-        <div class="guided-context"><span class="guided-kicker">Parcours guidé</span><span id="guided-step">Plan 2D</span></div>
-        <div class="guided-actions">
-          <button type="button" id="guided-prev" class="btn-toggle" aria-label="Étape précédente" disabled>←</button>
-          <button type="button" id="guided-next" class="btn-toggle guided-next">Démarrer la visite <span aria-hidden="true">→</span></button>
+      <nav id="guided-controls" class="guided-controls tour-dock interactive" aria-label="Commandes du parcours">
+        <div class="dock-context">
+          <div class="dock-meta"><span class="guided-kicker" id="guided-step">Parcours guidé</span><span id="guided-count">—</span></div>
+          <div class="room-meta-row"><h2 id="hud-room-name" class="room-name">Plan d’architecte 2D</h2><span id="hud-room-surface" class="room-surface"></span></div>
+          <div id="guided-timeline" class="guided-timeline" aria-hidden="true"></div>
+          <p id="hud-room-desc" class="sr-only"></p>
+          <span class="sr-only">Élévation <span id="hud-elevation-percent">0%</span> · HSP <span id="hud-wall-height">—</span></span>
+          <span id="guided-announcement" class="sr-only" role="status"></span>
         </div>
-        <span id="guided-announcement" class="sr-only" role="status"></span>
+        <div class="guided-actions" id="guided-actions">
+          <button type="button" id="guided-prev" class="btn-toggle dock-arrow" aria-label="Étape précédente" disabled>←</button>
+          <button type="button" id="guided-next" class="btn-toggle dock-arrow" aria-label="Étape suivante">→</button>
+        </div>
+        <button type="button" id="guided-action" class="btn-toggle guided-next">Démarrer la visite</button>
+        <div class="dock-shortcuts">
+          <button type="button" id="btn-section" class="btn-toggle" aria-label="Coupe" aria-keyshortcuts="C" aria-pressed="false"><svg class="i dock-shortcut-icon" aria-hidden="true"><use href="#i-section"></use></svg><span>Coupe</span> <kbd>C</kbd></button>
+          <button type="button" id="btn-explode" class="btn-toggle" aria-label="Vue éclatée" aria-keyshortcuts="X" aria-pressed="false"><svg class="i dock-shortcut-icon" aria-hidden="true"><use href="#i-explode"></use></svg><span>Éclaté</span> <kbd>X</kbd></button>
+        </div>
       </nav>
-      <!-- Fiche d'espace en cours de visite -->
-      <div class="room-card interactive">
-        <div class="room-meta-row">
-          <h2 id="hud-room-name" class="room-name">PLAN D'ARCHITECTE 2D</h2>
-          <span id="hud-room-surface" class="room-surface">—</span>
-        </div>
-        <p id="hud-room-desc" class="room-desc">Faites défiler vers le bas pour voir les murs s'élever et visiter la maison.</p>
-        
-        <div class="stats-row">
-          <div class="stats-item">ÉLÉVATION 3D : <strong id="hud-elevation-percent">0%</strong></div>
-          <div class="stats-item">HSP : <strong id="hud-wall-height">—</strong></div>
-        </div>
-      </div>
-
-      <!-- Minimap / Radar architectural 2D -->
       <div class="minimap-card interactive">
-        <div class="minimap-header">
-          <span>RADAR ÉTAGE</span>
-          <span>NORD ↑</span>
+        <button type="button" id="minimap-toggle" class="btn-toggle" aria-expanded="false" aria-controls="minimap-panel" aria-label="Radar du plan"><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg><span>Plan</span></button>
+        <div id="minimap-panel" hidden>
+          <div class="minimap-header"><span>RADAR ÉTAGE</span><span>NORD ↑</span></div>
+          <canvas id="minimap-canvas" aria-label="Plan interactif de l’étage"></canvas>
+          <span class="minimap-footer">Cliquez sur une pièce pour y aller</span>
         </div>
-        <canvas id="minimap-canvas"></canvas>
-        <span class="minimap-footer">Cliquez sur une pièce pour y aller</span>
       </div>
     </footer>
   </div>
@@ -357,42 +368,7 @@
     </dialog>
   </dialog>
 
-  <!-- Bibliothèque 3D Three.js via CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <!-- Modules d'exemples Three.js r128 (même version que le cœur) -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/environments/RoomEnvironment.js"></script>
-
-  <!-- Scripts du projet -->
-  <script src="js/icons.js"></script>
-  <script src="js/motion.js"></script>
-  <script src="js/portal-context.js"></script>
-  <script src="js/houseDataCore.js"></script>
-  <script src="js/data.js"></script>
-  <script src="js/projectLoader.js"></script>
-  <script src="js/scene.js"></script>
-  <script src="js/variantState.js"></script>
-  <script src="js/solarStudy.js"></script>
-  <script src="js/realism.js"></script>
-  <script src="js/assets.js"></script>
-  <script src="js/presentationPlan.js"></script>
-  <script src="js/renderStudio.js"></script>
-  <script src="js/scrollTour.js"></script>
-  <script src="js/walkController.js"></script>
-  <script src="js/minimap.js"></script>
-  <script src="js/clientFinishes.js"></script>
-  <script src="js/solarOptions.js"></script>
-  <script src="js/clientTools.js"></script>
-  <script src="js/clientVariants.js"></script>
-  <script src="js/clientDecisions.js"></script>
-  <script src="js/clientFeedback.js"></script>
-  <script src="js/clientBrochure.js"></script>
-  <script src="js/viewOrder.js"></script>
-  <script src="js/costEstimate.js"></script>
-  <script src="js/planBook.js"></script>
-  <script src="js/app.js"></script>
-  <script src="js/presentMode.js"></script>
-
+  </section>
+  </template>
 </body>
 </html>

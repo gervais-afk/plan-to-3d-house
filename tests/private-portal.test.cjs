@@ -52,7 +52,9 @@ async function serve(root, variables = {}) {
 function fixture(root) {
   for (const file of ['serve.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'presentationStore.js', 'cabinetStore.js', 'portal.html', 'accueil.html', 'index.html', 'editor.html']) fs.copyFileSync(path.join(source, file), path.join(root, file));
   fs.mkdirSync(path.join(root, 'js'));
-  for (const file of ['variantState.js', 'data.js', 'coverImage.js']) fs.copyFileSync(path.join(source, 'js', file), path.join(root, 'js', file));
+  for (const file of ['variantState.js', 'data.js', 'coverImage.js', 'workspace.js']) fs.copyFileSync(path.join(source, 'js', file), path.join(root, 'js', file));
+  fs.mkdirSync(path.join(root, 'css'));
+  fs.copyFileSync(path.join(source, 'css', 'workspace.css'), path.join(root, 'css', 'workspace.css'));
   for (const project of ['plan-a', 'plan-b']) {
     const dir = path.join(root, 'projects', project);
     fs.mkdirSync(path.join(dir, 'generated', 'renders'), { recursive: true });
@@ -95,7 +97,11 @@ test('Mode démo conservé sans exposer les fichiers cachés', async t => {
   fs.writeFileSync(path.join(root, '.env'), 'TEST=NON_PUBLIC');
   const server = track(await serve(root));
   assert.match(await (await server.request('/')).text(), /id="home-cover"/);
-  assert.match(await (await server.request('/?project=plan-a')).text(), /id="webgl-container"/);
+  const projectEntry = await server.request('/?project=plan-a');
+  assert.equal(projectEntry.status, 200, 'le projet répond à la racine sans redirection');
+  const entryHtml = await projectEntry.text();
+  assert.match(entryHtml, /<template id="viewer-template">[\s\S]*id="webgl-container"/, 'le canvas reste inerte jusqu’à l’entrée dans la visite');
+  assert.match(entryHtml, /src="js\/workspace\.js"/);
   assert.equal((await server.request('/index.html')).status, 200);
   const publicProject = await server.request('/projects/plan-a/project.json');
   assert.equal(publicProject.status, 200);
@@ -185,6 +191,9 @@ test('Invitations : portée projet, rôles, accès direct, expiration et révoca
   assert.equal(cover.status, 200);
   assert.equal(cover.headers.get('cache-control'), 'private, no-store');
   assert.equal((await reader.request('/js/coverImage.js')).status, 200, 'le client invité reçoit le script de cadrage de couverture');
+  assert.equal((await reader.request('/js/workspace.js')).status, 200, 'le client invité reçoit le contrôleur de navigation');
+  assert.equal((await reader.request('/css/workspace.css')).status, 200);
+  assert.equal((await reader.request('/?project=plan-b')).status, 403, 'la racine ne contourne pas la portée de l’invitation');
   const projectResponse = await reader.request(a + '/project.json');
   assert.equal(projectResponse.status, 200);
   assert.equal((await projectResponse.json()).meta.client, undefined, 'le client reste masqué dans le JSON invité');

@@ -16,22 +16,29 @@
   <meta name="color-scheme" content="light dark">
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/motion.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/clientTools.css">
   <link rel="stylesheet" href="css/accueil.css">
   <link rel="stylesheet" href="css/presentation.css">
+  <link rel="stylesheet" href="css/workspace.css">
   <script src="js/portal-context.js" defer></script>
-  <script src="js/motion.js" defer></script>
-  <script src="js/houseDataCore.js" defer></script>
-  <script src="js/viewOrder.js" defer></script>
-  <script src="js/coverImage.js" defer></script>
-  <script src="js/home.js" defer></script>
+  <script src="js/workspace.js" defer></script>
 </head>
-<body>
+<body data-workspace-view="cover">
+  <div id="editorial-workspace">
   <a href="#contenu" class="skip">Aller au projet</a>
   <header class="masthead shell">
     <a class="brand" id="home-brand" href="accueil.html" aria-label="Plan to 3D, accueil">
       <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 36 36" fill="none"><path d="M6 28V8h24v20H6Zm0-11h14V8m0 9v11m0-5h10" stroke="currentColor" stroke-width="1.6"/><path d="M9 11h8v3H9zm14 15h4" stroke="currentColor" stroke-width="1.1"/></svg></span>
-      <span>PLAN<span class="brand-slash">/</span>3D<small>ATELIER NUMÉRIQUE</small></span>
+      <img id="home-brand-logo" alt="" hidden>
+      <span id="home-brand-name">Plan / 3D</span>
     </a>
+    <nav class="workspace-nav" aria-label="Sections du projet">
+      <a href="#visite" data-view="visit">Visite 3D</a>
+      <a href="#planbook-preview" data-view="dossier">Dossier <span>&amp; Plans</span></a>
+      <a href="#workspace-estimate" data-view="estimate">Estimation</a>
+      <a href="#workspace-gallery" data-view="gallery">Galerie</a>
+    </nav>
     <nav class="masthead-links" aria-label="Navigation principale">
       <div class="project-picker" id="home-picker" hidden>
         <label for="home-project">Projet</label>
@@ -52,11 +59,12 @@
         <p class="plate-label"><span></span> CATALOGUE D’IMAGES</p>
         <h1 id="cover-title">L’architecture<br>en volume.</h1>
         <p class="cover-description" id="cover-description">Du dessin à l’espace : découvrez le projet à votre rythme dans la maquette interactive.</p>
+        <p id="cover-area" class="cover-area" hidden></p>
         <p id="cover-client" class="cover-client" hidden></p>
         <div class="cover-signature" id="cover-signature" aria-label="Signature du cabinet"><img id="cover-logo" alt="" hidden><span id="cover-cabinet-name">Plan / 3D</span></div>
         <div class="cover-edition"><span>Édition</span><time id="cover-edition-date"></time></div>
         <div class="cover-actions">
-          <a id="cover-enter" class="primary" href="index.html">Entrer dans la maquette <span aria-hidden="true">↗</span></a>
+          <a id="cover-enter" class="primary" data-view="visit" href="index.html">Découvrir en 3D <span aria-hidden="true">↓</span></a>
           <button class="cover-print" type="button" data-print="catalog">Imprimer l’aperçu A4</button>
         </div>
       </div>
@@ -67,6 +75,9 @@
       </div>
       <div class="cover-caption"><span class="caption-key" aria-hidden="true">FIG.</span><span id="cover-caption" role="status">PLAN DE PROJET</span></div>
     </section>
+    <div id="workspace-scroll-entry" class="workspace-scroll-entry" data-panel="cover">
+      <a href="index.html" data-view="visit"><span>01 / IMMERSION</span><strong>Du trait au volume <span aria-hidden="true">↓</span></strong></a>
+    </div>
     <p id="home-status" class="load-status" role="status"></p>
 
     <div class="dossier" id="project-details">
@@ -76,7 +87,7 @@
         <dl class="project-facts" id="project-facts" hidden></dl>
       </section>
       <section class="view-section" aria-labelledby="view-title">
-        <div class="views-heading"><p class="section-kicker"><span>02</span> / LES VUES</p><a id="cover-gallery" class="more-link" href="index.html?galerie=1">Toute la galerie <span aria-hidden="true">↗</span></a></div>
+        <div class="views-heading"><p class="section-kicker"><span>02</span> / LES VUES</p><a id="cover-gallery" data-view="gallery" class="more-link" href="index.html?galerie=1">Toute la galerie <span aria-hidden="true">↗</span></a></div>
         <h2 id="view-title" class="sr-only">Aperçus du projet</h2>
         <div id="cover-views" class="views-grid"></div>
         <p id="cover-empty" class="empty-views" hidden>Aucun rendu publié. Explorez le plan et les volumes dans la maquette.</p>
@@ -109,7 +120,7 @@
       <div id="draft-list" class="draft-list"></div>
     </section>
 
-    <section class="planbook-preview" id="planbook-preview" aria-labelledby="planbook-title">
+    <section data-panel="dossier" class="planbook-preview" id="planbook-preview" aria-labelledby="planbook-title">
       <p class="section-kicker"><span>03</span> / CAHIER DE PLANS</p>
       <div class="planbook-cover" id="planbook-cover">
         <div class="planbook-heading">
@@ -131,10 +142,11 @@
           <p class="no-scale" id="planbook-scale-notice">Aperçu — sans échelle</p>
         </div>
       </div>
+      <p class="workspace-export"><button type="button" class="cover-print" id="workspace-book">Composer le cahier A3</button></p>
       <div class="planbook-contents" id="planbook-contents-page"><p class="section-kicker">DOCUMENTS DISPONIBLES</p><h3>Sommaire</h3><ol id="planbook-contents"></ol><p id="planbook-empty" hidden>Aucun document ni plan de niveau disponible.</p></div>
     </section>
 
-    <section class="project-sheet" id="project-sheet" aria-labelledby="sheet-title" hidden>
+    <section data-panel="dossier" class="project-sheet" id="project-sheet" aria-labelledby="sheet-title" hidden>
       <p class="section-kicker"><span>04</span> / LE PROJET</p>
       <div class="sheet-grid">
         <div class="sheet-concept" id="sheet-concept-block">
@@ -145,12 +157,31 @@
       </div>
     </section>
 
-    <section class="plan-section" id="plan-section" aria-labelledby="plan-title" hidden>
-      <div class="views-heading"><p class="section-kicker"><span>05</span> / LE PLAN</p><a id="plan-enter" class="more-link" href="index.html">Explorer en 3D <span aria-hidden="true">↗</span></a></div>
+    <section data-panel="dossier" class="plan-section" id="plan-section" aria-labelledby="plan-title" hidden>
+      <div class="views-heading"><p class="section-kicker"><span>05</span> / LE PLAN</p><a id="plan-enter" data-view="visit" class="more-link" href="index.html">Explorer en 3D <span aria-hidden="true">↗</span></a></div>
       <h2 id="plan-title" class="sr-only">Plan du projet</h2>
       <figure class="plan-figure"><div id="plan-figure" class="plan-drawing"></div><figcaption id="plan-caption"></figcaption></figure>
     </section>
+    <section id="workspace-estimate" data-panel="estimate" class="workspace-sheet" aria-labelledby="estimate-title">
+      <p class="section-kicker">03 / ÉCONOMIE DU PROJET</p>
+      <h2 id="estimate-title" tabindex="-1">Estimation</h2>
+      <p class="workspace-intro">Une fourchette tirée du métré. Repère indicatif, non contractuel.</p>
+      <div id="workspace-estimate-content"></div>
+    </section>
+    <section id="workspace-gallery" data-panel="gallery" class="workspace-sheet" aria-labelledby="gallery-title">
+      <p class="section-kicker">04 / IMAGES DU PROJET</p>
+      <h2 id="gallery-title" tabindex="-1">Galerie</h2>
+      <p class="workspace-intro">Croquis d’origine, vues de la maquette et rendus disponibles.</p>
+      <div id="workspace-gallery-content" class="workspace-media-grid"></div>
+      <button id="workspace-studio" type="button" class="cover-print">Ouvrir le studio de rendus</button>
+      <dialog id="workspace-image-dialog" class="workspace-lightbox" aria-labelledby="workspace-image-title">
+        <div class="workspace-lightbox-bar"><h3 id="workspace-image-title"></h3><form method="dialog"><button type="submit" class="cover-print" autofocus>Fermer</button></form></div>
+        <div id="workspace-image-body"></div>
+      </dialog>
+    </section>
   </main>
   <footer class="footer shell"><span>PLAN / 3D</span><span class="footer-signature" id="footer-signature" hidden><span id="footer-architect"></span> <a id="footer-contact" hidden></a></span><span>PRÉSENTATION ARCHITECTURALE INTERACTIVE</span><a class="footer-link" id="footer-editor" href="editor.html">ESPACE ATELIER</a></footer>
+  </div>
+  <p id="workspace-status" class="workspace-status" role="status" hidden></p>
 </body>
 </html>

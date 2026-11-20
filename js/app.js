@@ -3,7 +3,7 @@
  * Coordonne la scène 3D, la visite au scroll, la visite libre au clavier et le HUD
  */
 
-document.addEventListener('DOMContentLoaded', () => {
+window.startProjectViewer = () => {
   if (window.PROJECT_ACCESS_FAILED || typeof HOUSE_DATA === 'undefined') return;
   function showViewerError(error) {
     document.getElementById('viewer-error').hidden = false;
@@ -30,40 +30,15 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(checkSession, 20000);
   }
   const PROJECT_SLUG = window.ACTIVE_PROJECT_SLUG || HOUSE_DATA.meta?.slug || 'villa-serena';
-  document.getElementById('viewer-home').href = `accueil.html?project=${encodeURIComponent(PROJECT_SLUG)}`;
+  const viewerTitle = document.querySelector('.project-title');
+  viewerTitle.textContent = HOUSE_DATA.meta?.name || 'Visite architecturale';
+  const viewerHome = document.getElementById('viewer-home');
+  viewerHome.href = `/?project=${encodeURIComponent(PROJECT_SLUG)}`;
+  viewerHome.hidden = Boolean(portalContext?.decision);
   const projectApi = endpoint => `${endpoint}?project=${encodeURIComponent(PROJECT_SLUG)}`;
   const projectMedia = path => `projects/${encodeURIComponent(PROJECT_SLUG)}/generated/${path}`;
-  const projectPicker = document.getElementById('project-picker');
-  if (projectPicker && !invited) {
-    fetch('api/projects', { cache: 'no-store' }).then(response => response.ok ? response.json() : []).then(projects => {
-      projectPicker.replaceChildren();
-      projects.forEach(project => {
-        const option = document.createElement('option');
-        option.value = project.slug;
-        option.textContent = project.name;
-        projectPicker.appendChild(option);
-      });
-      if (!projects.some(project => project.slug === PROJECT_SLUG)) {
-        const fallback = document.createElement('option');
-        fallback.value = PROJECT_SLUG;
-        fallback.textContent = PROJECT_SLUG === 'villa-serena' ? 'Villa Serena' : PROJECT_SLUG;
-        projectPicker.prepend(fallback);
-      }
-      projectPicker.value = PROJECT_SLUG;
-    }).catch(() => {
-      projectPicker.innerHTML = '<option value="villa-serena">Villa Serena</option>';
-      projectPicker.value = PROJECT_SLUG;
-    });
-    projectPicker.addEventListener('change', () => {
-      if (!projectPicker.value) return;
-      try { localStorage.setItem('lastProject', projectPicker.value); } catch { /* stockage facultatif */ }
-      location.href = `index.html?project=${encodeURIComponent(projectPicker.value)}`;
-    });
-  }
-  if (invited && projectPicker) {
-    document.querySelector('.rg-intro').textContent = 'Consultez les images et vidéos partagées pour ce projet.';
-    projectPicker.hidden = true; projectPicker.labels[0].hidden = true;
-  }
+  if (invited) document.querySelector('.rg-intro').textContent = 'Consultez les images et vidéos partagées pour ce projet.';
+  const inVisit = () => window.ProjectWorkspace.isVisit();
   const container = document.getElementById('webgl-container');
   const minimapCanvas = document.getElementById('minimap-canvas');
 
@@ -681,10 +656,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function closeGallery() {
+  function closeGallery(backToGallery = true) {
     if (lightbox.open) closeLightbox();
     if (gallery.open) gallery.close();
     gallery.classList.add('hidden');
+    document.dispatchEvent(new CustomEvent('workspace:close-studio', { detail: { backToGallery: backToGallery !== false } }));
   }
 
   // Les deux niveaux utilisent la gestion native du focus et d’Échap des dialogues.
@@ -699,7 +675,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('rg-lb-close').addEventListener('click', closeLightbox);
   document.getElementById('rg-goto').addEventListener('click', () => {
     const shot = currentItem && (currentItem.shot || studio.shots.find(s => s.id === currentItem.id));
-    closeGallery();
+    closeGallery(false);
     if (!shot) return;
     releaseView(false);
     clientTools.setHour(shot.night ? SolarStudy.evening : SolarStudy.day);
@@ -808,12 +784,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnTimelapse) btnTimelapse.addEventListener('click', () => houseScene.playConstruction());
   function toggleSectionCut() {
     const active = houseScene.toggleSectionCut();
-    if (btnSection) { btnSection.classList.toggle('is-active', active); btnSection.setAttribute('aria-pressed', String(active)); Icons.label(btnSection, 'section', active ? 'Coupe : active' : 'Coupe'); }
+    if (btnSection) { btnSection.classList.toggle('is-active', active); btnSection.setAttribute('aria-pressed', String(active)); }
   }
   function toggleExploded() {
     const requested = !houseScene.explodedTarget;
     const active = houseScene.setExploded(requested);
-    if (btnExplode) { btnExplode.classList.toggle('is-active', active); btnExplode.setAttribute('aria-pressed', String(active)); Icons.label(btnExplode, 'explode', active ? 'Vue éclatée : active' : 'Vue éclatée'); }
+    if (btnExplode) { btnExplode.classList.toggle('is-active', active); btnExplode.setAttribute('aria-pressed', String(active)); }
   }
   if (btnSection) btnSection.addEventListener('click', toggleSectionCut);
   if (btnExplode) {
@@ -1003,17 +979,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateHUD(room) {
     activeRoom = room;
-    if (!room) return;
+    displayRoom(room);
+  }
 
-    roomNameEl.textContent = room.name || 'VILLA CONTEMPORAINE';
-    roomSurfaceEl.textContent = room.surface || '';
-    roomDescEl.textContent = room.desc || '';
+  function displayRoom(room, fallback = 'Vue d’ensemble') {
+    roomNameEl.textContent = room?.name || fallback;
+    roomSurfaceEl.textContent = Number.isFinite(room?.area) ? `${clientNumber.format(room.area)} m²${room.habitable ? '' : ' · annexe'}` : '';
+    roomDescEl.textContent = room?.desc || '';
   }
 
   function setMode(newMode) {
     releaseView(false);
     currentMode = newMode;
-    guidedControls.hidden = guideSelectLabel.hidden = currentMode === 'walk';
+    guidedActions.hidden = guidedAction.hidden = guideSelectLabel.hidden = currentMode === 'walk';
+    guidedControls.classList.toggle('dock-free', currentMode === 'walk');
     hidePhotoOverlay();
 
     if (currentMode === 'walk') {
@@ -1040,7 +1019,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (currentMode === 'walk') setMode('scroll');
     const hs = houseScene;
     pinnedView = pose;
-    guidedControls.hidden = guideSelectLabel.hidden = true;
+    guidedActions.hidden = guidedAction.hidden = guideSelectLabel.hidden = true;
+    guidedControls.classList.add('dock-free');
     hidePhotoOverlay();
     clearTimeout(photoDebounceTimer);
     if (Boolean(hs.sectionEnabled) !== pose.cut) toggleSectionCut();
@@ -1060,7 +1040,8 @@ document.addEventListener('DOMContentLoaded', () => {
   function releaseView(update = true) {
     if (!pinnedView) return;
     pinnedView = null;
-    guidedControls.hidden = guideSelectLabel.hidden = currentMode === 'walk';
+    guidedActions.hidden = guidedAction.hidden = guideSelectLabel.hidden = currentMode === 'walk';
+    guidedControls.classList.toggle('dock-free', currentMode === 'walk');
     resume.hidden = true;
     modeBadgeEl.textContent = 'Visite guidée';
     if (update) updateFromScroll();
@@ -1070,6 +1051,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const share = VariantState.readLink(location.hash, PROJECT_SLUG);
   const feedback = new ClientFeedback(clientTools, variants, share.channel);
   const panels = [...document.querySelectorAll('.client-panel-tabs > details')];
+  const toolTrigger = document.getElementById('viewer-command-toggle');
+  const commands = document.getElementById('viewer-commands');
+  function showTools(show) {
+    commands.hidden = !show;
+    toolTrigger.setAttribute('aria-expanded', String(show));
+    if (!show) panels.forEach(panel => { panel.open = false; });
+  }
+  toolTrigger.addEventListener('click', () => showTools(commands.hidden));
   panels.forEach(panel => panel.addEventListener('toggle', () => {
     if (!panel.open) return;
     panels.filter(other => other !== panel).forEach(other => { other.open = false; });
@@ -1250,7 +1239,7 @@ document.addEventListener('DOMContentLoaded', () => {
   exportVideoButton.addEventListener('click', exportCinematicVideo);
 
   window.addEventListener('keydown', (e) => {
-    if (e.defaultPrevented || gallery.open) return;
+    if (!inVisit() || e.defaultPrevented || gallery.open) return;
     if (tourRecording) {
       if (e.code === 'Escape') tourRecording.stopRequested = true;
       return;
@@ -1262,10 +1251,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (panel) { panel.open = false; panel.querySelector('summary').focus(); e.preventDefault(); return; }
       if (currentMode === 'walk') {
         setMode('scroll');
-        document.querySelector('#viewer-options summary').focus();
+        (commands.hidden ? toolTrigger : document.querySelector('#viewer-options summary')).focus();
         e.preventDefault();
         return;
       }
+      if (!commands.hidden && !document.body.classList.contains('is-presenting')) { showTools(false); toolTrigger.focus(); e.preventDefault(); return; }
     }
     if (!shortcuts.checked || e.altKey || e.ctrlKey || e.metaKey || e.repeat || e.target.closest?.('input, select, textarea, [contenteditable]')) return;
     if (e.code === 'KeyM' && !e.repeat && gallery.classList.contains('hidden')) {
@@ -1279,7 +1269,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.code === 'KeyN') toggleNight();
     if (e.code === 'KeyB') togglePlanStyle();
     if (e.code === 'KeyC') toggleSectionCut();
-    if (e.code === 'KeyX') toggleExploded();
+    if (e.code === 'KeyX' && !btnExplode.disabled) toggleExploded();
     if (e.code === 'KeyF') setPhotoMode(!photoModeEnabled);
     if (e.code === 'KeyR') void openGallery();
     if (e.code === 'KeyH') setQuality(houseScene.quality === 'high' ? 'normal' : 'high');
@@ -1287,7 +1277,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- GESTION DU SCROLL ---
   function updateFromScroll() {
-    if (currentMode !== 'scroll' || tourRecording || pinnedView) return;
+    if (!inVisit() || currentMode !== 'scroll' || tourRecording || pinnedView) return;
     hidePhotoOverlay();
     clearTimeout(photoDebounceTimer);
     photoDebounceTimer = setTimeout(onScrollStop, 350);
@@ -1315,6 +1305,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const guidedLabel = document.getElementById('guided-step');
   const guidedPrev = document.getElementById('guided-prev');
   const guidedNext = document.getElementById('guided-next');
+  const guidedAction = document.getElementById('guided-action');
+  const guidedActions = document.getElementById('guided-actions');
+  const guidedCount = document.getElementById('guided-count');
+  const timeline = document.getElementById('guided-timeline');
   const guidedAnnouncement = document.getElementById('guided-announcement');
   const guideSelect = document.getElementById('guided-select');
   const guideSelectLabel = document.getElementById('guided-select-label');
@@ -1327,30 +1321,44 @@ document.addEventListener('DOMContentLoaded', () => {
     return progress > elevation && (point.room || (!hasRoomSteps && point.label) || i === lastWaypoint) ? [{ progress, label: point.label || 'Vue d’ensemble' }] : [];
   })];
   guideSelect.replaceChildren(...stages.map((stage, index) => new Option(`${index + 1}. ${stage.label}`, index)));
+  const segments = stages.map(() => document.createElement('span'));
+  timeline.replaceChildren(...segments);
   let guidedIndex = -1;
   function syncGuidedControls() {
     let index = stages.length - 1;
     while (index && stages[index].progress > scrollProgress + 0.002) index--;
+    displayRoom(index < 2 ? null : activeRoom, stages[index].label);
     if (index === guidedIndex) return;
     guidedIndex = index;
     guideSelect.value = String(index);
-    guidedLabel.textContent = `${stages[index].label} · ${index + 1}/${stages.length}`;
+    guidedLabel.textContent = 'Parcours guidé';
+    guidedCount.textContent = `${index + 1} / ${stages.length}`;
+    segments.forEach((segment, i) => { segment.classList.toggle('is-past', i < index); segment.classList.toggle('is-current', i === index); });
     if (index === 0 && document.activeElement === guidedPrev) guidedNext.focus();
     guidedPrev.disabled = index === 0;
-    guidedNext.textContent = index === 0 ? 'Démarrer la visite →' : index === stages.length - 1 ? 'Revoir le plan ↺' : 'Étape suivante →';
+    if (index === stages.length - 1 && document.activeElement === guidedNext) guidedAction.focus();
+    guidedNext.disabled = index === stages.length - 1;
+    guidedAction.textContent = index === 0 ? 'Démarrer la visite →' : index === stages.length - 1 ? 'Revoir le plan ↺' : 'Continuer →';
   }
-  function navigateStage(index) {
+  function navigateStage(index, smooth = false) {
     if (tourRecording || !stages[index]) return;
     hidePhotoOverlay();
     const { progress, label } = stages[index];
     const top = Math.ceil((document.documentElement.scrollHeight - window.innerHeight) * progress);
-    window.scrollTo({ top, behavior: 'instant' });
-    updateFromScroll();
+    window.scrollTo({ top, behavior: smooth && !motion.matches ? 'smooth' : 'instant' });
+    if (!smooth || motion.matches) updateFromScroll();
     guidedAnnouncement.textContent = `Étape ${index + 1} sur ${stages.length} : ${label}`;
   }
   guideSelect.addEventListener('change', () => navigateStage(Number(guideSelect.value)));
   guidedPrev.addEventListener('click', () => navigateStage(guidedIndex - 1));
-  guidedNext.addEventListener('click', () => navigateStage((guidedIndex + 1) % stages.length));
+  guidedNext.addEventListener('click', () => navigateStage(guidedIndex + 1));
+  guidedAction.addEventListener('click', () => navigateStage((guidedIndex + 1) % stages.length));
+  const radar = document.getElementById('minimap-toggle');
+  const radarPanel = document.getElementById('minimap-panel');
+  radar.addEventListener('click', () => {
+    radarPanel.hidden = !radarPanel.hidden;
+    radar.setAttribute('aria-expanded', String(!radarPanel.hidden));
+  });
   syncGuidedControls();
 
   // Téléportation fluide vers une pièce lors d'un clic
@@ -1387,6 +1395,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const now = performance.now();
     const dt = Math.min(0.1, (now - lastFrame) / 1000);
     lastFrame = now;
+    if (!inVisit() && !tourRecording) return;
 
     // Garde-fou 60 FPS : repli automatique en qualité normale si < 45 FPS pendant 3 s (onglet visible)
     if (!tourRecording && houseScene.quality === 'high' && now > 5000 && document.visibilityState === 'visible' && document.hasFocus()) {
@@ -1402,7 +1411,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Plafonds seulement à hauteur d'homme : intérieur réaliste, maquette ouverte vue d'en haut
     houseScene.setCeilingsVisible(pinnedView?.ceilings ?? (houseScene.camera.position.y < 2.7 && houseScene.elevationProgress >= 0.99));
 
-    minimap.update(activeRoom ? activeRoom.id : null);
+    if (!radarPanel.hidden) minimap.update(activeRoom ? activeRoom.id : null);
     houseScene.render();
     const suppressed = Boolean(tourRecording) || !gallery.classList.contains('hidden') || photoOverlay.classList.contains('is-visible');
     clientTools.update(now, suppressed || feedback.placing);
@@ -1414,6 +1423,27 @@ document.addEventListener('DOMContentLoaded', () => {
   updateFromScroll();
   if (share.variant) variants.apply(share.variant);
   if (share.invalid) { document.getElementById('client-variants').open = true; variants.status.textContent = 'Lien partagé incomplet ou incompatible avec ce projet.'; }
+  const waypoint = new URLSearchParams(location.hash.slice(1)).get('wp');
+  if (!pinnedView && inVisit() && /^\d+$/.test(waypoint || '') && waypoints.length > 1) {
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    window.scrollTo({ top: max * Math.min(waypoints.length - 1, Number(waypoint)) / lastWaypoint, behavior: 'instant' });
+    updateFromScroll();
+  }
+  document.addEventListener('workspace:enter-visit', () => houseScene.onResize());
+  document.addEventListener('workspace:reveal-visit', () => {
+    if (guidedIndex === 0 && !pinnedView && !motion.matches) navigateStage(1, true);
+  });
+  document.addEventListener('workspace:leave-visit', () => {
+    if (tourRecording) tourRecording.stopRequested = true;
+    if (currentMode === 'walk') setMode('scroll');
+    if (gallery.open) closeGallery(false);
+    if (document.body.classList.contains('is-presenting')) document.getElementById('btn-present').click();
+    showTools(false);
+    if (feedback.placing) feedback.cancel();
+    if (clientTools.measuring) clientTools.toggleMeasure(false);
+    clearTimeout(photoDebounceTimer);
+    hidePhotoOverlay();
+  });
   animate();
-  if (new URLSearchParams(location.search).get('galerie') === '1') void openGallery();
-});
+  return true;
+};

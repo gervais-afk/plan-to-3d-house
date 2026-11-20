@@ -76,7 +76,7 @@ Les projets peuvent déclarer `level: 0` (RDC) ou `level: 1` (étage) sur les mu
 ### Méthode recommandée : `start.bat`
 Installez **Node.js LTS**, puis double-cliquez sur `start.bat`. Le script démarre `serve.js`, qui fournit les API nécessaires à l'éditeur (enregistrement des projets et appels IA), puis ouvre la visite dans le navigateur.
 
-Accès direct : **http://localhost:8000/index.html** · Éditeur : **http://localhost:8000/editor.html**.
+Entrée projet : **http://localhost:8000/?project=villa-serena** · Éditeur : **http://localhost:8000/editor.html**.
 
 Par défaut, le serveur Node écoute uniquement sur la machine locale (`127.0.0.1`). Pour une prévisualisation derrière un proxy de développement : `HOST=0.0.0.0 node serve.js`. L'ouverture directe de `index.html` ou le serveur Python historique ne donnent pas accès à toutes les fonctions (enregistrement et IA) ; ils ne sont pas pris en charge pour l'usage normal.
 
@@ -198,6 +198,8 @@ La visite guidée et les médias sont navigables sans souris ; la manipulation g
 
 ### Accueil du dossier
 
-Avec `node serve.js`, `/` ouvre la présentation du projet en mode démo. La maquette elle-même reste sur `index.html` ; les anciens liens de visite et les fragments partagés restent valides. En mode privé, la présentation du projet est accessible depuis **Options → Présentation du projet**, sous les mêmes droits que sa maquette.
+Avec `node serve.js`, `/?project=<dossier>` ouvre la couverture du projet. **Découvrir en 3D** ou le défilement sous la couverture initialise la maquette sans recharger la page. La navigation **Visite 3D · Dossier & Plans · Estimation · Galerie** ne change pas l’URL du projet. Le dock regroupe les étapes et les commandes de coupe (**C**) et de vue éclatée (**X**). Le bouton **Plan** déplie le radar et **Outils** ouvre les commandes secondaires.
+
+Les liens directs `index.html?project=<dossier>` et les liens d’étape, de variante ou de validation existants ouvrent toujours la visite. En mode privé, le projet et les médias restent limités au périmètre de la session.
 
 La couverture lit le nom, la description et la géométrie de `project.json`. Elle utilise les premières images publiées dans le manifeste de la galerie, ou les captures de maquette disponibles. Sans rendu, elle dessine un aperçu du plan en SVG sans lancer Three.js. Pour optimiser un rendu de couverture, placez un WebP facultatif à côté du fichier publié : `facade.jpg` → `facade-apercu.webp` dans `generated/images/`. Les polices locales Manrope et Source Serif 4 sont fournies sous leurs licences OFL respectives dans `assets/fonts/`.

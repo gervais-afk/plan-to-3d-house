@@ -1,15 +1,6 @@
 /** Couverture d’un dossier : mêmes API et périmètre projet que la visite, sans moteur WebGL. */
-(() => {
+window.ProjectCoverReady = (() => {
   const url = new URL(location.href);
-  const fragment = new URLSearchParams(url.hash.slice(1));
-  if (['variant', 'retours', 'wp'].some(key => fragment.has(key))) {
-    const visit = new URL('index.html', url);
-    visit.search = url.search;
-    visit.hash = url.hash;
-    location.replace(visit.href);
-    return;
-  }
-
   const el = id => document.getElementById(id);
   const context = window.PORTAL_CONTEXT;
   const status = el('home-status');
@@ -40,7 +31,9 @@
     return date && Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }).format(date) : '';
   };
   function renderCabinet() {
-    const logos = [el('cover-logo'), el('planbook-logo')];
+    const logos = [el('cover-logo'), el('planbook-logo'), el('home-brand-logo')];
+    el('home-brand-name').textContent = currentCabinet.name || 'Plan / 3D';
+    el('home-brand').classList.toggle('has-logo', Boolean(currentCabinet.logoUrl));
     const names = [el('cover-cabinet-name'), el('planbook-cabinet-name')];
     for (const name of names) {
       name.textContent = currentCabinet.name || 'Plan / 3D';
@@ -65,7 +58,8 @@
   // L’outil de saisie n’apparaît dans l’en-tête que pour l’architecte connecté ; en démo il reste en pied de page.
   el('home-editor').hidden = context?.role !== 'architect';
   el('footer-editor').hidden = Boolean(context?.role);
-  if (context?.project) el('home-brand').href = `accueil.html?project=${encodeURIComponent(context.project)}`;
+  el('home-brand').dataset.view = 'cover';
+  el('home-brand').removeAttribute('aria-label');
 
   function viewerLink(project, gallery = false) {
     const link = new URL('index.html', url);
@@ -74,6 +68,8 @@
     return link.pathname + link.search;
   }
   function selectProject(project) {
+    window.ProjectWorkspace.setProject(project);
+    el('home-brand').href = `/?project=${encodeURIComponent(project)}`;
     el('cover-enter').href = viewerLink(project);
     el('cover-gallery').href = viewerLink(project, true);
   }
@@ -187,6 +183,7 @@
   function projectFacts(project) {
     const facts = el('project-facts');
     facts.hidden = true;
+    el('cover-area').hidden = true;
     facts.replaceChildren();
     if (!Array.isArray(project?.walls) || !Array.isArray(project?.rooms)) return;
     const levels = new Set([...project.walls, ...project.rooms].map(item => Number(item?.level) || 0));
@@ -197,7 +194,12 @@
       const data = normalizeHouseData({ ...project, config: { ...HOUSE_DEFAULT_CONFIG, ...project.config } });
       area = data.totals.habitable; // Recalcul commun des surfaces rectangulaires et polygonales.
     } catch { /* métadonnées disponibles même si la géométrie est incomplète */ }
-    if (area > 0) stats.push([`${number.format(area)} m²`, 'Surface habitable']);
+    if (area > 0) {
+      const value = `${number.format(area)} m²`;
+      stats.push([value, 'Surface habitable']);
+      el('cover-area').textContent = `${value} habitables`;
+      el('cover-area').hidden = false;
+    }
     if (rooms > 0) stats.push([number.format(rooms), rooms === 1 ? 'Espace au plan' : 'Espaces au plan']);
     if (levels.size === 1) stats.push(['Plain-pied', 'Niveau']);
     else if (levels.size > 1) stats.push([`R+${levels.size - 1}`, `${levels.size} niveaux`]);
@@ -496,6 +498,120 @@
     el('planbook-empty').hidden = contents.children.length > 0;
   }
 
+  function element(tag, text, className) {
+    const node = document.createElement(tag);
+    if (text) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  }
+
+  function renderEstimate(project, data, slug) {
+    const host = el('workspace-estimate-content');
+    host.replaceChildren();
+    if (!data?.rooms?.length) {
+      host.append(element('p', 'Aucune surface exploitable pour établir une estimation.', 'workspace-empty'));
+      return;
+    }
+    const result = CostEstimate.estimate(data, project.estimate);
+    const unit = document.createElement('select');
+    unit.setAttribute('aria-label', 'Devise de l’estimation');
+    unit.append(new Option('FCFA', 'XAF'), new Option('EUR', 'EUR'));
+    const estimate = element('div');
+    const toolbar = element('div', '', 'workspace-sheet-toolbar');
+    const csv = element('button', 'Bordereau CSV · FCFA', 'cover-print');
+    csv.type = 'button';
+    csv.onclick = () => {
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(new Blob([CostEstimate.bordereauCSV(result, project.meta?.name)], { type: 'text/csv;charset=utf-8' }));
+      link.download = `${slug}-bordereau.csv`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    };
+    toolbar.append(unit, csv);
+    function render() {
+      const money = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
+      const format = value => unit.value === 'EUR' ? `${money.format(value / 655.957)} €` : CostEstimate.formatXAF(value);
+      const table = (title, headings, rows) => {
+        const frame = element('div', '', 'workspace-table');
+        const t = document.createElement('table');
+        t.append(element('caption', title));
+        const head = t.createTHead().insertRow();
+        headings.forEach(label => { const cell = element('th', label); cell.scope = 'col'; head.append(cell); });
+        const body = t.createTBody();
+        for (const [label, ...values] of rows) {
+          const row = body.insertRow();
+          const cell = element('th', label); cell.scope = 'row'; row.append(cell);
+          values.forEach(value => { row.append(element('td', value)); });
+        }
+        frame.append(t);
+        return frame;
+      };
+      const notes = element('p', `${result.rate.label} · ${number.format(result.reference)} m² de référence.`, 'workspace-intro');
+      const summary = element('div', '', 'workspace-budget');
+      summary.append(element('span', 'ENVELOPPE TRAVAUX', 'section-kicker'), element('strong', `${format(result.total.low)} – ${format(result.total.high)}`), notes);
+      if (unit.value === 'EUR') summary.append(element('p', 'Conversion indicative : 1 € = 655,957 FCFA.', 'workspace-intro'));
+      const ranges = rows => rows.map(row => [row.label, format(row.low), format(row.high)]);
+      const works = table('Répartition des travaux', ['Poste', 'Bas', 'Haut'], ranges(result.lots));
+      const materials = table('Bordereau d’achats', ['Matériau', 'Quantité', 'Montant'], result.materials.map(row =>
+        [row.label, `${number.format(row.quantity)} ${row.unit}`, format(row.cost)]));
+      const foot = element('p', `${result.excluded} Le bordereau est un repère d’achat déjà inclus dans le gros œuvre.`, 'workspace-intro');
+      estimate.replaceChildren(summary, works);
+      if (result.overall) estimate.append(table('Budget global avec annexes', ['Poste', 'Bas', 'Haut'],
+        ranges([...result.annexes, { label: 'Total global', ...result.overall }])));
+      estimate.append(materials, foot);
+    }
+    unit.onchange = render;
+    host.append(toolbar, estimate);
+    render();
+  }
+
+  function renderGallery(project, media, slug) {
+    const host = el('workspace-gallery-content');
+    const studio = el('workspace-studio');
+    const lightbox = el('workspace-image-dialog');
+    const lightboxBody = el('workspace-image-body');
+    lightbox.onclose = () => { lightboxBody.replaceChildren(); };
+    studio.hidden = ['read', 'comment'].includes(context?.role);
+    host.replaceChildren();
+    const append = (source, label, kind, preview = source, video = false) => {
+      const anchor = element('a', '', 'workspace-media');
+      anchor.href = source;
+      anchor.setAttribute('aria-haspopup', 'dialog');
+      anchor.addEventListener('click', event => {
+        if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || typeof lightbox.showModal !== 'function') return;
+        event.preventDefault();
+        const full = element(video ? 'video' : 'img');
+        full.src = source;
+        if (video) { full.controls = true; full.playsInline = true; }
+        else full.alt = label;
+        el('workspace-image-title').textContent = label;
+        lightboxBody.replaceChildren(full);
+        lightbox.showModal();
+      });
+      const photo = element(video ? 'video' : 'img');
+      if (video) { photo.preload = 'none'; if (preview) photo.poster = preview; }
+      else { photo.src = preview; photo.alt = ''; photo.loading = 'lazy'; }
+      anchor.classList.toggle('workspace-original', kind === 'Document source');
+      anchor.append(photo, element('span', kind, 'section-kicker'), element('strong', label));
+      host.append(anchor);
+    };
+    const crop = project?.config?.planImage?.url;
+    if (typeof crop === 'string' && crop.startsWith(`projects/${slug}/`) && /^[a-z\d_-]+\.(?:jpe?g|png|webp)$/i.test(crop.slice(`projects/${slug}/`.length))) {
+      append(crop, 'Plan ou croquis d’origine', 'Document source');
+    }
+    for (const view of ViewOrder.views({ images: media.images }, slug, Infinity, { keepDuplicates: true })) {
+      append(view.source, view.label, 'Rendu publié', view.preview || view.source);
+    }
+    for (const view of ViewOrder.views({ renders: media.renders }, slug, Infinity, { keepDuplicates: true })) {
+      append(view.source, view.label, 'Capture 3D');
+    }
+    for (const video of media.videos || []) {
+      if (typeof video.file !== 'string' || !video.file.startsWith(`projects/${slug}/generated/videos/`)) continue;
+      append(video.file, video.label, 'Animation · ouvrir la vidéo', ViewOrder.pathInProject(video.poster, slug), true);
+    }
+    if (!host.children.length) host.append(element('p', 'Aucun média partagé pour le moment.', 'workspace-empty'));
+  }
+
   async function loadProject(item) {
     request?.abort();
     const controller = new AbortController();
@@ -539,6 +655,8 @@
       signature(projectRecord);
     } else status.textContent = 'Les informations du projet sont indisponibles pour le moment.';
     const media = gallery.status === 'fulfilled' ? gallery.value : { images: [], renders: [], presentation: { slots: [null, null, null], focal: { x: 50, y: 50 } } };
+    renderEstimate(projectRecord, projectData, item.slug);
+    renderGallery(projectRecord, media, item.slug);
     loadedProjectRecord = projectRecord; loadedProjectData = projectData; loadedProjectMedia = media;
     renderPresentationEditor(media, item.slug);
     renderViews(makeViews(media, item.slug));
@@ -555,7 +673,7 @@
 
   el('cover-prev').addEventListener('click', () => void showView(current - 1));
   el('cover-next').addEventListener('click', () => void showView(current + 1));
-  json('api/projects').then(items => {
+  return json('api/projects').then(items => {
     const projects = items.filter(item => slugPattern.test(item.slug) && typeof item.name === 'string');
     if (!projects.length) { el('cover-empty').hidden = false; status.textContent = 'Aucun dossier disponible.'; return; }
     const asked = context?.project || url.searchParams.get('project');
@@ -566,10 +684,9 @@
     select.addEventListener('change', () => {
       const target = projects.find(project => project.slug === select.value);
       if (!target) return;
-      const href = new URL('accueil.html', url);
-      href.searchParams.set('project', target.slug);
-      history.replaceState(null, '', href);
-      void loadProject(target);
+      try { localStorage.setItem('lastProject', target.slug); } catch { /* facultatif */ }
+      // Changer de maquette démarre un nouveau document ; seules les sections du même projet partagent une scène.
+      location.assign(`/?project=${encodeURIComponent(target.slug)}`);
     });
     return loadProject(item);
   }).catch(() => {
