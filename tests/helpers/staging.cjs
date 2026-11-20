@@ -17,6 +17,17 @@ async function listen(server) {
 }
 const close = server => new Promise(resolve => server.close(resolve));
 
+function copy(src, dest) {
+  const stat = fs.statSync(src);
+  if (stat.isDirectory()) {
+    fs.mkdirSync(dest, { recursive: true });
+    for (const entry of fs.readdirSync(src)) copy(path.join(src, entry), path.join(dest, entry));
+  } else {
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(src, dest);
+  }
+}
+
 async function start() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plan3d-tls-'));
   let backend, edge;
@@ -27,15 +38,16 @@ async function start() {
   };
   try {
     for (const name of ['serve.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'presentationStore.js', 'cabinetStore.js', 'accueil.html', 'index.html', 'editor.html', 'portal.html', 'js', 'css']) {
-      fs.cpSync(path.join(source, name), path.join(root, name), { recursive: true });
+      copy(path.join(source, name), path.join(root, name));
     }
-    fs.cpSync(path.join(source, 'assets/fonts'), path.join(root, 'assets/fonts'), { recursive: true });
-    fs.cpSync(path.join(source, 'assets/vendor'), path.join(root, 'assets/vendor'), { recursive: true });
-    fs.cpSync(path.join(source, 'deploy/staging/projects'), path.join(root, 'projects'), { recursive: true });
+    copy(path.join(source, 'assets/fonts'), path.join(root, 'assets/fonts'));
+    copy(path.join(source, 'assets/vendor'), path.join(root, 'assets/vendor'));
+    copy(path.join(source, 'deploy/staging/projects'), path.join(root, 'projects'));
     fs.copyFileSync(path.join(source, 'deploy/staging/data.js'), path.join(root, 'js/data.js'));
     const keyFile = path.join(root, 'edge.key'), certFile = path.join(root, 'edge.crt');
+    const opensslConf = process.env.OPENSSL_CONF || (fs.existsSync('C:\\Users\\HP\\anaconda3\\Library\\openssl.cnf') ? 'C:\\Users\\HP\\anaconda3\\Library\\openssl.cnf' : undefined);
     execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=127.0.0.1',
-      '-addext', 'subjectAltName=IP:127.0.0.1', '-keyout', keyFile, '-out', certFile], { stdio: 'ignore' });
+      '-addext', 'subjectAltName=IP:127.0.0.1', '-keyout', keyFile, '-out', certFile], { stdio: 'ignore', env: { ...process.env, ...(opensslConf ? { OPENSSL_CONF: opensslConf } : {}) } });
     const cert = fs.readFileSync(certFile);
     const reservation = net.createServer();
     const upstream = await listen(reservation);
