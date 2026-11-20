@@ -36,10 +36,60 @@ test('Le métré vient de la géométrie : surfaces, linéaires, ouvertures et p
 
   const e = CostEstimate.estimate(box, {});
   const [p20, p15] = e.materials;
-  assert.equal(p20.count, Math.ceil((36 * 3 - 7.5) * 12.5 * 1.05));
-  assert.equal(p15.count, Math.ceil(22 * 12.5 * 1.05));
-  assert.equal(p15.cost, p15.count * 365);
-  assert.equal(p20.sourced, false, 'le prix du parpaing de 20 reste à confirmer');
+  assert.equal(p20.quantity, Math.ceil((36 * 3 - 7.5) * 12.5 * 1.05));
+  assert.equal(p15.quantity, Math.ceil(22 * 12.5 * 1.05));
+  assert.equal(p15.cost, p15.quantity * 365);
+  assert.equal(p20.unitPrice, 425);
+  assert.match(p20.source, /Spécifications techniques/);
+});
+
+test('Profils de prix : fourchette ECS publiée, indice des Spécifications × coefficient de ville, TVA facultative', () => {
+  const ref = 84; // 80 m² habitables + 8 m² d'annexes à 50 %
+  const ecs = CostEstimate.estimate(box, { profile: 'ecs', standing: 'moyen' });
+  near(ecs.lots[0].low + ecs.lots[1].low, ref * 170000);
+  near(ecs.lots[0].high + ecs.lots[1].high, ref * 220000);
+  const douala = CostEstimate.estimate(box, { profile: 'spec', city: 'douala' });
+  near(douala.perM2, 380000);
+  assert.match(douala.rate.label, /HT/);
+  const maroua = CostEstimate.estimate(box, { profile: 'spec', city: 'maroua', standing: 'haut', vat: true });
+  near(maroua.perM2, 380000 * 1.35 * 1.13 * 1.1925, 1e-3);
+  assert.match(maroua.rate.label, /TVA 19,25 % incluse/);
+  // Un standing inconnu du profil reprend le standing par défaut de ce profil.
+  assert.equal(CostEstimate.settings({ profile: 'ecs', standing: 'tres-haut' }).standing, 'moyen');
+  assert.equal(CostEstimate.settings({ profile: 'spec', standing: 'moyen' }).standing, 'standard');
+  // Une ville sans règle de permis connue retient la taxe saisie à la main.
+  near(CostEstimate.estimate(box, { city: 'garoua', permitOther: 300000 }).lots[3].mid, 300000);
+});
+
+test('Bordereau d’achats : carrelage avec chutes, couverture selon le type, export CSV pour tableur', () => {
+  const tiled = { ...box, rooms: box.rooms.map(r => (r.id === 'sejour' ? { ...r, floorType: 'tiles' } : r)) };
+  const e = CostEstimate.estimate(tiled, { tileFormat: '60x60', roofType: 'aluzinc' });
+  const tile = e.materials.find(m => m.id === 'carrelage');
+  const roof = e.materials.find(m => m.id === 'couverture');
+  near(tile.quantity, 44);          // 40 m² carrelés + 10 % de chutes
+  assert.equal(tile.unitPrice, 16500);
+  near(roof.quantity, 88);          // toutes les pièces du dernier niveau, annexes comprises
+  assert.equal(roof.unitPrice, 7200 + 9500);
+  const csv = CostEstimate.bordereauCSV(e, 'Maison ; test');
+  assert.ok(csv.startsWith('﻿'), 'BOM pour un affichage correct des accents dans Excel');
+  assert.match(csv, /^﻿Projet;"Maison ; test"/);
+  assert.match(csv, /Carrelage grand format 60 × 60[^;]*;44;m²;16500;726000;/);
+});
+
+test('Budget global : études, extérieurs et terrain en fourchette, séparés de l’enveloppe travaux', () => {
+  const none = CostEstimate.estimate(box, { studies: false, exterior: false });
+  assert.equal(none.overall, null);
+  const all = CostEstimate.estimate(box, { land: true, plotArea: 300, landZone: 'centre' });
+  const works = all.lots[0].low + all.lots[1].low;
+  const [studies, exterior, land] = all.annexes;
+  assert.deepEqual([studies.low, studies.high], [2000000, 5000000]);
+  near(exterior.low, works * 0.05);
+  assert.deepEqual([land.low, land.high], [300 * 30000, 300 * 100000]);
+  near(all.overall.low, all.total.low + studies.low + exterior.low + land.low);
+  assert.equal(all.total.mid, CostEstimate.estimate(box, {}).total.mid, 'les annexes ne modifient pas l’enveloppe travaux');
+  // Bornes : une fourchette inversée est remise dans l'ordre.
+  const s = CostEstimate.settings({ studiesLow: 4e6, studiesHigh: 1e6, exteriorLow: 0.2, exteriorHigh: 0.05 });
+  assert.ok(s.studiesHigh >= s.studiesLow && s.exteriorHigh >= s.exteriorLow);
 });
 
 test('L’estimation suit le standing, les annexes à 50 %, les imprévus et la taxe de permis par ville', () => {

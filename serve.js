@@ -369,12 +369,15 @@ function projectProblem(project) {
 }
 
 // Réglages d’estimation (js/costEstimate.js) : clés connues, nombres finis positifs ou libellés courts.
-const ESTIMATE_TEXT = new Set(['standing', 'city', 'currency']);
+const ESTIMATE_TEXT = new Set(['standing', 'city', 'currency', 'profile', 'tileFormat', 'roofType', 'landZone']);
+const ESTIMATE_BOOLEANS = new Set(['vat', 'studies', 'exterior', 'land']);
 const ESTIMATE_NUMBERS = new Set(['version', 'perM2', 'annexWeight', 'grossShare', 'contingency', 'rangeLow', 'rangeHigh',
-  'permitOther', 'blockPrice15', 'blockPrice20', 'blocksPerM2', 'blockWaste']);
+  'permitOther', 'blockPrice15', 'blockPrice20', 'blocksPerM2', 'blockWaste', 'tileWaste',
+  'studiesLow', 'studiesHigh', 'exteriorLow', 'exteriorHigh', 'plotArea']);
 function estimateSettingsValid(value) {
   return isRecord(value) && Object.entries(value).every(([key, item]) =>
-    (ESTIMATE_TEXT.has(key) && typeof item === 'string' && /^[a-zA-Z-]{1,20}$/.test(item)) ||
+    (ESTIMATE_TEXT.has(key) && typeof item === 'string' && /^[a-zA-Z0-9-]{1,20}$/.test(item)) ||
+    (ESTIMATE_BOOLEANS.has(key) && typeof item === 'boolean') ||
     (ESTIMATE_NUMBERS.has(key) && ((key === 'perM2' && item === null) || (Number.isFinite(item) && item >= 0 && item <= 1e9))));
 }
 

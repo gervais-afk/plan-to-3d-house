@@ -105,21 +105,42 @@
   </dialog>
   <dialog id="dlg-estimate" class="ed-dialog ed-estimate" aria-labelledby="dlg-estimate-title">
     <h3 id="dlg-estimate-title">Métré et estimation — Cameroun (FCFA)</h3>
-    <p class="ed-note">Quantités calculées depuis le plan ; prix indicatifs publics, modifiables. Ce n’est ni un devis ni un bordereau.</p>
+    <p class="ed-note">Quantités calculées depuis le plan ; prix indicatifs sourcés, modifiables. Ce n’est ni un devis ni un engagement de prix.</p>
     <form id="est-form" class="ed-est-form">
-      <div class="ed-field"><label for="est-standing">Standing</label><select id="est-standing" name="standing"></select></div>
-      <div class="ed-field"><label for="est-city">Ville</label><select id="est-city" name="city"></select></div>
-      <div class="ed-field"><label for="est-perM2">Prix au m² (FCFA)</label><input id="est-perM2" name="perM2" type="number" min="0" step="5000" inputmode="numeric"></div>
-      <div class="ed-field"><label for="est-annexWeight">Annexes comptées à (%)</label><input id="est-annexWeight" name="annexWeight" type="number" min="0" max="100" step="5" data-percent></div>
-      <div class="ed-field"><label for="est-grossShare">Part gros œuvre (%)</label><input id="est-grossShare" name="grossShare" type="number" min="20" max="90" step="1" data-percent></div>
-      <div class="ed-field"><label for="est-contingency">Imprévus (%)</label><input id="est-contingency" name="contingency" type="number" min="0" max="50" step="1" data-percent></div>
-      <div class="ed-field" id="est-permit-row" hidden><label for="est-permitOther">Taxe de permis (FCFA)</label><input id="est-permitOther" name="permitOther" type="number" min="0" step="10000" inputmode="numeric"></div>
-      <div class="ed-field"><label for="est-blockPrice20">Parpaing de 20 (FCFA)</label><input id="est-blockPrice20" name="blockPrice20" type="number" min="0" step="5" inputmode="numeric"></div>
-      <div class="ed-field"><label for="est-blockPrice15">Parpaing de 15 (FCFA)</label><input id="est-blockPrice15" name="blockPrice15" type="number" min="0" step="5" inputmode="numeric"></div>
+      <fieldset class="ed-est-group"><legend>Prix au m²</legend>
+        <div class="ed-field"><label for="est-profile">Référence de prix</label><select id="est-profile" name="profile"></select></div>
+        <div class="ed-field"><label for="est-standing">Standing</label><select id="est-standing" name="standing"></select></div>
+        <div class="ed-field"><label for="est-city">Ville</label><select id="est-city" name="city"></select></div>
+        <div class="ed-field" id="est-vat-row" hidden><label for="est-vat">Ajouter la TVA (19,25 %)</label><input id="est-vat" name="vat" type="checkbox"></div>
+        <div class="ed-field"><label for="est-perM2">Prix au m² saisi (FCFA)</label><input id="est-perM2" name="perM2" type="number" min="0" step="5000" inputmode="numeric" placeholder="selon la référence"></div>
+        <div class="ed-field"><label for="est-annexWeight">Annexes comptées à (%)</label><input id="est-annexWeight" name="annexWeight" type="number" min="0" max="100" step="5" data-percent></div>
+        <div class="ed-field"><label for="est-grossShare">Part gros œuvre (%)</label><input id="est-grossShare" name="grossShare" type="number" min="20" max="90" step="1" data-percent></div>
+        <div class="ed-field"><label for="est-contingency">Imprévus (%)</label><input id="est-contingency" name="contingency" type="number" min="0" max="50" step="1" data-percent></div>
+        <div class="ed-field" id="est-permit-row" hidden><label for="est-permitOther">Taxe de permis (FCFA)</label><input id="est-permitOther" name="permitOther" type="number" min="0" step="10000" inputmode="numeric"></div>
+      </fieldset>
+      <fieldset class="ed-est-group"><legend>Bordereau d’achats</legend>
+        <div class="ed-field"><label for="est-blockPrice20">Parpaing de 20 (FCFA)</label><input id="est-blockPrice20" name="blockPrice20" type="number" min="0" step="5" inputmode="numeric"></div>
+        <div class="ed-field"><label for="est-blockPrice15">Parpaing de 15 (FCFA)</label><input id="est-blockPrice15" name="blockPrice15" type="number" min="0" step="5" inputmode="numeric"></div>
+        <div class="ed-field"><label for="est-tileFormat">Carrelage</label><select id="est-tileFormat" name="tileFormat"></select></div>
+        <div class="ed-field"><label for="est-tileWaste">Chutes de carrelage (%)</label><input id="est-tileWaste" name="tileWaste" type="number" min="0" max="50" step="1" data-percent></div>
+        <div class="ed-field"><label for="est-roofType">Couverture</label><select id="est-roofType" name="roofType"></select></div>
+      </fieldset>
+      <fieldset class="ed-est-group"><legend>Budget global (postes souvent oubliés)</legend>
+        <div class="ed-field"><label for="est-studies">Études et permis</label><input id="est-studies" name="studies" type="checkbox"></div>
+        <div class="ed-field"><label for="est-studiesLow">Études : de (FCFA)</label><input id="est-studiesLow" name="studiesLow" type="number" min="0" step="100000" inputmode="numeric"></div>
+        <div class="ed-field"><label for="est-studiesHigh">à (FCFA)</label><input id="est-studiesHigh" name="studiesHigh" type="number" min="0" step="100000" inputmode="numeric"></div>
+        <div class="ed-field"><label for="est-exterior">Clôture et extérieurs</label><input id="est-exterior" name="exterior" type="checkbox"></div>
+        <div class="ed-field"><label for="est-exteriorLow">Extérieurs : de (%)</label><input id="est-exteriorLow" name="exteriorLow" type="number" min="0" max="50" step="1" data-percent></div>
+        <div class="ed-field"><label for="est-exteriorHigh">à (%)</label><input id="est-exteriorHigh" name="exteriorHigh" type="number" min="0" max="50" step="1" data-percent></div>
+        <div class="ed-field"><label for="est-land">Terrain à acheter</label><input id="est-land" name="land" type="checkbox"></div>
+        <div class="ed-field"><label for="est-plotArea">Surface de la parcelle (m²)</label><input id="est-plotArea" name="plotArea" type="number" min="0" step="10" inputmode="numeric"></div>
+        <div class="ed-field"><label for="est-landZone">Situation</label><select id="est-landZone" name="landZone"></select></div>
+      </fieldset>
     </form>
     <div id="est-result" aria-live="polite"></div>
     <div class="ed-dialog-actions">
       <button id="est-reset" type="button">Valeurs par défaut</button>
+      <button id="est-csv" type="button">Bordereau CSV</button>
       <button id="est-close" type="button" class="ed-primary">Fermer</button>
     </div>
   </dialog>

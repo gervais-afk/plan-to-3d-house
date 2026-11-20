@@ -685,38 +685,52 @@ const PlanBook = (() => {
     sheetFrame(doc, data, sheet);
     const fmt = CostEstimate.formatXAF, x = content.x, w = 250;
     const s = e.settings;
-    paragraph(doc, `Méthode : surface de référence (${fr.format(e.reference)} m², annexes à ${Math.round(s.annexWeight * 100)} %) × ${fmt(e.perM2)}/m² — ${CostEstimate.STANDINGS[s.standing].label}, ${CostEstimate.CITIES[s.city].label}. Fourchette de −${Math.round(s.rangeLow * 100)} % à +${Math.round(s.rangeHigh * 100)} %.`, x, content.y + 4, w, 9, 1.5, C.muted);
-    let y = content.y + 22;
+    paragraph(doc, `Méthode : surface de référence (${fr.format(e.reference)} m², annexes à ${Math.round(s.annexWeight * 100)} %) × ${fmt(e.rate.low)} à ${fmt(e.rate.high)}/m². Référence : ${e.rate.label}.`, x, content.y + 4, w, 9, 1.5, C.muted);
+    let y = content.y + 24;
     kicker(doc, 'Poste', x, y);
     text(doc, 'BAS', x + w - 60, y, 7.5, { bold: true, color: C.muted, align: 'right', space: 0.9 });
     text(doc, 'HAUT', x + w, y, 7.5, { bold: true, color: C.muted, align: 'right', space: 0.9 });
     doc.setDrawColor(C.ink).setLineWidth(0.4).line(x, y + 2.5, x + w, y + 2.5);
-    y += 10;
-    e.lots.forEach(lot => {
-      text(doc, lot.label, x, y, 9.2, { maxWidth: w - 120 });
-      text(doc, fmt(lot.low), x + w - 60, y, 9.2, { align: 'right' });
-      text(doc, fmt(lot.high), x + w, y, 9.2, { align: 'right' });
-      doc.setDrawColor(C.rule).setLineWidth(0.15).line(x, y + 3.5, x + w, y + 3.5);
-      y += 10;
-    });
-    doc.setDrawColor(C.ink).setLineWidth(0.6).line(x, y - 4, x + w, y - 4);
-    text(doc, 'Enveloppe travaux', x, y + 3, 11, { bold: true });
-    text(doc, fmt(e.total.low), x + w - 60, y + 3, 11, { bold: true, align: 'right' });
-    text(doc, fmt(e.total.high), x + w, y + 3, 11, { bold: true, align: 'right' });
-    y += 18;
-    paragraph(doc, `${e.excluded} Estimation indicative fondée sur des ratios publics (${CostEstimate.SOURCES.map(src => src.label).join(' ; ')}). Ce document n’est ni un devis ni un engagement de prix.`, x, y, w, 8, 1.5, C.muted);
+    y += 9;
+    const line = (label, low, high, size = 9) => {
+      text(doc, label, x, y, size, { maxWidth: w - 125 });
+      text(doc, fmt(low), x + w - 60, y, size, { align: 'right' });
+      text(doc, fmt(high), x + w, y, size, { align: 'right' });
+      doc.setDrawColor(C.rule).setLineWidth(0.15).line(x, y + 3.2, x + w, y + 3.2);
+      y += 8.6;
+    };
+    const total = (label, low, high) => {
+      doc.setDrawColor(C.ink).setLineWidth(0.6).line(x, y - 3.6, x + w, y - 3.6);
+      text(doc, label, x, y + 2.5, 10.5, { bold: true });
+      text(doc, fmt(low), x + w - 60, y + 2.5, 10.5, { bold: true, align: 'right' });
+      text(doc, fmt(high), x + w, y + 2.5, 10.5, { bold: true, align: 'right' });
+      y += 14;
+    };
+    e.lots.forEach(lot => line(lot.label, lot.low, lot.high));
+    total('Enveloppe travaux', e.total.low, e.total.high);
+    if (e.overall) {
+      e.annexes.forEach(a => line(a.label, a.low, a.high, 8.6));
+      total('Budget global du projet', e.overall.low, e.overall.high);
+    }
+    paragraph(doc, `${e.excluded} Estimation indicative (${CostEstimate.SOURCES.map(src => src.label).join(' ; ')}). Ce document n’est ni un devis ni un engagement de prix.`, x, y, w, 7.6, 1.5, C.muted, 5);
     const side = x + w + 20, sw = content.w - w - 20;
-    kicker(doc, 'Métré issu du plan', side, content.y + 4);
     const q = e.quantities;
-    [['Surface habitable', `${fr.format(q.habitable)} m²`], ['Annexes', `${fr.format(q.annexes)} m²`], ['Murs extérieurs', `${fr.format(q.extLength)} m`],
-      ['Cloisons', `${fr.format(q.intLength)} m`], ['Maçonnerie nette', `${fr.format(q.wall20 + q.wall15)} m²`], ['Portes', String(q.doors)],
-      ['Fenêtres et baies', String(q.windows + q.bays)], ...e.materials.map(m => [m.label, `${fr.format(m.count)} u`])]
-      .forEach(([label, value], n) => {
-        const ry = content.y + 14 + n * 8;
-        text(doc, label, side, ry, 8.4, { maxWidth: sw - 34 });
-        text(doc, value, side + sw, ry, 8.4, { bold: true, align: 'right' });
-        doc.setDrawColor(C.rule).setLineWidth(0.15).line(side, ry + 2.5, side + sw, ry + 2.5);
+    const block = (title, rows, top) => {
+      kicker(doc, title, side, top);
+      rows.forEach(([label, value], n) => {
+        const ry = top + 9 + n * 7.4;
+        text(doc, label, side, ry, 8, { maxWidth: sw - 40 });
+        text(doc, value, side + sw, ry, 8, { bold: true, align: 'right' });
+        doc.setDrawColor(C.rule).setLineWidth(0.15).line(side, ry + 2.4, side + sw, ry + 2.4);
       });
+      return top + 9 + rows.length * 7.4 + 8;
+    };
+    const next = block('Métré issu du plan', [
+      ['Surface habitable', `${fr.format(q.habitable)} m²`], ['Annexes', `${fr.format(q.annexes)} m²`],
+      ['Murs extérieurs / cloisons', `${fr.format(q.extLength)} / ${fr.format(q.intLength)} m`],
+      ['Maçonnerie nette', `${fr.format(q.wall20 + q.wall15)} m²`], ['Portes · fenêtres et baies', `${q.doors} · ${q.windows + q.bays}`]
+    ], content.y + 4);
+    block('Bordereau d’achats (chutes comprises)', e.materials.map(m => [m.label, `${fr.format(m.quantity)} ${m.unit === 'u' ? 'u' : m.unit} · ${fmt(m.cost)}`]), next);
   }
 
   return { exportBook, exportCatalog, publishedViews, SECTIONS, axonometric, planScale, levelBounds };

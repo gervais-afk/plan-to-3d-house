@@ -147,13 +147,13 @@ test('Enregistrement projet : erreurs JSON utilisables et validation avant écri
   assert.equal(withImage.json().planImage.url, `projects/${slug}/plan.jpg`);
   assert.deepEqual(fs.readFileSync(path.join(path.dirname(target), 'plan.jpg')), jpg);
   const beforeEstimate = fs.readFileSync(target, 'utf8');
-  for (const estimate of [{ perM2: -1 }, { standing: '<script>' }, { prixSecret: 1 }, []]) {
+  for (const estimate of [{ perM2: -1 }, { standing: '<script>' }, { prixSecret: 1 }, [], { vat: 'oui' }, { land: 1 }, { profile: 'a b' }]) {
     const badEstimate = await architect.request(route, { body: { slug, project: { ...project, estimate } } });
     assert.equal(badEstimate.status, 422);
     assert.match(badEstimate.json().error, /estimation/);
   }
   assert.equal(fs.readFileSync(target, 'utf8'), beforeEstimate);
-  const estimated = { ...project, estimate: { version: 1, currency: 'XAF', standing: 'moyen', city: 'douala', perM2: null, contingency: 0.1 } };
+  const estimated = { ...project, estimate: { version: 2, currency: 'XAF', profile: 'spec', standing: 'haut', city: 'maroua', perM2: null, vat: true, tileFormat: '60x60', roofType: 'aluzinc', land: true, landZone: 'centre', plotArea: 450, studiesLow: 2000000, contingency: 0.1 } };
   assert.equal((await architect.request(route, { body: { slug, project: estimated } })).status, 200);
   assert.deepEqual(JSON.parse(fs.readFileSync(target)).estimate, estimated.estimate);
   const raw = await architect.request(route, { method: 'POST', headers: { Origin: stage.origin, 'Content-Type': 'application/json' } });
