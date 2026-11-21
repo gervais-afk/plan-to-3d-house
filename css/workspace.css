@@ -18,15 +18,12 @@ body[data-workspace-view] .masthead {
   background: var(--surface); border-bottom: 1px solid var(--glass-line);
 }
 @supports (backdrop-filter: blur(18px)) {
-  body[data-workspace-view] .masthead, .tour-dock.guided-controls, .minimap-card:has(#minimap-toggle) {
+  body[data-workspace-view="visit"] .masthead, .tour-dock.guided-controls, .minimap-card:has(#minimap-toggle) {
     background: var(--glass-paper); backdrop-filter: blur(18px);
   }
 }
 .masthead .brand { max-width: 100%; min-width: 0; gap: .6rem; letter-spacing: -.01em; font-size: .95rem; }
-.masthead .brand-mark { flex: none; width: 34px; height: 34px; border-radius: 10px; }
-.masthead .brand.has-logo .brand-mark { display: none; }
-#home-brand-logo { width: auto; height: auto; max-height: 34px; max-width: 68px; object-fit: contain; }
-#home-brand-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#home-brand-logo { display: block; width: auto; height: 36px; max-width: min(42vw, 220px); object-fit: contain; }
 .workspace-nav { display: flex; gap: 3px; align-items: center; justify-content: center; }
 .workspace-nav a {
   min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: .2em; padding: .55rem .8rem;
@@ -130,6 +127,19 @@ body.is-presenting #visit-workspace .tool-trigger { display: none; }
   margin: 0; width: min(100%, 770px); min-width: 0; padding: 10px; color: var(--ink);
 }
 .tour-dock .dock-context { grid-area: reading; min-width: 0; }
+body[data-workspace-view="visit"] { --glass-paper:color-mix(in srgb,var(--surface) 84%,transparent); --glass-line:color-mix(in srgb,var(--on-night) 54%,var(--rule)); --glass-shadow:inset 0 1px 0 var(--glass-line),var(--shadow-1),var(--shadow-2) }
+#visit-workspace #cockpit-tools > div { width:min(18rem,80vw); max-height:55vh; overflow:auto; border:1px solid var(--glass-line); border-radius:var(--radius-lg); box-shadow:var(--glass-shadow); background:var(--surface); color:var(--ink); font-family:var(--sans) }
+@supports (backdrop-filter:blur(1px)) { #visit-workspace #cockpit-tools > div { background:var(--glass-paper); backdrop-filter:blur(18px) saturate(115%) } }
+#cockpit-tools :is(button,select,summary) { border:1px solid var(--rule-soft); border-radius:var(--radius-sm); color:var(--ink); background:var(--surface); font:inherit }
+#cockpit-tools select {width:100%} #cockpit-tools #guided-select-label {margin:0}
+#atlas-estimate:not([hidden]) {display:grid;gap:.55rem;margin-top:.65rem;padding:.8rem;border-top:1px solid var(--rule)}
+#atlas-estimate h3 {font:500 1.2rem/1.2 var(--serif);margin:0} #atlas-estimate-data p {display:flex;justify-content:space-between;gap:.75rem;margin:.3rem 0;font-size:.78rem} #atlas-estimate-data strong {text-align:right;font-variant-numeric:tabular-nums} #atlas-estimate small {color:var(--muted);line-height:1.45}
+#cockpit-edition figcaption {margin-block:var(--space-3); color:var(--muted); font:500 var(--text-sm)/1.6 var(--sans); font-variant-numeric:tabular-nums}
+@media (hover:hover) and (pointer:fine) and (prefers-reduced-motion:no-preference) {
+  .tour-dock :is(button,select,summary) {transition:transform var(--dur-2) var(--ease-out),box-shadow var(--dur-2) var(--ease-out)}
+  .tour-dock :is(button,select,summary):hover:not(:disabled) {transform:perspective(34rem) translateY(-1px) rotateX(3deg);box-shadow:var(--shadow-1)}
+  .tour-dock button:active:not(:disabled) {transform:none}
+}
 .tour-dock .dock-meta { display: flex; align-items: center; justify-content: space-between; gap: .25rem; }
 .tour-dock .guided-kicker { font-size: 11px; letter-spacing: .13em; white-space: nowrap; }
 .tour-dock #guided-count { font-size: 11px; font-weight: 750; font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
@@ -174,8 +184,8 @@ body[data-workspace-view="visit"]:has(.masthead) :is(#portal-account, #viewer-ho
 @media (max-width: 850px) {
   body[data-workspace-view] { --workspace-bar: 102px; }
   body[data-workspace-view] .masthead { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px .55rem; padding: 4px 12px; }
-  .workspace-nav { grid-area: 2 / 1 / 3 / -1; justify-content: space-between; }
-  .workspace-nav a { min-height: 44px; padding-inline: clamp(.35rem, 2vw, .75rem); font-size: clamp(.71rem, 2.8vw, .83rem); }
+  .workspace-nav { grid-area: 2 / 1 / 3 / -1; justify-content: flex-start; overflow-x: auto; scrollbar-width: thin; }
+  .workspace-nav a { flex: 0 0 auto; min-height: 44px; padding-inline: clamp(.35rem, 2vw, .75rem); font-size: clamp(.71rem, 2.8vw, .83rem); }
   .masthead .masthead-links { grid-column: 2; grid-row: 1; }
   .masthead #home-editor { display: none; }
   #visit-workspace .top-bar { left: 10px; right: 10px; top: calc(var(--workspace-bar) + 5px); }
@@ -203,8 +213,8 @@ body[data-workspace-view="visit"]:has(.masthead) :is(#portal-account, #viewer-ho
 }
 @media (max-width: 350px) {
   .tour-dock .dock-shortcuts .btn-toggle { min-width: 44px; }
-  .tour-dock .dock-shortcuts .btn-toggle > span { display: none; }
-  .tour-dock .dock-shortcut-icon { display: block; width: 14px; height: 14px; margin: 0; }
+  .tour-dock .dock-shortcuts .btn-toggle > span { display: inline; }
+  .tour-dock .dock-shortcut-icon { display: none; }
   .tour-dock #guided-action { white-space: normal; line-height: 1.1; }
 }
 @media (max-height: 500px) and (orientation: landscape) {

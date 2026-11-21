@@ -330,9 +330,7 @@ window.HouseAuto = HouseAuto;
   if (typeof HOUSE_DATA === 'undefined') return;
   const params = new URLSearchParams(location.search);
   const requested = params.get('project');
-  let stored = window.PORTAL_CONTEXT?.project;
-  try { stored ||= localStorage.getItem('lastProject'); } catch { /* stockage facultatif */ }
-  let name = requested || (stored && /^[a-z0-9-]{1,60}$/.test(stored) ? stored : 'villa-serena');
+  let name = window.PORTAL_CONTEXT?.project || requested || 'residence-verandas';
   window.ACTIVE_PROJECT_SLUG = /^[a-z0-9-]{1,60}$/.test(name) ? name : 'villa-serena';
   if (!/^[a-z0-9-]{1,60}$/.test(name)) { console.warn('Nom de projet invalide :', name); return; }
   const xhr = new XMLHttpRequest();

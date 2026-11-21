@@ -125,7 +125,8 @@
       submit.disabled = true;
       const projects = await request('api/projects');
       el('project').replaceChildren(...projects.map(project => new Option(project.name, project.slug)));
-      if (projects[0]) { el('visit').href = visit(projects[0].slug); submit.disabled = false; }
+      const selected = projects.find(project => project.default) || projects[0];
+      if (selected) { el('project').value = selected.slug; el('visit').href = visit(selected.slug); submit.disabled = false; }
       else status.textContent = 'Aucun projet disponible. Créez d’abord un projet dans l’éditeur.';
       await listInvitations();
     }

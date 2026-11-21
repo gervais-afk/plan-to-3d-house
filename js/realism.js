@@ -392,9 +392,9 @@
     const c = this.makeCanvas(128);
     const g = c.getContext('2d');
     const grad = g.createRadialGradient(64, 64, 8, 64, 64, 64);
-    grad.addColorStop(0, 'rgba(0,0,0,0.55)');
-    grad.addColorStop(0.55, 'rgba(0,0,0,0.28)');
-    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    grad.addColorStop(0, 'rgba(41,45,34,0.52)');
+    grad.addColorStop(0.55, 'rgba(41,45,34,0.23)');
+    grad.addColorStop(1, 'rgba(41,45,34,0)');
     g.fillStyle = grad;
     g.fillRect(0, 0, 128, 128);
     const tex = new THREE.CanvasTexture(c);
@@ -410,7 +410,7 @@
       m.rotation.set(-Math.PI / 2, 0, it.dims === 'local' ? (it.rotY || 0) : 0);
       m.position.set(it.x, this.levelOffset(it.level) + 0.008, it.z);
       m.renderOrder = 1;
-      m.userData = { nominalY: 0.008 };
+      m.userData = { nominalY: m.position.y };
       this.scene.add(m);
       this.furnitureMeshes.push(m);
     });

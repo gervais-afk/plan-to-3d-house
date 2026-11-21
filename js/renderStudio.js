@@ -160,16 +160,16 @@ class RenderStudio {
         const url = this.hs.presentationCanvas.toDataURL('image/png');
         const item = { id: 'plan-2d-presentation', label: 'Plan 2D de présentation', url, ext: 'png' };
         this.results.push(item);
+        await this.save('plan-2d-presentation.png', url);
         onItem && onItem(item);
-        this.save('plan-2d-presentation.png', url);
       }
       for (const shot of this.shots) {
         await frame();
         const url = this.capture(shot);
         const item = { id: shot.id, label: shot.label, url, ext: 'jpg', shot };
         this.results.push(item);
+        await this.save(shot.id + '.jpg', url);
         onItem && onItem(item);
-        this.save(shot.id + '.jpg', url);
       }
       return this.results;
     })();

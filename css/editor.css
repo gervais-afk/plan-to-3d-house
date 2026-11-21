@@ -58,7 +58,9 @@ kbd {
   border-bottom: 1px solid var(--line);
 }
 .ed-brand { display: flex; align-items: center; gap: 10px; letter-spacing: 0.06em; font-size: 12px; min-width: 0; }
-.ed-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+.ed-brand-logo { width: 34px; height: 34px; flex: none; }
+.ed-brand > strong { color: var(--ink); font: 800 .76rem/1.2 var(--sans); letter-spacing: .12em; }
+.ed-brand > strong span { color: var(--accent-ink); }
 .ed-muted { color: var(--ink-2); font-weight: 500; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ed-actions { display: flex; gap: 6px; align-items: center; overflow-x: auto; }
 

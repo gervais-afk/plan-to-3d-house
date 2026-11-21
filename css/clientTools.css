@@ -204,9 +204,10 @@
 .book-dialog .book-files { color: var(--ink); border-color: var(--ink); }
 
 /* Sélections d’une image dans la galerie */
-.rg-flags { display: flex; gap: 6px; margin: 0 14px 12px; }
+.rg-flags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 14px 12px; }
+.rg-flags-label { flex: 0 0 100%; color: var(--muted); font: 700 .62rem/1.3 var(--sans); letter-spacing: .08em; text-transform: uppercase; }
 .rg-flag { flex: 1; font-size: 11px; }
-.render-gallery .rg-flag[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); border-color: var(--accent-soft); }
+.render-gallery .rg-flag[aria-pressed="true"] { background: #B38646; color: #fff; border-color: #B38646; }
 
 /* =====================================================================
  * Refonte de l'interface de la visite (DESIGN.md) : la maquette d'abord.
@@ -334,3 +335,12 @@ body.is-presenting .guided-kicker { color: var(--accent-soft); }
   .approval-card h2 { font-size: 1.05rem; }
   .approval-card button { min-height: 44px; }
 }
+.perspective-dialog { width:min(92vw,80rem); max-height:92vh; padding:1rem; border:1px solid var(--rule); background:var(--night); color:var(--on-night) }
+.perspective-dialog img { display:block; width:100%; max-height:77vh; object-fit:contain; margin-top:.7rem }
+.perspective-dialog button { font:inherit; min-height:44px; color:inherit; background:transparent; border:1px solid currentColor; padding-inline:1rem }
+#zone-card:not([hidden]), #cockpit-tools > div, #cockpit-edition[open] { background:var(--paper); color:var(--ink); box-shadow:var(--shadow-2); padding:1rem; border:1px solid var(--rule); font: 500 .85rem/1.45 var(--sans); font-variant-numeric:tabular-nums }
+#zone-card:not([hidden]) { position:fixed; z-index:12; top:5.5rem; left:1rem; display:grid; gap:.3rem; max-width:min(21rem,85vw) }
+#zone-card strong,#cockpit-edition h3 { font:500 1.45rem/1.15 var(--serif) }
+#cockpit-tools { position:relative; pointer-events:auto } #cockpit-tools summary {cursor:pointer} #cockpit-tools > div {position:absolute;bottom:100%;right:0;min-width:11rem;display:grid;gap:.4rem}
+#cockpit-edition { width:min(92vw,68rem); max-height:88vh; overflow:auto } #cockpit-edition img {width:100%;height:min(57vh,42rem);object-fit:contain} #cockpit-edition figure {margin:.7rem 0} #cockpit-edition select {max-width:100%}
+:is(#zone-card,#cockpit-tools,#cockpit-edition) :is(button,select),#cockpit-tools summary { min-height:2.75rem; padding:.45rem .65rem; font:inherit; cursor:pointer }

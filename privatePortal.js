@@ -33,6 +33,7 @@ function allowClientFile(relative, session) {
   if (/^assets\/models\/[\w./-]+\.(?:gltf|glb|bin|jpe?g|png|webp)$/i.test(relative)) return true; // bibliothèque CC0 uniquement
   const parts = relative.split('/');
   if (relative === 'assets/cabinet/logo.png') return true;
+  if (session.project === 'residence-verandas' && relative === 'projects/residence-verandas/planches/cahier.pdf') return true;
   return parts[0] === 'projects' && parts[1] === session.project && safePath(relative) &&
     (/^projects\/[^/]+\/project\.json$/.test(relative) || /\.(?:jpe?g|png|webp|hdr|glb|gltf|bin|mp4|webm)$/i.test(relative));
 }
@@ -204,13 +205,15 @@ function createPortal({ root, projects, send, read, env = process.env, now = Dat
     const match = /^projects\/([^/]+)\/generated\/(images|videos|renders)(?:\/(.*))?$/i.exec(relative);
     if (!match) return true;
     const bucket = match[2].toLowerCase(), filename = match[3] || '';
-    if (match[1] !== project || bucket === 'renders' || !filename || filename !== path.basename(filename)) return false;
+    if (match[1] !== project || !filename || filename !== path.basename(filename)) return false;
     const manifestFile = path.join(projects, project, 'generated', 'manifest.json');
     let items;
     try { items = JSON.parse(fs.readFileSync(manifestFile, 'utf8')).items; } catch { return false; }
     if (!Array.isArray(items)) return false;
     const published = item => item && item.status !== 'draft' && item.published !== false;
     if (bucket === 'videos') return items.some(item => published(item) && item.type === 'video' && item.file === relative);
+    if (bucket === 'renders') return items.some(item => published(item) && item.type === 'image' && item.file === relative &&
+      (item.catalog === true || item.book === true));
     const publicImage = items.some(item => published(item) && item.type === 'image' && typeof item.file === 'string' &&
       (item.file === relative || (item.file.startsWith(`projects/${project}/generated/images/`) &&
         path.basename(item.file) === item.file.slice(`projects/${project}/generated/images/`.length) &&

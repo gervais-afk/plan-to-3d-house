@@ -31,19 +31,15 @@ window.ProjectCoverReady = (() => {
     return date && Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }).format(date) : '';
   };
   function renderCabinet() {
-    const logos = [el('cover-logo'), el('planbook-logo'), el('home-brand-logo')];
-    el('home-brand-name').textContent = currentCabinet.name || 'Plan / 3D';
-    el('home-brand').classList.toggle('has-logo', Boolean(currentCabinet.logoUrl));
-    const names = [el('cover-cabinet-name'), el('planbook-cabinet-name')];
-    for (const name of names) {
-      name.textContent = currentCabinet.name || 'Plan / 3D';
-      name.hidden = Boolean(currentCabinet.logoUrl);
-    }
-    for (const logo of logos) {
-      logo.hidden = !currentCabinet.logoUrl;
-      if (currentCabinet.logoUrl) logo.src = currentCabinet.logoUrl;
-      else logo.removeAttribute('src');
-    }
+    const logo = el('cover-logo');
+    const name = el('cover-cabinet-name');
+    name.textContent = currentCabinet.name || 'ArchiCam Studio';
+    name.hidden = Boolean(currentCabinet.logoUrl);
+    logo.hidden = !currentCabinet.logoUrl;
+    if (currentCabinet.logoUrl) logo.src = currentCabinet.logoUrl;
+    else logo.removeAttribute('src');
+    // Le bandeau et le cartouche conservent toujours la marque officielle ; le profil Cabinet
+    // ne remplace que la signature propre au projet sur la couverture.
   }
   json('api/cabinet/profile').then(profile => {
     currentCabinet = profile; renderCabinet();
@@ -72,6 +68,12 @@ window.ProjectCoverReady = (() => {
     el('home-brand').href = `/?project=${encodeURIComponent(project)}`;
     el('cover-enter').href = viewerLink(project);
     el('cover-gallery').href = viewerLink(project, true);
+    const synthesis = el('cover-synthesis');
+    synthesis.hidden = project !== 'residence-verandas';
+    synthesis.href = `projects/${encodeURIComponent(project)}/planches/cahier.pdf`;
+    const synthesisNav = el('home-synthesis-nav');
+    synthesisNav.hidden = project !== 'residence-verandas';
+    synthesisNav.href = synthesis.href;
   }
   const nameForDisplay = name => name === name.toLocaleUpperCase('fr-FR')
     ? name.toLocaleLowerCase('fr-FR').replace(/(^|[\s-])\p{L}/gu, start => start.toLocaleUpperCase('fr-FR')) : name;
@@ -79,7 +81,7 @@ window.ProjectCoverReady = (() => {
     const display = nameForDisplay(name);
     title.textContent = display;
     title.toggleAttribute('data-long', display.length > 23);
-    document.title = `${display} — Plan to 3D`;
+    document.title = `${display} — ArchiCam Studio`;
   }
   async function json(route, signal) {
     const response = await fetch(route, { cache: 'no-store', signal });
@@ -88,7 +90,7 @@ window.ProjectCoverReady = (() => {
   }
   // L’ordre historique reste le repli ; les sélections ne sont appliquées que si disponibles.
   const makeViews = (media, slug) => {
-    const published = ViewOrder.views({ images: media?.images || [], renders: [] }, slug);
+    const published = ViewOrder.views({ images: media?.images || [], renders: [] }, slug).filter(view => view.catalog);
     const automatic = published.slice(0, 3);
     return ViewOrder.selectSlots(automatic, media?.presentation?.slots, published);
   };
@@ -599,7 +601,7 @@ window.ProjectCoverReady = (() => {
     if (typeof crop === 'string' && crop.startsWith(`projects/${slug}/`) && /^[a-z\d_-]+\.(?:jpe?g|png|webp)$/i.test(crop.slice(`projects/${slug}/`.length))) {
       append(crop, 'Plan ou croquis d’origine', 'Document source');
     }
-    for (const view of ViewOrder.views({ images: media.images }, slug, Infinity, { keepDuplicates: true })) {
+    for (const view of ViewOrder.views({ images: media.images }, slug, Infinity, { keepDuplicates: true }).filter(view => view.catalog)) {
       append(view.source, view.label, 'Rendu publié', view.preview || view.source);
     }
     for (const view of ViewOrder.views({ renders: media.renders }, slug, Infinity, { keepDuplicates: true })) {
@@ -611,6 +613,31 @@ window.ProjectCoverReady = (() => {
     }
     if (!host.children.length) host.append(element('p', 'Aucun média partagé pour le moment.', 'workspace-empty'));
   }
+
+  function renderEdition(project, slug, host = el('edition-reader'), initial = 0) {
+    host.hidden = true; host.replaceChildren();
+    if (slug !== 'residence-verandas' || !project?.edition) return;
+    const series = [...project.edition.sheets, ...project.edition.photos];
+    if (!series.length) return;
+    const title = element('h3', 'Les planches de la résidence');
+    const select = element('select'); select.setAttribute('aria-label', 'Choisir une planche');
+    series.forEach((sheet, i) => select.add(new Option(`${counter(i + 1)} · ${sheet.title}`, String(i))));
+    const image = element('img'); image.loading = 'lazy';
+    const caption = element('figcaption'); caption.setAttribute('aria-live', 'polite');
+    const figure = element('figure'); figure.append(image, caption);
+    const prev = element('button', 'Précédente'), next = element('button', 'Suivante');
+    const download = element('a', 'Télécharger le cahier complet (PDF)');
+    download.href = `projects/${slug}/planches/cahier.pdf`; download.download = 'Residence-des-Verandas.pdf';
+    function show(i) {
+      const sheet = series[i]; select.selectedIndex = i;
+      image.src = sheet.image || sheet.art || sheet.preview;
+      image.alt = sheet.title; caption.textContent = `Fig. ${counter(i + 1)} / ${counter(series.length)} — ${sheet.title}`;
+      prev.disabled = i === 0; next.disabled = i === series.length - 1;
+    }
+    prev.onclick = () => show(select.selectedIndex - 1); next.onclick = () => show(select.selectedIndex + 1); select.onchange = () => show(select.selectedIndex);
+    const nav = element('div'); nav.append(prev, select, next); host.append(title, nav, figure, download); host.hidden = false; show(initial);
+  }
+  window.renderProjectEdition = renderEdition;
 
   async function loadProject(item) {
     request?.abort();
@@ -655,6 +682,7 @@ window.ProjectCoverReady = (() => {
       signature(projectRecord);
     } else status.textContent = 'Les informations du projet sont indisponibles pour le moment.';
     const media = gallery.status === 'fulfilled' ? gallery.value : { images: [], renders: [], presentation: { slots: [null, null, null], focal: { x: 50, y: 50 } } };
+    renderEdition(projectRecord, item.slug);
     renderEstimate(projectRecord, projectData, item.slug);
     renderGallery(projectRecord, media, item.slug);
     loadedProjectRecord = projectRecord; loadedProjectData = projectData; loadedProjectMedia = media;

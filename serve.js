@@ -14,15 +14,16 @@ const ROOT = fs.realpathSync(__dirname);
 const PROJECTS = path.join(ROOT, 'projects');
 const portal = createPortal({ root: ROOT, projects: PROJECTS, send: sendJson, read: readBody });
 const TYPES = {
+  '.pdf': 'application/pdf',
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
+  '.json': 'application/json', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml',
   '.mp4': 'video/mp4', '.webm': 'video/webm', '.woff2': 'font/woff2',
   '.hdr': 'application/octet-stream', '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.bin': 'application/octet-stream'
 };
 
 // Médias isolés par projet : projects/<slug>/generated/{renders,images,videos,manifest.json}
 function projectSlug(value) {
-  const slug = String(value || 'villa-serena');
+  const slug = String(value || 'residence-verandas');
   if (!/^[a-z0-9-]{1,60}$/i.test(slug)) throw new Error('projet invalide');
   return slug.toLowerCase();
 }
@@ -113,7 +114,21 @@ function galleryFlags(req, res, url) {
     let manifest;
     try { manifest = JSON.parse(fs.readFileSync(media.manifest, 'utf8')); }
     catch { return sendJson(res, 409, { error: 'Le manifeste du projet est illisible.' }); }
-    const item = Array.isArray(manifest?.items) && manifest.items.find(entry => entry && entry.type === 'image' && entry.id === id);
+    if (!manifest || !Array.isArray(manifest.items)) return sendJson(res, 409, { error: 'Le manifeste du projet est invalide.' });
+    let item = manifest.items.find(entry => entry && entry.type === 'image' && entry.id === id);
+    if (!item) {
+      // Les captures Three.js résident dans renders/ plutôt que images/ ; ne les inscris
+      // qu’à la demande, après avoir confirmé que le fichier du projet existe.
+      const renderStem = /^render-([a-z0-9_-]{1,70})$/i.exec(id);
+      if (renderStem) {
+        const name = ['jpg', 'png'].map(ext => `${renderStem[1]}.${ext}`).find(candidate =>
+          candidate === path.basename(candidate) && fs.existsSync(path.join(media.renders, candidate)));
+        if (name) {
+          item = { id, type: 'image', file: `${media.prefix}renders/${name}`, label: renderStem[1].replace(/[-_]+/g, ' '), generator: 'Three.js', catalog: false, book: false };
+          manifest.items.push(item);
+        }
+      }
+    }
     if (!item) return sendJson(res, 404, { error: 'Image introuvable dans ce projet.' });
     Object.assign(item, flags);
     atomicFile(media.manifest, JSON.stringify(manifest, null, 2));
@@ -184,11 +199,17 @@ function saveGenerated(req, res, url) {
         generator: IMAGE_MODELS.includes(metadata.model)
           ? `OpenRouter · ${metadata.model}` : 'OpenRouter · google/gemini-3.1-flash-image',
         prompt: String(metadata.prompt || '').slice(0, 6000),
-        notes: 'Image issue du rendu Three.js ; géométrie à vérifier visuellement.'
+        notes: 'Image issue du rendu Three.js ; géométrie à vérifier visuellement.',
+        catalog: false,
+        book: false
       };
       const index = manifest.items.findIndex(existing => existing.id === id);
-      if (index >= 0) manifest.items[index] = item;
-      else manifest.items.push(item);
+      if (index >= 0) {
+        const previous = manifest.items[index];
+        item.catalog = typeof previous.catalog === 'boolean' ? previous.catalog : true;
+        item.book = previous.book === true;
+        manifest.items[index] = item;
+      } else manifest.items.push(item);
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true, item }));
@@ -285,18 +306,22 @@ function galleryMedia(res, url, access = {}) {
 
   const images = manifestItems.filter(item => item && item.type === 'image' && item.status !== 'draft' && item.published !== false && typeof item.file === 'string')
     .filter(item => {
-      const name = item.file.slice(imagePrefix.length);
-      return item.file.startsWith(imagePrefix) && name === path.basename(name) && /^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp)$/i.test(name)
-        && fs.existsSync(path.join(media.images, name)) && fs.statSync(path.join(media.images, name)).isFile();
+      const isImage = item.file.startsWith(imagePrefix), isRender = item.file.startsWith(renderPrefix);
+      const name = item.file.slice(isImage ? imagePrefix.length : isRender ? renderPrefix.length : 0);
+      const dir = isImage ? media.images : isRender ? media.renders : null;
+      return !!dir && name === path.basename(name) && /^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp)$/i.test(name)
+        && fs.existsSync(path.join(dir, name)) && fs.statSync(path.join(dir, name)).isFile();
     }).map(item => {
-      const preview = path.parse(item.file).name + '-apercu.webp';
+      const imageName = item.file.startsWith(imagePrefix) ? item.file.slice(imagePrefix.length) : null;
+      const preview = imageName && path.parse(imageName).name + '-apercu.webp';
       return {
         id: String(item.id || ''), type: 'image', file: item.file,
-        preview: fs.statSync(path.join(media.images, preview), { throwIfNoEntry: false })?.isFile() ? imagePrefix + preview : null,
+        preview: preview && fs.statSync(path.join(media.images, preview), { throwIfNoEntry: false })?.isFile() ? imagePrefix + preview : null,
         reference: typeof item.reference === 'string' && item.reference.startsWith(renderPrefix)
           && /^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp)$/i.test(item.reference.slice(renderPrefix.length)) ? item.reference : null,
         room: item.room || null, label: item.label || item.id || 'Image générée', cover: item.cover === true,
-        catalog: item.catalog === true, book: item.book === true,
+        // Les anciennes images publiées restent visibles si le choix catalogue n’existait pas encore.
+        catalog: item.catalog === true || item.catalog === undefined, book: item.book === true,
         ...(access.session?.role && access.session.role !== 'architect' ? {} : { generator: item.generator || '', prompt: item.prompt || '', notes: item.notes || '' }),
         width: item.width || null, height: item.height || null
       };
@@ -527,7 +552,7 @@ function aiChat(req, res) {
     try {
       const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'Plan de maison anime' },
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'ArchiCam Studio' },
         body: JSON.stringify(payload)
       });
       const text = await r.text();
@@ -556,7 +581,7 @@ function aiImage(req, res) {
       }
       const r = await fetch('https://openrouter.ai/api/v1/images', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'Plan de maison anime' },
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'ArchiCam Studio' },
         body: JSON.stringify({
           model: body.model, prompt: body.prompt, input_references: body.input_references,
           aspect_ratio: body.aspect_ratio || '16:9', n: 1, output_format: 'png', response_format: 'b64_json'
@@ -670,7 +695,7 @@ async function submitVideo(req, res, body) {
     frame_images: [{ type: 'image_url', image_url: { url: firstFrameUrl }, frame_type: 'first_frame' }]
   };
   const upstream = await fetch('https://openrouter.ai/api/v1/videos', {
-    method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'Plan de maison anime' },
+    method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'ArchiCam Studio' },
     body: JSON.stringify(payload)
   });
   const result = await upstream.json().catch(() => ({}));
@@ -876,4 +901,4 @@ http.createServer((req, res) => {
       }
     });
   });
-}).listen(PORT, process.env.HOST || '127.0.0.1', () => console.log(`Plan de maison animé : http://localhost:${PORT}/`));
+}).listen(PORT, process.env.HOST || '127.0.0.1', () => console.log("ArchiCam Studio : http://localhost:" + PORT + "/"));

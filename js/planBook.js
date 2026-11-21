@@ -414,7 +414,7 @@ const PlanBook = (() => {
   /**
    * Compose et télécharge le cahier selon la composition approuvée.
    * @param {object} options { data, studio, files (PDF d’annexe, facultatif), sections ({ axo: true, … }), onStatus }
-   * Les images d’ambiance sont celles ajoutées au cahier ; sans sélection, les quatre premières dans l’ordre de présentation.
+   * Les images d’ambiance sont celles explicitement ajoutées au cahier ; aucune n’est incluse par défaut.
    */
   async function exportBook({ data, studio, files = null, sections = {}, includeEstimate, onStatus = () => {} }) {
     const JsPDF = await loadJsPDF();
@@ -423,8 +423,7 @@ const PlanBook = (() => {
     const annexes = await annexPages(files, onStatus);
     onStatus('Prises de vue de la maquette…');
     const allViews = await publishedViews(data);
-    const chosen = allViews.filter(view => view.book);
-    const views = chosen.length ? chosen : allViews;
+    const views = allViews.filter(view => view.book);
     const levels = [...new Set(data.walls.map(w => Number(w.level) || 0))].sort((a, b) => a - b).filter(level => levelBounds(data, level).valid);
     const levelName = level => level === 0 ? 'Rez-de-chaussée' : `Étage ${level}`;
     const estimate = on('estimate') && typeof CostEstimate !== 'undefined' ? CostEstimate.estimate(data, data.estimate) : null;
@@ -433,7 +432,9 @@ const PlanBook = (() => {
     const sheets = [{ id: 'cover', title: 'Couverture', section: 'Présentation' },
       ...(on('axo') ? [{ id: 'axo', title: 'Axonométrie', section: 'Volumétrie' }] : []),
       ...(on('cut') ? [{ id: 'cut', title: 'Écorché — vue en coupe', section: 'Volumétrie' }] : []),
-      ...(on('plans') ? levels.map(level => ({ id: 'plan', level, title: `Plan — ${levelName(level)}`, section: 'Plans' })) : []),
+      ...(on('plans') ? (data.edition?.sheets?.some(s => s.art)
+        ? data.edition.sheets.map(s => ({ id: 'art', title: s.title, section: 'Planches de référence', source: s.art || s.preview }))
+        : levels.map(level => ({ id: 'plan', level, title: `Plan - ${levelName(level)}`, section: 'Plans' }))) : []),
       ...(on('views') ? [{ id: 'views', title: views.length ? 'Ambiances' : 'Vues de la maquette', section: 'Images' }] : []),
       ...(on('spec') ? [{ id: 'spec', title: 'Descriptif sommaire', section: 'Notice' }] : []),
       ...(estimate ? [{ id: 'estimate', title: 'Estimation indicative', section: 'Économie' }] : []),
@@ -470,6 +471,12 @@ const PlanBook = (() => {
         sideNote(doc, content.x + w + 8, content.y, 88, 'La maison ouverte',
           `Coupe horizontale à ${fr2.format(sceneHeight(data, hs) * 0.5)} m du sol : l’organisation des pièces, les circulations et l’ameublement se lisent d’un seul regard.`,
           data.rooms.filter(r => r.habitable).slice(0, 8).map(r => [roomName(r.name), `${fr.format(r.area || 0)} m²`]));
+      } else if (sheet.id === 'art') {
+        sheetFrame(doc, data, sheet);
+        const image = await loadImage(sheet.source);
+        const ratio = Math.min(content.w / image.naturalWidth, content.h / image.naturalHeight);
+        const w = image.naturalWidth * ratio, h = image.naturalHeight * ratio;
+        doc.addImage(jpeg(image, image.naturalWidth, image.naturalHeight, { quality: 0.98 }), 'JPEG', content.x + (content.w-w)/2, content.y + (content.h-h)/2, w, h);
       } else if (sheet.id === 'plan') {
         sheetFrame(doc, data, sheet);
         drawPlan(doc, data, sheet.level, planBox, sheet.denominator);

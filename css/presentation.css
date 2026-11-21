@@ -128,3 +128,10 @@
   body[data-print="planbook"] .planbook-heading .cover-print { display: none !important; }
   body[data-print="planbook"] .planbook-contents ol { columns: 1; }
 }
+#edition-reader { margin-block:var(--space-8); padding:clamp(1rem,4vw,3rem); background:var(--paper); color:var(--ink); border-block:1px solid var(--rule); font-family:var(--sans); font-variant-numeric:tabular-nums }
+#edition-reader h3 { font:500 clamp(1.8rem,4vw,3rem)/1.1 var(--serif) }
+#edition-reader div { display:flex;flex-wrap:wrap;gap:.6rem }
+#edition-reader :is(button,select) { max-width:100%;min-height:44px;background:var(--surface);color:var(--ink);border:1px solid var(--rule);padding:.5rem;font:inherit }
+#edition-reader figure { margin:1.4rem 0 } #edition-reader img { display:block;width:100%;height:min(72vh,850px);object-fit:contain;background:var(--surface) }
+#edition-reader figcaption { margin-block:.6rem;color:var(--muted) } #edition-reader a {color:var(--accent-ink)}
+@media print { #edition-reader {display:none!important} }

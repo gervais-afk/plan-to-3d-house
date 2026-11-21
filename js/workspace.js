@@ -6,7 +6,8 @@
   const targeted = Boolean(context?.decision);
   const fragment = new URLSearchParams(url.hash.slice(1));
   const legacyGallery = url.searchParams.get('galerie') === '1';
-  const directVisit = targeted || url.pathname.endsWith('/index.html') || url.searchParams.has('decision') ||
+  const cockpitEntry = !legacyGallery && !targeted && !url.hash && !url.searchParams.has('decision') && (context?.project || url.searchParams.get('project') || 'residence-verandas') === 'residence-verandas';
+  const directVisit = cockpitEntry || targeted || url.pathname.endsWith('/index.html') || url.searchParams.has('decision') ||
     ['wp', 'variant', 'retours'].some(key => fragment.has(key));
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
   const knownViews = ['cover', 'visit', 'dossier', 'estimate', 'gallery'];
@@ -201,7 +202,7 @@
   });
 
   history.replaceState({ projectView: requestedView }, '');
-  if (directVisit) void open('visit', { record: false, focus: false, studio: legacyGallery });
+  if (directVisit) void open('visit', { record: false, focus: false, studio: legacyGallery, reveal: cockpitEntry });
   mountCover().then(() => {
     if (!targeted && !directVisit && requestedView !== 'visit' && legacyGallery) return open('gallery', { record: false, focus: false });
     if (!targeted && !el('home-cover')) return;

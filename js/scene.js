@@ -19,6 +19,8 @@ class HouseScene {
     this.slabMeshes = [];
     this.foundationMeshes = [];
     this.finishFloorMeshes = [];
+    this.clearanceGuidesVisible = false;
+    this.clearanceGroup = null;
 
     this.elevationProgress = 0.0;
     this.ceilingsVisible = false;
@@ -28,15 +30,21 @@ class HouseScene {
     this.createFloors();
     this.createWalls();
     this.createColumns();
+    this.createArchitecturalContactShadows();
     this.createCanopies();
     this.createFurniture();
     this.createDoors();
+    this.createClearanceGuides();
     this.createBlueprintAnnotations();
     this.createLabels();
     this.createCeilings();
     this.ensurePlanOverlay();
 
     window.addEventListener('resize', () => this.onResize());
+    if (window.ResizeObserver) {
+      this.containerResizeObserver = new ResizeObserver(() => this.onResize());
+      this.containerResizeObserver.observe(this.container);
+    }
   }
 
   initThree() {
@@ -63,12 +71,13 @@ class HouseScene {
   }
 
   setupLighting() {
-    this.ambientLight = new THREE.AmbientLight(0xfff8ed, 0.6);
+    this.ambientLight = new THREE.AmbientLight(0xffedd7, 0.72);
     this.scene.add(this.ambientLight);
 
-    // Soleil rasant Sud-Ouest : dessine les colonnes du porche et la façade d'entrée
-    this.sunLight = new THREE.DirectionalLight(0xfff4e0, 1.05);
-    this.sunLight.position.set(-10, 18, 12);
+    // Golden hour tropicale par défaut : azimut 244° (SO), altitude 45°.
+    this.sunLight = new THREE.DirectionalLight(0xffc783, 1.22);
+    const azimuth = 244 * Math.PI / 180, altitude = 45 * Math.PI / 180;
+    this.sunLight.position.set(Math.sin(azimuth) * Math.cos(altitude), Math.sin(altitude), -Math.cos(azimuth) * Math.cos(altitude)).multiplyScalar(30);
     this.sunLight.castShadow = true;
     this.sunLight.shadow.mapSize.width = 2048;
     this.sunLight.shadow.mapSize.height = 2048;
@@ -80,7 +89,8 @@ class HouseScene {
     this.sunLight.shadow.camera.top = d;
     this.sunLight.shadow.camera.bottom = -d;
     this.sunLight.shadow.bias = -0.0004;
-    this.sunLight.shadow.normalBias = 0.02;
+    this.sunLight.shadow.normalBias = 0.018;
+    this.sunLight.shadow.radius = 4; // pénombre douce avec PCFSoftShadowMap
     this.scene.add(this.sunLight);
 
     this.fillLight = new THREE.HemisphereLight(0xffffff, 0xd8d2c4, 0.45);
@@ -96,7 +106,7 @@ class HouseScene {
     return c;
   }
 
-  getFloorTextureBase(type) {
+  getFloorTextureBase(type = 'concrete') {
     this._texCache = this._texCache || {};
     if (this._texCache[type]) return this._texCache[type];
 
@@ -104,7 +114,9 @@ class HouseScene {
     const c = this.makeCanvas(S);
     const g = c.getContext('2d');
     let meters = 2;
-    const rnd = (a, b) => a + Math.random() * (b - a);
+    // Keep grain and joints identical between the live visit and catalogue captures.
+    let seed = 1709 + type.charCodeAt(0);
+    const rnd = (a, b) => { seed = (Math.imul(1664525, seed) + 1013904223) >>> 0; return a + (b - a) * seed / 4294967296; };
 
     if (type === 'parquet') {
       meters = 2.0; // 512 px = 2 m, lames de 0,20 m
@@ -113,8 +125,8 @@ class HouseScene {
         let x = -rnd(0, S * 0.4);
         while (x < S) {
           const len = rnd(0.35, 0.75) * S;
-          const l = rnd(-10, 10);
-          g.fillStyle = `hsl(${rnd(30, 36)}, ${rnd(38, 48)}%, ${62 + l}%)`;
+          const l = rnd(-4, 4);
+          g.fillStyle = `hsl(${rnd(34, 39)}, ${rnd(29, 38)}%, ${74 + l}%)`;
           g.fillRect(x, row * plankW, len, plankW);
           // veinage
           g.strokeStyle = 'rgba(90,60,30,0.10)';
@@ -151,20 +163,17 @@ class HouseScene {
         g.fillRect(0, i * t - 2, S, 4);
       }
     } else if (type === 'stone') {
-      meters = 1.6; // dalles 40x40
+      meters = 1.6; // Pierre calcaire, modules de 80 × 40 cm en quinconce.
       const n = 4, t = S / n;
-      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
-        g.fillStyle = `hsl(${rnd(32, 40)}, ${rnd(10, 18)}%, ${rnd(76, 84)}%)`;
-        g.fillRect(i * t, j * t, t, t);
-        for (let k = 0; k < 250; k++) {
-          g.fillStyle = `rgba(90,80,60,${rnd(0.03, 0.08)})`;
-          g.fillRect(i * t + rnd(0, t), j * t + rnd(0, t), rnd(1, 4), rnd(1, 4));
+      g.fillStyle = '#b3aa99'; g.fillRect(0, 0, S, S);
+      for (let j = 0; j < n; j++) for (let i = 0; i < n / 2; i++) {
+        const x = (2 * i + j % 2) * t, y = j * t;
+        g.fillStyle = `hsl(${rnd(36, 42)}, ${rnd(14, 19)}%, ${rnd(77, 82)}%)`;
+        for (const left of [x, x - S]) g.fillRect(left + 1, y + 1, 2*t - 2, t - 2);
+        for (let k = 0; k < 500; k++) {
+          g.fillStyle = `rgba(96,86,67,${rnd(0.03, 0.09)})`;
+          g.fillRect((x + rnd(2, 2*t - 4)) % S, y + rnd(2, t - 4), rnd(1, 4), rnd(1, 2));
         }
-      }
-      g.fillStyle = '#a8a091';
-      for (let i = 0; i <= n; i++) {
-        g.fillRect(i * t - 2, 0, 4, S);
-        g.fillRect(0, i * t - 2, S, 4);
       }
     } else {
       meters = 2.0; // béton lissé
@@ -243,7 +252,7 @@ class HouseScene {
     this.blueprintGrid = grid;
     this.scene.add(grid);
 
-    const roughness = { parquet: 0.5, tiles: 0.22, stone: 0.8, concrete: 0.7 };
+    const roughness = { parquet: 0.34, tiles: 0.18, stone: 0.8, concrete: 0.7 };
 
     HOUSE_DATA.rooms.forEach(room => {
       const levelY = this.levelOffset(room.level);
@@ -265,12 +274,21 @@ class HouseScene {
         map, normalMap, roughnessMap,
         normalScale: new THREE.Vector2(0.16, 0.16),
         roughness: roughness[room.floorType] || 0.6,
-        metalness: room.floorType === 'tiles' ? 0.035 : 0.0,
+        metalness: room.floorType === 'tiles' ? 0.045 : room.floorType === 'parquet' ? 0.025 : 0.0,
+        envMapIntensity: room.floorType === 'parquet' || room.floorType === 'tiles' ? 0.55 : 0.2,
         transparent: true, opacity: 0
       });
 
       let floorMesh, line;
-      if (room.poly) {
+      const opening = (HOUSE_DATA.stairwells || []).find(s => s.level === room.level && s.xMin>b.xMin && s.xMax<b.xMax && s.zMin>b.zMin && s.zMax<b.zMax);
+      if (opening && !room.poly) {
+        const shape = new THREE.Shape([[b.xMin,b.zMin],[b.xMax,b.zMin],[b.xMax,b.zMax],[b.xMin,b.zMax]].map(([x,z])=>new THREE.Vector2(x,-z)));
+        shape.holes.push(new THREE.Path([[opening.xMin,opening.zMin],[opening.xMin,opening.zMax],[opening.xMax,opening.zMax],[opening.xMax,opening.zMin]].map(([x,z])=>new THREE.Vector2(x,-z))));
+        floorMesh = new THREE.Mesh(new THREE.ShapeGeometry(shape),floorMat);
+        floorMesh.rotation.x = -Math.PI/2; floorMesh.position.y = levelY+.005;
+        line = new THREE.LineSegments(new THREE.EdgesGeometry(floorMesh.geometry),new THREE.LineBasicMaterial({color:0x34423a}));
+        line.rotation.copy(floorMesh.rotation); line.position.copy(floorMesh.position);
+      } else if (room.poly) {
         // Pièce polygonale : forme exacte (UV en mètres → répétition 1/m)
         const shape = new THREE.Shape(room.poly.map(p => new THREE.Vector2(p[0], -p[1])));
         floorMesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), floorMat);
@@ -344,8 +362,8 @@ class HouseScene {
     this.facadeMaterial.userData.keepBatch = true;
     this.inkEdgeMaterial = new THREE.LineBasicMaterial({ color: 0x11161d });
     this.glassMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0xd6e8f0, transparent: true, opacity: 0.26, roughness: 0.04, metalness: 0.0,
-      reflectivity: 0.6, depthWrite: false
+      color: 0xb9cbd0, transparent: true, opacity: 0.32, roughness: 0.075, metalness: 0.035,
+      reflectivity: 0.62, clearcoat: 0.58, clearcoatRoughness: 0.08, depthWrite: false
     });
     this.frameMaterial = new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.45, metalness: 0.4 });
 
@@ -449,6 +467,51 @@ class HouseScene {
     if (w >= 0.9) this.addElevated(new THREE.BoxGeometry(0.04, h, depth * 0.8), mat, p.x, p.z, levelY + sill, h, -angle, opt);
   }
 
+  // Halos diffus de contact pour les soubassements et les appuis : AO légère sans post-process.
+  contactShadowMaterial() {
+    if (this._contactShadowMaterial) return this._contactShadowMaterial;
+    const canvas = document.createElement('canvas'); canvas.width = canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createRadialGradient(64, 64, 8, 64, 64, 64);
+    gradient.addColorStop(0, 'rgba(27,25,20,.48)');
+    gradient.addColorStop(.55, 'rgba(27,25,20,.2)');
+    gradient.addColorStop(1, 'rgba(27,25,20,0)');
+    ctx.fillStyle = gradient; ctx.fillRect(0, 0, 128, 128);
+    const texture = new THREE.CanvasTexture(canvas);
+    this._contactShadowMaterial = new THREE.MeshBasicMaterial({ map: texture, color: 0x8b806c, transparent: true, opacity: 0.72, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, side: THREE.DoubleSide });
+    return this._contactShadowMaterial;
+  }
+
+  createContactPatch(parent, width, depth, x, y, z, rotationY = 0, opacity = 0.72) {
+    const material = this.contactShadowMaterial();
+    const patch = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), material);
+    patch.rotation.order = 'YXZ';
+    patch.rotation.set(-Math.PI / 2, rotationY, 0);
+    patch.position.set(x, y, z);
+    patch.material = material.clone();
+    patch.material.opacity = opacity;
+    patch.renderOrder = 1;
+    patch.userData.nominalY = y;
+    if (parent) parent.add(patch); else { this.scene.add(patch); this.furnitureMeshes.push(patch); }
+    return patch;
+  }
+
+  createArchitecturalContactShadows() {
+    (HOUSE_DATA.walls || []).forEach(wall => {
+      const dx = wall.to[0] - wall.from[0], dz = wall.to[1] - wall.from[1];
+      const length = Math.hypot(dx, dz);
+      if (length < 0.5) return;
+      const levelY = this.levelOffset(wall.level);
+      this.createContactPatch(null, length + 0.12, 0.11,
+        (wall.from[0] + wall.to[0]) / 2, levelY + 0.012,
+        (wall.from[1] + wall.to[1]) / 2, -Math.atan2(dz, dx), 0.58);
+    });
+    (HOUSE_DATA.columns || []).forEach(column => {
+      const y = this.levelOffset(column.level) + 0.01;
+      this.createContactPatch(null, column.base + 0.22, column.base + 0.22, column.x, y, column.z, 0, 0.8);
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // COLONNES DU PORCHE & POTEAU DE TERRASSE
   // ---------------------------------------------------------------------------
@@ -478,12 +541,27 @@ class HouseScene {
         m.position.set(x, y, z);
         m.rotation.x = rotationX;
         m.userData.explodeBaseY = y;
-        m.userData.explodable = cn.type === 'slab';
+        m.userData.explodable = cn.type === 'slab' || cn.type === 'hip';
         m.castShadow = true;
         m.receiveShadow = true;
         this.canopyGroup.add(m);
       };
-      if (cn.type === 'slab' && Array.isArray(cn.poly) && cn.poly.length >= 3) {
+      if (cn.type === 'hip' && cn.faces && cn.vertices) {
+        // Project coordinates: x/z in metres, height above the eaves.
+        const triangles = [];
+        for (const face of cn.faces) for (let i = 1; i < face.length - 1; i++) {
+          triangles.push(...cn.vertices[face[0]], ...cn.vertices[face[i]], ...cn.vertices[face[i + 1]]);
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(triangles, 3));
+        geo.computeVertexNormals(); mat.side = THREE.DoubleSide; add(geo, 0, canopyY, 0);
+      } else if (cn.type === 'hip') {
+        const a = [-w/2,0,-d/2], b = [w/2,0,-d/2], c = [w/2,0,d/2], e = [-w/2,0,d/2];
+        const ridge = Math.max(0,(d-w)/2), n = [0,cn.rise,-ridge], s = [0,cn.rise,ridge];
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position',new THREE.Float32BufferAttribute([a,n,b,b,n,s,b,s,c,c,s,e,e,s,n,e,n,a].flat(),3));
+        geo.computeVertexNormals(); mat.side = THREE.DoubleSide; add(geo,cx,canopyY,cz);
+      } else if (cn.type === 'slab' && Array.isArray(cn.poly) && cn.poly.length >= 3) {
         const shape = new THREE.Shape();
         cn.poly.forEach((p, i) => i ? shape.lineTo(p[0], -p[1]) : shape.moveTo(p[0], -p[1]));
         shape.closePath();
@@ -508,7 +586,10 @@ class HouseScene {
   // MOBILIER
   // ---------------------------------------------------------------------------
   createFurniture() {
+    const well = HOUSE_DATA.meta?.slug === 'residence-verandas' && HOUSE_DATA.stairwells?.[0];
+    if (well) this.createReturnStair(well);
     HOUSE_DATA.furniture.forEach(item => {
+      if (well && item.model === 'step') return;
       const levelY = this.levelOffset(item.level);
       // Mobilier composé (realism.js) si disponible pour ce type
       const comp = this.buildComposite ? this.buildComposite(item) : null;
@@ -542,6 +623,34 @@ class HouseScene {
       this.scene.add(mesh);
       this.furnitureMeshes.push(mesh);
     });
+  }
+
+  createReturnStair(s) {
+    const group = new THREE.Group(), path = [], H = this.levelOffset(s.level);
+    const width=(s.zMax-s.zMin-.12)/2, landing=.84, tread=(s.xMax-s.xMin-landing)/8;
+    const start=s.xMax, turn=s.xMin+landing, front=s.zMax-width/2, back=s.zMin+width/2;
+    const wood=new THREE.MeshStandardMaterial({color:0xceab80,map:this.getFloorTextureBase('parquet').tex,roughness:.52});
+    const steel=new THREE.MeshStandardMaterial({color:0x485449,metalness:.48,roughness:.38});
+    const v=(x,y,z)=>new THREE.Vector3(x,y,z);
+    function box(w,h,d,x,y,z,mat){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;group.add(m);return m;}
+    function bar(a,b,size){const delta=b.clone().sub(a),mid=a.clone().lerp(b,.5);const m=box(size,delta.length(),size,mid.x,mid.y,mid.z,steel);m.quaternion.setFromUnitVectors(v(0,1,0),delta.normalize());}
+    path.push(v(start+.42,0,front));
+    for(let flight=0;flight<2;flight++){
+      const z=flight?back:front, edge=z+(flight?1:-1)*(width/2-.045), ends=[];
+      for(let i=0;i<8;i++){
+        const x=flight?turn+(i+.5)*tread:start-(i+.5)*tread,y=(flight*8+i+1)*H/16;
+        box(tread+.008,.09,width,x,y-.045,z,wood);
+        // AO de contact très douce sous le nez de chaque marche, complémentaire aux ombres PCF.
+        this.createContactPatch(group, tread * 0.88, width * 0.9, x, y + 0.006, z, 0, 0.3);
+        path.push(v(x,y,z));
+        if(i===0||i===7||i===4)bar(v(x,y,edge),v(x,y+.91,edge),.032);
+        if(i===0||i===7)ends.push(v(x,y,edge));
+      }
+      for(const dy of [-.14,.91])bar(...ends.map(p=>p.clone().add(v(0,dy,0))),dy<0?.14:.052);
+      if(!flight){box(landing,.14,s.zMax-s.zMin,s.xMin+landing/2,H/2-.07,(front+back)/2,wood);path.push(v(s.xMin+landing/2,H/2,front),v(s.xMin+landing/2,H/2,back));}
+    }
+    path.push(v(start+.55,H,back));this.stairPath=path;
+    group.userData.nominalY=0;this.scene.add(group);this.furnitureMeshes.push(group);
   }
 
   // ---------------------------------------------------------------------------
@@ -594,6 +703,51 @@ class HouseScene {
         this.furnitureMeshes.push(leaf);
       });
     });
+  }
+
+  // Gabarits visuels indicatifs, distincts d'une vérification de conformité ou de circulation.
+  createClearanceGuides() {
+    this.clearanceGroup = new THREE.Group();
+    const material = new THREE.LineBasicMaterial({ color: 0xB38646, transparent: true, opacity: 0.78, depthTest: false });
+    const buffer = 0.90; // bande de 90 cm théorique autour de l'empreinte, non vérifiée contre murs ou obstacles
+    (HOUSE_DATA.furniture || []).filter(item => ['bed', 'diningTable', 'sofa'].includes(item.model)).forEach(item => {
+      const halfW = Math.max(0.15, Number(item.w) || 0.8) / 2 + buffer;
+      const halfD = Math.max(0.15, Number(item.d) || 0.8) / 2 + buffer;
+      const angle = item.dims === 'local' ? Number(item.rotY) || 0 : 0;
+      const c = Math.cos(angle), s = Math.sin(angle), y = this.levelOffset(item.level) + 0.025;
+      const points = [[-halfW,-halfD],[halfW,-halfD],[halfW,halfD],[-halfW,halfD]].map(([x,z]) =>
+        new THREE.Vector3(item.x + x*c + z*s, y, item.z - x*s + z*c));
+      const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(points), material);
+      line.renderOrder = 3;
+      this.clearanceGroup.add(line);
+    });
+    // Arcs de portes déjà présents dans le plan : redessinés en bronze comme repère de débattement.
+    (HOUSE_DATA.walls || []).forEach(w => {
+      const levelY = this.levelOffset(w.level) + 0.03;
+      const dx = w.to[0] - w.from[0], dz = w.to[1] - w.from[1], length = Math.hypot(dx, dz) || 1;
+      const ux = dx / length, uz = dz / length, nx = -uz, nz = ux;
+      (w.openings || []).filter(op => op.type === 'door').forEach(op => {
+        const hingeEnd = op.hinge === 'end', sign = hingeEnd ? -1 : 1, side = op.side || 1;
+        const hx = hingeEnd ? op.at + op.w / 2 : op.at - op.w / 2;
+        const hxw = w.from[0] + ux * hx, hzw = w.from[1] + uz * hx;
+        const arc = [];
+        for (let i = 0; i <= 20; i++) {
+          const a = i / 20 * Math.PI / 2;
+          const vx = ux * sign * Math.cos(a) + nx * side * Math.sin(a);
+          const vz = uz * sign * Math.cos(a) + nz * side * Math.sin(a);
+          arc.push(new THREE.Vector3(hxw + vx * op.w, levelY, hzw + vz * op.w));
+        }
+        this.clearanceGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(arc), material));
+      });
+    });
+    this.clearanceGroup.visible = false;
+    this.scene.add(this.clearanceGroup);
+  }
+
+  setClearanceGuides(visible) {
+    this.clearanceGuidesVisible = Boolean(visible);
+    if (this.clearanceGroup) this.clearanceGroup.visible = this.clearanceGuidesVisible;
+    return this.clearanceGuidesVisible;
   }
 
   // ---------------------------------------------------------------------------
@@ -795,7 +949,8 @@ class HouseScene {
     });
 
     // Auvents : descendent et apparaissent en fin d'élévation
-    const k = Math.max(0, Math.min(1, (e - 0.90) / 0.10));
+    const rawCanopyProgress = Math.max(0, Math.min(1, (e - 0.90) / 0.10));
+    const k = rawCanopyProgress * rawCanopyProgress * (3 - 2 * rawCanopyProgress);
     this.canopyGroup.visible = k > 0.01;
     this.canopyGroup.position.y = (1 - k) * 1.2;
     this.canopyMaterials.forEach(m => { m.opacity = k; });
@@ -862,11 +1017,12 @@ class HouseScene {
   }
 
   onResize() {
-    this.width = window.innerWidth;
-    this.height = window.innerHeight;
+    const bounds = this.container.getBoundingClientRect();
+    this.width = Math.max(1, Math.round(bounds.width || window.innerWidth));
+    this.height = Math.max(1, Math.round(bounds.height || window.innerHeight));
     this.camera.aspect = this.width / this.height;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(this.width, this.height);
+    this.renderer.setSize(this.width, this.height, false);
   }
 
   render() {

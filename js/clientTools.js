@@ -32,6 +32,21 @@ class ClientTools {
     this.measurements = [];
     this.measuring = false;
     this.hotspots = HOUSE_DATA.rooms.map(room => this.makeHotspot(room));
+    this.photoAnchors = [];
+    if (HOUSE_DATA.meta.slug === 'residence-verandas' && HOUSE_DATA.edition?.photos?.length) {
+      const dialog = document.createElement('dialog'); dialog.className = 'perspective-dialog';
+      dialog.setAttribute('aria-label','Perspective architecturale');
+      const close = document.createElement('button'), image = document.createElement('img');
+      close.textContent = 'Fermer la perspective'; close.onclick = () => dialog.close();
+      dialog.append(close, image); document.body.append(dialog);
+      HOUSE_DATA.edition.photos.forEach((photo,i) => {
+        const el = this.makeAnchor(), button = document.createElement('button');
+        button.className = 'client-hotspot'; button.textContent = String(i + 1).padStart(2,'0');
+        button.setAttribute('aria-label', `Voir la perspective : ${photo.title}`);
+        button.onclick = () => { image.src = photo.image; image.alt = photo.title; dialog.showModal(); };
+        el.append(button); this.photoAnchors.push({el,point:new THREE.Vector3(...photo.anchor)});
+      });
+    }
     this.nextOcclusion = 0;
     this.occlusionWorld = new THREE.Matrix4();
     this.occlusionProjection = new THREE.Matrix4();
@@ -155,7 +170,7 @@ class ClientTools {
   }
 
   clipped(point) {
-    return this.hs.sectionEnabled && this.hs.sectionPlane.distanceToPoint(point) < -0.001;
+    return this.hs.renderer.clippingPlanes.some(p => p.distanceToPoint(point) < -.001) || (this.hs.sectionEnabled && this.hs.sectionPlane.distanceToPoint(point) < -0.001);
   }
 
   blockers(includeFurniture = false) {
@@ -229,6 +244,7 @@ class ClientTools {
     const showRooms = show && !this.measuring && this.hotspotToggle.checked && !document.pointerLockElement;
     const camera = hs.camera;
     if (show) camera.updateMatrixWorld();
+    this.photoAnchors.forEach(anchor => { anchor.el.hidden = !show || this.measuring || !!document.pointerLockElement || !this.project(anchor, true); });
     const aerial = showRooms && !hs.sectionEnabled && camera.matrixWorld.elements[9] > 0.27;
     // Lancer les rayons à fréquence réduite, et ne pas les répéter si la vue est fixe.
     const checkOcclusion = showRooms && now >= this.nextOcclusion && (!this.nextOcclusion ||

@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Dégradé de fond : encre vert-graphite profond -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#18201B"/>
+      <stop offset="50%" stop-color="#141A16"/>
+      <stop offset="100%" stop-color="#0E1310"/>
+    </linearGradient>
+
+    <!-- Dégradé or impérial / bronze satiné -->
+    <linearGradient id="goldGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#996E2E"/>
+      <stop offset="35%" stop-color="#B38646"/>
+      <stop offset="70%" stop-color="#D9B775"/>
+      <stop offset="100%" stop-color="#F3E2B8"/>
+    </linearGradient>
+
+    <!-- Dégradé or doux pour les lignes de structure -->
+    <linearGradient id="goldFine" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E5CCA0" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#A87A38" stop-opacity="0.75"/>
+    </linearGradient>
+
+    <!-- Lueur subtile pour un éclat haut de gamme -->
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Fond carré biseauté / courbure architecturale (Rayon 108px) -->
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#bgGrad)"/>
+  
+  <!-- Filet d'encadrement millimétrique en bronze discret (1.5px) -->
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="none" stroke="#B38646" stroke-opacity="0.28" stroke-width="2"/>
+
+  <!-- SYMBOLE ARCHICAM : Portique Monolithique (A) & Lentille / Courbure de Véranda (C) -->
+  <g id="monogram" transform="translate(0, 0)">
+    
+    <!-- L'Arc circulaire de vision (Caméra / Perspective / Véranda) -->
+    <circle cx="256" cy="256" r="148" fill="none" stroke="url(#goldGrad)" stroke-width="3" stroke-dasharray="7 5" stroke-opacity="0.45"/>
+    <path d="M 172 320 A 136 136 0 1 1 364 256" fill="none" stroke="url(#goldGrad)" stroke-width="12" stroke-linecap="round"/>
+
+    <!-- Le Grand Portique Monumental (L'Arche du 'A') -->
+    <!-- Jambage Gauche -->
+    <path d="M 160 380 L 244 140 L 268 140 L 352 380" fill="none" stroke="url(#goldGrad)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- L'Entablement Horizontal / Trait de Niveau (Traverse du 'A' & Ligne d'Horizon) -->
+    <line x1="192" y1="298" x2="320" y2="298" stroke="url(#goldGrad)" stroke-width="14" stroke-linecap="round"/>
+
+    <!-- L'Oculus / Point Focal de Précision (Objectif Caméra & Clé de Voûte) -->
+    <circle cx="256" cy="216" r="16" fill="url(#goldGrad)" filter="url(#softGlow)"/>
+    <circle cx="256" cy="216" r="6" fill="#141A16"/>
+
+    <!-- Lignes d'épissures axonométriques (Épure du plan vers le volume) -->
+    <line x1="256" y1="140" x2="256" y2="92" stroke="url(#goldFine)" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="256" cy="84" r="5" fill="#D9B775"/>
+    
+    <!-- Base socle architecturale -->
+    <line x1="140" y1="400" x2="372" y2="400" stroke="url(#goldFine)" stroke-width="3" stroke-linecap="round" stroke-opacity="0.6"/>
+  </g>
+</svg>

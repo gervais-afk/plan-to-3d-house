@@ -63,8 +63,8 @@ class ScrollTour {
     let current = null;
 
     for (let r of HOUSE_DATA.rooms) {
-      const b = r.bounds;
-      if (pos.y < 3.5 && roomContains(r, pos.x, pos.z)) {
+      const aboveFloor = pos.y - this.houseScene.levelOffset(r.level);
+      if (aboveFloor >= 0 && aboveFloor <= HOUSE_DATA.config.wallHeight && roomContains(r, pos.x, pos.z)) {
         current = r;
         break;
       }

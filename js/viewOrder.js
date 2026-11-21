@@ -67,7 +67,7 @@ const ViewOrder = (() => {
       const kind = category(item, `${item.id || ''} ${label} ${source.split('/').pop()}`);
       return [{ id: String(item.id || ''), label, source, preview: pathInProject(item.preview, slug), reference: pathInProject(item.reference, slug), notes,
         category: kind, rank: item.cover === true ? RANK.cover : RANK[kind], kind: KIND[kind], alt: notes ? `${label} : ${notes}` : label, published: true,
-        catalog: item.catalog === true, book: item.book === true, room: item.room || null }];
+        catalog: item.catalog === true || item.catalog === undefined, book: item.book === true, room: item.room || null }];
     });
     const captures = (media?.renders || []).flatMap(value => {
       const source = pathInProject(value, slug);

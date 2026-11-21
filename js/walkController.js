@@ -13,7 +13,7 @@ class WalkController {
 
     this.enabled = false;
     this.speed = 4.2; // m/s
-    this.eyeHeight = 1.65; // hauteur d'yeux en mètres
+    this.eyeHeight = 1.59; // hauteur d'yeux en mètres
     this.playerRadius = 0.25; // rayon du corps
     this.colliders = [];
     this._probe = new THREE.Vector3();
@@ -31,6 +31,9 @@ class WalkController {
     this.isPointerLocked = false;
 
     this.stepTimer = 0;
+    this.currentFloorY = 0;
+    this.targetFloorY = 0;
+    this.walkFloorHeight = Number(HOUSE_DATA.config.floorHeight) || 3;
     this.lastTime = performance.now();
 
     this.initEvents();
@@ -56,7 +59,11 @@ class WalkController {
     });
   }
 
-  start(initialPosition = null) {
+  start(initialPosition = null, level = 0) {
+    this.walkLevel = level;
+    this.walkFloorHeight = Number(HOUSE_DATA.config.floorHeight) || 3;
+    this.currentFloorY = this.targetFloorY = level * this.walkFloorHeight;
+    this.eyeHeight = 1.59;
     this.enabled = true;
     this.houseScene.setElevation(1.0); // Murs levés à 100%
 
@@ -67,10 +74,10 @@ class WalkController {
 
     const start = HOUSE_DATA.config.walkStart;
     if (initialPosition) {
-      this.camera.position.set(initialPosition.x, this.eyeHeight, initialPosition.z);
+      this.camera.position.set(initialPosition.x, this.currentFloorY + this.eyeHeight, initialPosition.z);
     } else {
       // Démarrage par défaut face au porche à colonnes
-      this.camera.position.set(start.x, this.eyeHeight, start.z);
+      this.camera.position.set(start.x, this.currentFloorY + this.eyeHeight, start.z);
     }
 
     this.camera.fov = 65;
@@ -79,6 +86,8 @@ class WalkController {
     // Orientation initiale : regard vers le Nord (la maison)
     this.yaw = start.yaw || 0;
     this.pitch = 0;
+    this.velocity.set(0, 0, 0);
+    this.stepTimer = 0;
     this.lastTime = performance.now();
     this.updateCameraRotation();
 
@@ -167,6 +176,37 @@ class WalkController {
     this.camera.quaternion.setFromEuler(euler);
   }
 
+  /** Hauteur du dessus de marche (ou du palier) sous le point de déplacement. */
+  stairFloorAt(x, z) {
+    for (const stair of HOUSE_DATA.stairwells || []) {
+      const upperLevel = Number(stair.level) || 1;
+      const rise = upperLevel * this.walkFloorHeight;
+      const landing = 0.84;
+      const width = (stair.zMax - stair.zMin - 0.12) / 2;
+      const turn = stair.xMin + landing;
+      const start = stair.xMax;
+      const tread = (start - turn) / 8;
+      const front = stair.zMax - width / 2;
+      const back = stair.zMin + width / 2;
+      const inFrontFlight = Math.abs(z - front) <= width / 2 + this.playerRadius * 0.55;
+      const inBackFlight = Math.abs(z - back) <= width / 2 + this.playerRadius * 0.55;
+
+      if (x >= stair.xMin - this.playerRadius && x <= turn &&
+          z >= stair.zMin - this.playerRadius && z <= stair.zMax + this.playerRadius) {
+        return { y: rise / 2, upperLevel, onStair: true };
+      }
+      if (x >= turn - this.playerRadius * 0.35 && x <= start + this.playerRadius * 0.35 && inFrontFlight) {
+        const step = Math.max(0, Math.min(7, Math.floor((start - x) / tread)));
+        return { y: (step + 1) * rise / 16, upperLevel, onStair: true };
+      }
+      if (x >= turn - this.playerRadius * 0.35 && x <= start + this.playerRadius * 0.35 && inBackFlight) {
+        const step = Math.max(0, Math.min(7, Math.floor((x - turn) / tread)));
+        return { y: rise / 2 + (step + 1) * rise / 16, upperLevel, onStair: true };
+      }
+    }
+    return null;
+  }
+
   update() {
     if (!this.enabled) return;
 
@@ -215,15 +255,22 @@ class WalkController {
       }
     }
 
-    // Oscillation de la tête (Head-bobbing pendant la marche)
-    const isMoving = (Math.abs(this.velocity.x) > 0.1 || Math.abs(this.velocity.z) > 0.1);
-    if (isMoving) {
-      this.stepTimer += delta * 9.0;
-      const bobY = Math.sin(this.stepTimer) * 0.035;
-      this.camera.position.y = this.eyeHeight + bobY;
+    const stairSurface = this.stairFloorAt(this.camera.position.x, this.camera.position.z);
+    if (stairSurface) {
+      this.targetFloorY = stairSurface.y;
+      if (this.targetFloorY >= stairSurface.upperLevel * this.walkFloorHeight * 0.98) this.walkLevel = stairSurface.upperLevel;
     } else {
-      this.camera.position.y = this.eyeHeight;
+      if (this.currentFloorY < this.walkFloorHeight * 0.5) this.walkLevel = 0;
+      else if (this.currentFloorY > this.walkFloorHeight * 0.5) this.walkLevel = 1;
+      this.targetFloorY = this.walkLevel * this.walkFloorHeight;
     }
+    this.currentFloorY += (this.targetFloorY - this.currentFloorY) * (1 - Math.exp(-delta * 13));
+
+    // Bobbing très léger (2 cm), calé sur la distance parcourue comme une vraie cadence de pas.
+    const moved = Math.hypot(this.camera.position.x - oldPos.x, this.camera.position.z - oldPos.z);
+    if (moved > 0.0005) this.stepTimer += moved * (Math.PI * 2 / 0.72);
+    const bobY = moved > 0.0005 ? Math.sin(this.stepTimer) * 0.02 : 0;
+    this.camera.position.y = this.currentFloorY + this.eyeHeight + bobY;
 
     // Mise à jour de la pièce active pour le HUD
     this.updateActiveRoom();
@@ -233,7 +280,7 @@ class WalkController {
     const b = HOUSE_DATA.config.walkBounds;
     if (pos.x < b.xMin || pos.x > b.xMax || pos.z < b.zMin || pos.z > b.zMax) return true;
 
-    this._probe.set(pos.x, this.eyeHeight, pos.z);
+    this._probe.set(pos.x, this.currentFloorY + this.eyeHeight, pos.z);
     for (let i = 0; i < this.colliders.length; i++) {
       if (this.colliders[i].containsPoint(this._probe)) return true;
     }
@@ -243,12 +290,12 @@ class WalkController {
   updateActiveRoom() {
     const pos = this.camera.position;
     for (let r of HOUSE_DATA.rooms) {
-      const b = r.bounds;
-      if (roomContains(r, pos.x, pos.z)) {
+      if ((r.level || 0) === this.walkLevel && roomContains(r, pos.x, pos.z)) {
         if (this.onRoomChange) this.onRoomChange(r);
         return;
       }
     }
+    this.onRoomChange?.(null);
   }
 }
 

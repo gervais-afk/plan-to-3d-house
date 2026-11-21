@@ -57,6 +57,7 @@ window.startProjectViewer = () => {
   let currentMode = 'scroll'; // 'scroll' ou 'walk'
   let scrollProgress = 0.0;
   let activeRoom = null;
+  let climb = null;
 
   // 1. Initialisation de la scène 3D
   let houseScene;
@@ -105,7 +106,7 @@ window.startProjectViewer = () => {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  function createViewCard(shot, aiImage) {
+  function createViewCard(shot, aiImage, baseImage = null) {
     const card = document.createElement('article');
     card.className = 'rg-card rg-view-card';
     card.dataset.id = shot.id;
@@ -165,34 +166,44 @@ window.startProjectViewer = () => {
       action.setAttribute('aria-label', `Ouvrir la vue : ${shot.label}`);
     }
     card.appendChild(action);
-    if (!invited && aiImage?.id) {
-      // Le rendu IA de cette vue peut rejoindre le catalogue des intérieurs et/ou le cahier de plans.
-      const flags = document.createElement('div');
-      flags.className = 'rg-flags';
-      [['catalog', 'Catalogue'], ['book', 'Cahier']].forEach(([key, label]) => {
-        const toggle = document.createElement('button');
-        toggle.type = 'button';
-        toggle.className = 'btn-toggle btn-small rg-flag';
-        const paint = () => {
-          toggle.setAttribute('aria-pressed', String(aiImage[key] === true));
-          // État porté par aria-pressed (fond sable) et par l’icône : coche quand l’image est retenue.
-          Icons.label(toggle, aiImage[key] ? 'check' : key === 'catalog' ? 'gallery' : 'book', label);
-          toggle.title = aiImage[key] ? `Retirer du ${label.toLowerCase()}` : `Ajouter au ${label.toLowerCase()}`;
-        };
-        paint();
-        toggle.addEventListener('click', async event => {
-          event.stopPropagation();
-          toggle.disabled = true;
-          try {
-            await setImageFlags(aiImage.id, { [key]: !aiImage[key] });
-            aiImage[key] = !aiImage[key];
-            paint();
-          } catch (error) { status.textContent = error.message; }
-          finally { toggle.disabled = false; }
+    if (!invited) {
+      const appendFlags = (target, version) => {
+        if (!target?.id) return;
+        const flags = document.createElement('div');
+        flags.className = 'rg-flags';
+        flags.setAttribute('aria-label', `Affectations — ${version}`);
+        const flagsLabel = document.createElement('span');
+        flagsLabel.className = 'rg-flags-label';
+        flagsLabel.textContent = `Affecter — ${version}`;
+        flags.append(flagsLabel);
+        [['book', 'Cahier de plans'], ['catalog', 'Catalogue']].forEach(([key, label]) => {
+          const toggle = document.createElement('button');
+          toggle.type = 'button';
+          toggle.className = 'btn-toggle btn-small rg-flag';
+          const paint = () => {
+            toggle.setAttribute('aria-pressed', String(target[key] === true));
+            Icons.label(toggle, target[key] ? 'check' : key === 'catalog' ? 'gallery' : 'book', label);
+            toggle.title = `${target[key] ? 'Retirer de' : 'Ajouter au'} ${label.toLowerCase()} — ${version}`;
+            toggle.setAttribute('aria-label', `${target[key] ? 'Retirer du' : 'Ajouter au'} ${label.toLowerCase()} — ${version} : ${shot.label}`);
+          };
+          paint();
+          toggle.addEventListener('click', async event => {
+            event.stopPropagation();
+            toggle.disabled = true;
+            try {
+              await setImageFlags(target.id, { [key]: !target[key] });
+              target[key] = !target[key];
+              paint();
+            } catch (error) { status.textContent = error.message; }
+            finally { toggle.disabled = false; }
+          });
+          flags.append(toggle);
         });
-        flags.append(toggle);
-      });
-      card.appendChild(flags);
+        card.appendChild(flags);
+      };
+      // La capture Three.js et sa retouche IA sont deux images distinctes, chacune avec ses propres choix.
+      appendFlags(baseImage || { id: `render-${shot.id}`, catalog: false, book: false }, 'vue 3D');
+      if (aiImage?.id) appendFlags(aiImage, 'retouche IA');
     }
     if (action.textContent !== 'Ouvrir la vue') {
       const view = document.createElement('button');
@@ -438,8 +449,9 @@ window.startProjectViewer = () => {
     let withAI = 0;
     shots3D.forEach(shot => {
       const aiImage = aiImageForShot(shot, media.images);
+      const baseImage = media.images.find(image => image.id === `render-${shot.id}`) || null;
       if (aiImage) withAI++;
-      grid.appendChild(createViewCard(shot, aiImage));
+      grid.appendChild(createViewCard(shot, aiImage, baseImage));
     });
 
     if (invited) {
@@ -646,6 +658,11 @@ window.startProjectViewer = () => {
     if (feedback.placing) feedback.cancel();
     if (clientTools.measuring) clientTools.toggleMeasure(false);
     hidePhotoOverlay();
+    const intro=gallery.querySelector('.rg-intro');
+    if(intro && PROJECT_SLUG==='residence-verandas'){
+      const budget=CostEstimate.estimate(HOUSE_DATA,HOUSE_DATA.estimate);
+      intro.textContent=`Budget travaux indicatif : ${CostEstimate.formatXAF(budget.total.low)} – ${CostEstimate.formatXAF(budget.total.high)}. Cette estimation FCFA est distincte du coût IA affiché sur chaque vue ; aucun appel facturable n’est lancé sans confirmation.`;
+    }
     gallery.classList.remove('hidden');
     gallery.showModal();
     if (!galleryInitialized && !galleryTask) {
@@ -799,6 +816,178 @@ window.startProjectViewer = () => {
     btnExplode.addEventListener('click', toggleExploded);
   }
   const clientTools = new ClientTools(houseScene, hidePhotoOverlay);
+
+  // Repères solaires : commandes rapides connectées au curseur temporel existant.
+  const solarPresets = [...document.querySelectorAll('[data-solar-hour]')];
+  const syncSolarPresetState = () => solarPresets.forEach(button => {
+    button.setAttribute('aria-pressed', String(Math.abs(Number(clientTools.hour.value) - Number(button.dataset.solarHour)) < 0.01));
+  });
+  solarPresets.forEach(button => button.addEventListener('click', () => {
+    clientTools.setHour(Number(button.dataset.solarHour));
+    syncSolarPresetState();
+  }));
+  clientTools.hour.addEventListener('input', syncSolarPresetState);
+  syncSolarPresetState();
+
+  // Comparaison côte à côte avec le document source, sans recalage sur la maquette interprétée.
+  const compareButton = document.getElementById('btn-plan-compare');
+  const sourcePane = document.getElementById('source-plan-pane');
+  const sourceImage = document.getElementById('source-plan-image');
+  const divider = document.getElementById('comparison-divider');
+  const planImageConfig = HOUSE_DATA.config?.planImage;
+  let comparisonEnabled = false, splitPercent = 50;
+  if (planImageConfig?.url) {
+    sourceImage.src = planImageConfig.url;
+    sourcePane.hidden = true;
+    sourceImage.addEventListener('error', () => {
+      compareButton.disabled = true;
+      compareButton.title = 'Le plan source associé à ce projet est indisponible.';
+      compareButton.textContent = 'Comparer plan / 3D';
+      compareButton.setAttribute('aria-pressed', 'false');
+      comparisonEnabled = false;
+      sourcePane.hidden = true;
+      divider.hidden = true;
+      document.body.classList.remove('is-plan-comparison');
+    }, { once: true });
+  } else {
+    compareButton.disabled = true;
+    compareButton.title = 'Aucun document source associé à ce projet.';
+  }
+  function setComparison(on) {
+    comparisonEnabled = Boolean(on && planImageConfig?.url);
+    document.body.classList.toggle('is-plan-comparison', comparisonEnabled);
+    sourcePane.hidden = !comparisonEnabled;
+    divider.hidden = !comparisonEnabled;
+    compareButton.setAttribute('aria-pressed', String(comparisonEnabled));
+    compareButton.textContent = comparisonEnabled ? 'Fermer la comparaison' : 'Comparer plan / 3D';
+    if (comparisonEnabled) {
+      document.body.style.setProperty('--comparison-split', `${splitPercent}vw`);
+      requestAnimationFrame(() => houseScene.onResize());
+    } else requestAnimationFrame(() => houseScene.onResize());
+  }
+  compareButton.addEventListener('click', () => setComparison(!comparisonEnabled));
+  function setSplit(clientX) {
+    splitPercent = Math.max(30, Math.min(70, clientX / window.innerWidth * 100));
+    document.body.style.setProperty('--comparison-split', `${splitPercent}vw`);
+    divider.setAttribute('aria-valuenow', String(Math.round(splitPercent)));
+    if (comparisonEnabled) houseScene.onResize();
+  }
+  divider.addEventListener('pointerdown', event => {
+    event.preventDefault();
+    divider.setPointerCapture(event.pointerId);
+    setSplit(event.clientX);
+  });
+  divider.addEventListener('pointermove', event => {
+    if (divider.hasPointerCapture(event.pointerId)) setSplit(event.clientX);
+  });
+  divider.addEventListener('keydown', event => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    splitPercent = event.key === 'Home' ? 30 : event.key === 'End' ? 70 : Math.max(30, Math.min(70, splitPercent + (event.key === 'ArrowRight' ? 3 : -3)));
+    setSplit(window.innerWidth * splitPercent / 100);
+  });
+
+  // Gabarits graphiques volontairement indicatifs, sans audit normatif des circulations.
+  const clearanceButton = document.getElementById('btn-clearance-guides');
+  clearanceButton.addEventListener('click', () => {
+    const active = houseScene.setClearanceGuides(!houseScene.clearanceGuidesVisible);
+    clearanceButton.setAttribute('aria-pressed', String(active));
+    clearanceButton.textContent = active ? 'Masquer les gabarits' : 'Gabarits indicatifs';
+  });
+
+  // Accès client persistants en mode présentation.
+  const synthesisLink = document.getElementById('presentation-synthesis');
+  if (PROJECT_SLUG === 'residence-verandas') {
+    synthesisLink.href = `projects/${encodeURIComponent(PROJECT_SLUG)}/planches/cahier.pdf`;
+    synthesisLink.hidden = false;
+  }
+  const estimateDialog = document.getElementById('presentation-estimate');
+  const estimateOpen = document.getElementById('presentation-estimate-open');
+  const estimateStanding = document.getElementById('presentation-standing');
+  const estimateData = document.getElementById('presentation-estimate-data');
+  function updatePresentationEstimate() {
+    if (typeof CostEstimate === 'undefined') return;
+    HOUSE_DATA.estimate = { ...HOUSE_DATA.estimate, profile: 'lefisk', standing: estimateStanding.value };
+    const result = CostEstimate.estimate(HOUSE_DATA, CostEstimate.settings(HOUSE_DATA.estimate));
+    const quantities = result.quantities;
+    const format = value => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(value);
+    estimateData.replaceChildren();
+    [['Surface habitable', `${format(quantities.habitable)} m²`], ['Annexes', `${format(quantities.annexes)} m²`], ['Toiture estimée', `${format(quantities.roofArea)} m²`], ['Budget indicatif', `${CostEstimate.formatXAF(result.total.low)} – ${CostEstimate.formatXAF(result.total.high)}`]].forEach(([label, value]) => {
+      const row = document.createElement('p');
+      row.append(Object.assign(document.createElement('span'), { textContent: label }), Object.assign(document.createElement('strong'), { textContent: value }));
+      estimateData.append(row);
+    });
+  }
+  estimateOpen.addEventListener('click', () => {
+    updatePresentationEstimate();
+    if (estimateDialog.showModal) estimateDialog.showModal();
+    else estimateDialog.setAttribute('open', '');
+  });
+  estimateStanding.addEventListener('change', updatePresentationEstimate);
+  document.getElementById('btn-present').addEventListener('click', () => {
+    if (document.body.classList.contains('is-presenting')) return;
+    setComparison(false);
+    houseScene.setClearanceGuides(false);
+    clearanceButton.setAttribute('aria-pressed', 'false');
+    clearanceButton.textContent = 'Gabarits indicatifs';
+  });
+
+  const levelPicker = document.getElementById('visit-level');
+  const atlas = document.getElementById('cockpit-tools'), reader = document.getElementById('cockpit-edition');
+  const zone = document.getElementById('zone-card'), edition = HOUSE_DATA.edition;
+  const hasAtlas = !!edition?.zonePhotos && !portalContext?.decision;
+  let zoneRoom;
+  async function browseEdition(page) {
+    if (!hasAtlas) return;
+    await window.ProjectCoverReady;
+    if (!window.renderProjectEdition || !inVisit()) return;
+    window.renderProjectEdition(HOUSE_DATA, PROJECT_SLUG, reader.querySelector('article'), page);
+    reader.showModal();
+  }
+  if (hasAtlas) {
+    atlas.hidden = false;
+    atlas.lastElementChild.append(levelPicker, document.getElementById('guided-select-label'));
+    atlas.querySelector('[data-atlas="plans"]').onclick = () => browseEdition(0);
+    atlas.querySelector('[data-atlas="photos"]').onclick = () => browseEdition(edition.sheets.length);
+    atlas.querySelector('[data-atlas="renders"]').onclick = () => document.getElementById('btn-renders').click();
+    const estimatePanel=document.getElementById('atlas-estimate'), estimateOutput=document.getElementById('atlas-estimate-data'), standing=document.getElementById('atlas-standing');
+    atlas.querySelector('[data-atlas="estimate"]').onclick=()=>{estimatePanel.hidden=!estimatePanel.hidden;if(!estimatePanel.hidden)updateAtlasEstimate();};
+    function updateAtlasEstimate(){
+      HOUSE_DATA.estimate={...HOUSE_DATA.estimate,profile:'lefisk',standing:standing.value};
+      const settings=CostEstimate.settings(HOUSE_DATA.estimate);
+      const result=CostEstimate.estimate(HOUSE_DATA,settings),q=result.quantities,fmt=n=>new Intl.NumberFormat('fr-FR',{maximumFractionDigits:1}).format(n);
+      estimateOutput.replaceChildren();
+      const rows=[['Surface habitable',`${fmt(q.habitable)} m²`],['Annexes',`${fmt(q.annexes)} m²`],['Parpaings 15 / 20',`${fmt(result.materials.find(x=>x.id==='parpaing-15')?.quantity||0)} / ${fmt(result.materials.find(x=>x.id==='parpaing-20')?.quantity||0)} unités`],['Toiture estimée',`${fmt(q.roofArea)} m²`],['Carrelages',`${fmt(q.tiledArea)} m²`],['Budget indicatif',`${CostEstimate.formatXAF(result.total.low)} – ${CostEstimate.formatXAF(result.total.high)}`]];
+      for(const [label,value] of rows){const line=document.createElement('p');line.append(Object.assign(document.createElement('span'),{textContent:label}),Object.assign(document.createElement('strong'),{textContent:value}));estimateOutput.append(line);}
+      document.getElementById('atlas-bqe').onclick=()=>{const csv=CostEstimate.bordereauCSV(result,HOUSE_DATA.meta.name),url=URL.createObjectURL(new Blob(['\\ufeff',csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='residence-des-verandas-bqe.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+    }
+    standing.addEventListener('change',updateAtlasEstimate);
+    zone.querySelector('[data-zone="plan"]').onclick = () => browseEdition(zoneRoom.id === 'outside' ? 0 : zoneRoom.level ? 2 : 1);
+    zone.querySelector('[data-zone="photo"]').onclick = () => browseEdition(edition.sheets.length + edition.zonePhotos[zoneRoom.id]);
+  }
+  function syncZone(room) {
+    if (!hasAtlas || room === zoneRoom) return;
+    zoneRoom = room;
+    const photo = room && edition.photos[edition.zonePhotos[room.id]];
+    zone.hidden = !photo;
+    if (!photo) return;
+    zone.querySelector('strong').textContent = room.name;
+    zone.querySelector('span').textContent = Number.isFinite(room.area) ? `${clientLevel(room.level)} · env. ${clientNumber.format(room.area)} m²` : 'Approche extérieure';
+    zone.querySelector('[data-zone="plan"]').textContent = room.id === 'outside' ? 'Plan de masse' : 'Plan du niveau';
+    zone.querySelector('[data-zone="photo"]').textContent = `Voir la perspective · ${photo.title}`;
+  }
+  levelPicker.hidden = !HOUSE_DATA.edition || Boolean(portalContext?.decision);
+  const ceiling = new THREE.Plane(new THREE.Vector3(0, -1, 0), 12);
+  const base = new THREE.Plane(new THREE.Vector3(0, 1, 0), 2);
+  let sliceTarget = null;
+  levelPicker.addEventListener('change', () => {
+    hidePhotoOverlay();
+    if (houseScene.sectionEnabled) toggleSectionCut();
+    houseScene.setElevation(1);
+    const h = HOUSE_DATA.config.floorHeight;
+    sliceTarget = levelPicker.value === 'all' ? [12, 2] : levelPicker.value === '0' ? [h - .7, 2] : [2*h - .7, -h + .2];
+    houseScene.renderer.clippingPlanes = [ceiling, base];
+  });
   const pdfButton = document.getElementById('client-pdf');
   const pdfStatus = document.getElementById('client-pdf-status');
   let exportingPDF = false;
@@ -970,7 +1159,7 @@ window.startProjectViewer = () => {
   const minimap = new MiniMap(minimapCanvas, houseScene, (clickedRoom) => {
     // Si l'utilisateur clique sur une pièce de la minimap
     if (currentMode === 'walk') {
-      walkController.start(clickedRoom.center);
+      walkController.start(clickedRoom.center, clickedRoom.level);
     } else {
       // Trouver l'étape de scroll la plus proche de cette pièce
       jumpToRoom(clickedRoom);
@@ -984,11 +1173,13 @@ window.startProjectViewer = () => {
 
   function displayRoom(room, fallback = 'Vue d’ensemble') {
     roomNameEl.textContent = room?.name || fallback;
+    syncZone(room);
     roomSurfaceEl.textContent = Number.isFinite(room?.area) ? `${clientNumber.format(room.area)} m²${room.habitable ? '' : ' · annexe'}` : '';
     roomDescEl.textContent = room?.desc || '';
   }
 
   function setMode(newMode) {
+    climb = null;
     releaseView(false);
     currentMode = newMode;
     guidedActions.hidden = guidedAction.hidden = guideSelectLabel.hidden = currentMode === 'walk';
@@ -997,7 +1188,7 @@ window.startProjectViewer = () => {
 
     if (currentMode === 'walk') {
       scrollTour.update(1.0); // S'assurer que les murs sont à 100%
-      walkController.start(activeRoom ? activeRoom.center : null);
+      walkController.start(activeRoom?.center, activeRoom?.level);
       modeBadgeEl.textContent = 'Visite libre';
       modeBadgeEl.classList.add('is-fps');
       btnToggleMode.textContent = 'Revenir à la visite guidée';
@@ -1388,6 +1579,33 @@ window.startProjectViewer = () => {
 
   // --- BOUCLE D'ANIMATION PRINCIPALE (60 FPS) ---
   let lastFrame = performance.now();
+  const stairsButton = document.getElementById('take-stairs');
+  stairsButton.hidden = !houseScene.stairPath || !!portalContext?.decision;
+  stairsButton.onclick = () => {
+    if (tourRecording || climb) return;
+    if (houseScene.sectionEnabled) toggleSectionCut();
+    if (houseScene.explodedTarget) toggleExploded();
+    levelPicker.value='all'; sliceTarget=null; houseScene.renderer.clippingPlanes=[];
+    setMode('walk'); walkController.clearMovement();
+    climb = {elapsed:0,lastStep:-1};
+    stairsButton.dataset.progress='0.00';
+    guidedAnnouncement.textContent='Montée vers le palier de l’étage : 16 marches, deux volées.';
+  };
+  function advanceStair(dt) {
+    const pts=houseScene.stairPath, end=pts.length-1;
+    climb.elapsed+=dt;
+    const t=motion.matches?end:Math.min(end,climb.elapsed*3.6), i=Math.min(end-1,Math.floor(t)), f=t-i;
+    stairsButton.dataset.progress=(t/end).toFixed(2);
+    const step=Math.min(16,Math.ceil(t/end*16));
+    if(step!==climb.lastStep){climb.lastStep=step;guidedAnnouncement.textContent=`Montée de l’escalier : marche ${step} sur 16${i>=9?' · palier de retournement':' .'}`;}
+    const a=pts[i], b=pts[i+1], camera=houseScene.camera;
+    camera.position.lerpVectors(a,b,f);
+    camera.position.y=1.59+a.y+(b.y-a.y)*f*f*(3-2*f);
+    const heading=Math.atan2(a.x-b.x,a.z-b.z);
+    const diff=Math.atan2(Math.sin(heading-walkController.yaw),Math.cos(heading-walkController.yaw));
+    walkController.yaw+=diff*(1-Math.exp(-dt*9)); walkController.pitch=-.13; walkController.updateCameraRotation();
+    if(t===end){walkController.start(pts[end],1);walkController.yaw=-Math.PI/2;walkController.updateCameraRotation();climb=null;guidedAnnouncement.textContent='Arrivée au palier de l’étage.';}
+  }
   let slowTime = 0;
   function animate() {
     requestAnimationFrame(animate);
@@ -1403,9 +1621,18 @@ window.startProjectViewer = () => {
       if (slowTime > 3) { setQuality('normal'); slowTime = 0; }
     }
     houseScene.updateRealism(dt);
+    if (sliceTarget) {
+      const blend = matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : 1 - Math.exp(-dt * 10);
+      ceiling.constant += (sliceTarget[0] - ceiling.constant) * blend;
+      base.constant += (sliceTarget[1] - base.constant) * blend;
+      if (Math.abs(ceiling.constant - sliceTarget[0]) + Math.abs(base.constant - sliceTarget[1]) < .015) {
+        [ceiling.constant, base.constant] = sliceTarget; sliceTarget = null;
+        if (levelPicker.value === 'all') houseScene.renderer.clippingPlanes = [];
+      }
+    }
 
     if (currentMode === 'walk') {
-      walkController.update();
+      if(climb) advanceStair(dt); else walkController.update();
     }
 
     // Plafonds seulement à hauteur d'homme : intérieur réaliste, maquette ouverte vue d'en haut
@@ -1419,7 +1646,8 @@ window.startProjectViewer = () => {
   }
 
   // Démarrage initial
-  if (clientTools.solarOptions.configured) clientTools.solarOptions.restore(clientTools.solarOptions.configured, SolarStudy.day);
+  const openingHour = HOUSE_DATA.config.openingHour ?? SolarStudy.day;
+  if (clientTools.solarOptions.configured || HOUSE_DATA.config.openingHour != null) clientTools.solarOptions.restore(clientTools.solarOptions.configured, openingHour);
   updateFromScroll();
   if (share.variant) variants.apply(share.variant);
   if (share.invalid) { document.getElementById('client-variants').open = true; variants.status.textContent = 'Lien partagé incomplet ou incompatible avec ce projet.'; }
@@ -1431,7 +1659,7 @@ window.startProjectViewer = () => {
   }
   document.addEventListener('workspace:enter-visit', () => houseScene.onResize());
   document.addEventListener('workspace:reveal-visit', () => {
-    if (guidedIndex === 0 && !pinnedView && !motion.matches) navigateStage(1, true);
+    if (guidedIndex === 0 && !pinnedView) navigateStage(1, !motion.matches);
   });
   document.addEventListener('workspace:leave-visit', () => {
     if (tourRecording) tourRecording.stopRequested = true;

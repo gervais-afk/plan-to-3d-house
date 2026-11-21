@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta name="theme-color" content="#f4f2eb" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#141a16" media="(prefers-color-scheme: dark)">
-  <meta name="description" content="Le dossier architectural, du plan à la visite 3D.">
-  <title>Plan to 3D — Dossier architectural</title>
+  <meta name="theme-color" content="#F7F5F0" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161C19" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="ArchiCam Studio — Le cockpit architectural immersif. Visite 3D, héliodon, gabarits et estimation budgétaire.">
+  <title>Résidence des Vérandas — ArchiCam Studio</title>
   <meta property="og:type" content="website">
   <meta property="og:locale" content="fr_FR">
-  <meta property="og:title" content="Dossier architectural — du plan à la visite 3D">
-  <meta property="og:description" content="Plans, rendus et maquette interactive du projet.">
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Crect width='36' height='36' rx='6' fill='%231f2a1f'/%3E%3Cg fill='none' stroke='%23dcea9f'%3E%3Cpath d='M6 28V8h24v20H6Zm0-11h14V8m0 9v11m0-5h10' stroke-width='1.9'/%3E%3Cpath d='M9 11h8v3H9zm14 15h4' stroke-width='1.3'/%3E%3C/g%3E%3C/svg%3E">
+  <meta property="og:title" content="Résidence des Vérandas — ArchiCam Studio">
+  <meta property="og:description" content="Le cockpit architectural immersif. Visite 3D, héliodon, gabarits et estimation budgétaire.">
+  <link rel="icon" type="image/svg+xml" href="assets/archicam-icon.svg">
   <meta name="color-scheme" content="light dark">
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/motion.css">
@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="css/accueil.css">
   <link rel="stylesheet" href="css/presentation.css">
   <link rel="stylesheet" href="css/workspace.css">
+  <link rel="stylesheet" href="css/calmCockpit.css">
   <script src="js/portal-context.js" defer></script>
   <script src="js/workspace.js" defer></script>
 </head>
@@ -30,10 +31,18 @@
   <noscript><p class="workspace-status">Activez JavaScript pour parcourir le dossier et la maquette.</p></noscript>
   <template id="viewer-template">
   <section id="visit-workspace" aria-label="Visite 3D" hidden>
+  <aside id="zone-card" hidden aria-label="Fiche de la pièce"><strong></strong><span></span><button type="button" data-zone="plan">Plan du niveau</button><button type="button" data-zone="photo"></button></aside>
+  <dialog id="cockpit-edition" aria-label="Cahier de la résidence"><form method="dialog"><button>Revenir à la visite</button></form><article></article></dialog>
 
 
   <!-- Conteneur 3D WebGL fixé en arrière-plan -->
   <div id="webgl-container" tabindex="-1" role="group" aria-label="Maquette 3D" aria-describedby="fps-hint"></div>
+  <aside id="source-plan-pane" aria-label="Plan 2D source" hidden>
+    <div class="source-plan-heading"><span>DOCUMENT SOURCE</span><strong>Plan 2D original</strong></div>
+    <img id="source-plan-image" alt="Plan original du projet, présenté sans recalage sur la maquette 3D">
+    <p id="source-plan-note">Document source non calibré — affiché séparément, sans superposition ni alignement géométrique avec la maquette interprétée.</p>
+  </aside>
+  <button id="comparison-divider" type="button" role="separator" tabindex="0" aria-label="Redimensionner les vues Plan 2D source et Maquette 3D" aria-orientation="vertical" aria-valuemin="30" aria-valuemax="70" aria-valuenow="50" hidden><span aria-hidden="true">↔</span></button>
   <p id="viewer-error" class="viewer-error" role="alert" hidden>La vue 3D ne peut pas démarrer. Vérifiez la connexion et la prise en charge de WebGL, puis <a href="">réessayez</a>.</p>
   <noscript><p class="viewer-error">Activez JavaScript pour ouvrir la visite 3D.</p></noscript>
 
@@ -56,6 +65,10 @@
     <!-- En-tête / Cartouche d'architecte -->
     <header class="top-bar">
       <div class="viewer-identity interactive">
+        <div class="viewer-brand-mark" id="viewer-brand-name" aria-label="ArchiCam Studio">
+          <img class="viewer-brand-logo viewer-brand-logo-light" src="assets/archicam-logo-horizontal.svg" alt="ArchiCam Studio" height="34">
+          <img class="viewer-brand-logo viewer-brand-logo-dark" src="assets/archicam-logo-dark.svg" alt="ArchiCam Studio" height="34">
+        </div>
         <p class="brand-tag">MAQUETTE INTERACTIVE</p>
         <p class="project-title">Visite architecturale</p>
         <p class="project-meta" hidden></p>
@@ -69,6 +82,9 @@
         <div class="btn-row viewer-primary">
           <span id="mode-badge" class="mode-badge">Visite guidée</span>
           <button id="btn-renders" type="button" class="btn-toggle btn-small" aria-haspopup="dialog"><svg class="i" aria-hidden="true"><use href="#i-gallery"></use></svg> Galerie</button>
+          <button id="btn-plan-compare" type="button" class="btn-toggle btn-small" aria-pressed="false">Comparer plan / 3D</button>
+          <button id="btn-clearance-guides" type="button" class="btn-toggle btn-small" aria-pressed="false" aria-describedby="clearance-note" title="Repères indicatifs — gabarits d’encombrement visuels et non normatifs">Gabarits indicatifs</button>
+          <span id="clearance-note" class="sr-only">Repères indicatifs : bandes théoriques de 90 centimètres autour de certains meubles et arcs simplifiés de portes. Ils ne valident pas la conformité des circulations.</span>
           <button id="btn-present" type="button" class="btn-toggle btn-small" aria-pressed="false" title="Plein écran sans outils ; flèches pour avancer, Échap pour quitter"><svg class="i" aria-hidden="true"><use href="#i-present"></use></svg> <span>Présenter</span></button>
           <a id="portal-account" href="portal.html" class="btn-toggle btn-small" hidden>Espace privé</a>
         </div>
@@ -93,8 +109,14 @@
               </div>
               <div class="client-sun">
                 <label for="client-hour"><span>Ensoleillement indicatif</span><output id="client-hour-value" for="client-hour">13h00</output></label>
-                <div><input id="client-hour" type="range" min="7" max="20" step="0.25" value="13">
+                <div><input id="client-hour" type="range" min="7" max="20" step="0.25" value="13" aria-label="Course du soleil, heure de la journée">
                   <span class="client-compass" id="client-compass" title="Nord sur le plan, vu du dessus">N <span aria-hidden="true">↑</span></span>
+                </div>
+                <div class="solar-presets" role="group" aria-label="Repères de la course du soleil">
+                  <button type="button" data-solar-hour="8">8 h <span>Matin</span></button>
+                  <button type="button" data-solar-hour="13">13 h <span>Midi</span></button>
+                  <button type="button" data-solar-hour="17">17 h <span>Golden Hour</span></button>
+                  <button type="button" data-solar-hour="20">20 h <span>Soir</span></button>
                 </div>
                 <div id="client-hour-scale" class="client-hour-scale">07h00 — simulation indicative — 20h00</div>
                 <label class="client-check"><input id="solar-geo" type="checkbox"> Étude par lieu et date</label>
@@ -232,7 +254,10 @@
           <button type="button" id="guided-next" class="btn-toggle dock-arrow" aria-label="Étape suivante">→</button>
         </div>
         <button type="button" id="guided-action" class="btn-toggle guided-next">Démarrer la visite</button>
+        <details id="cockpit-tools" hidden><summary>Atlas de visite</summary><div><button type="button" data-atlas="plans">Cahier de plans</button><button type="button" data-atlas="photos">Perspectives HD</button><button type="button" data-atlas="estimate">Estimation &amp; devis</button><button type="button" data-atlas="renders">Studio de rendus IA</button></div><section id="atlas-estimate" hidden aria-labelledby="atlas-estimate-title"><h3 id="atlas-estimate-title">Métré &amp; estimation indicative</h3><label>Standing <select id="atlas-standing"><option value="moyen">Moyen standing</option><option value="haut">Haut standing</option></select></label><div id="atlas-estimate-data" aria-live="polite"></div><button type="button" id="atlas-bqe">Télécharger le BQE · CSV</button><small>Ordres de grandeur indicatifs au Cameroun, en FCFA ; prix à confirmer auprès des entreprises. Ce document n’est pas un devis contractuel.</small></section></details>
         <div class="dock-shortcuts">
+          <button type="button" class="btn-toggle" id="take-stairs" hidden>Prendre l’escalier</button>
+          <select id="visit-level" class="btn-toggle" aria-label="Niveau de la maquette" hidden><option value="all">Vue d’ensemble</option><option value="0">Rez-de-chaussée</option><option value="1">Étage</option></select>
           <button type="button" id="btn-section" class="btn-toggle" aria-label="Coupe" aria-keyshortcuts="C" aria-pressed="false"><svg class="i dock-shortcut-icon" aria-hidden="true"><use href="#i-section"></use></svg><span>Coupe</span> <kbd>C</kbd></button>
           <button type="button" id="btn-explode" class="btn-toggle" aria-label="Vue éclatée" aria-keyshortcuts="X" aria-pressed="false"><svg class="i dock-shortcut-icon" aria-hidden="true"><use href="#i-explode"></use></svg><span>Éclaté</span> <kbd>X</kbd></button>
         </div>
@@ -247,6 +272,19 @@
       </div>
     </footer>
   </div>
+  <nav id="presentation-shortcuts" aria-label="Ressources pour le rendez-vous client">
+    <a id="presentation-synthesis" href="" target="_blank" rel="noopener" hidden>Planche de Synthèse ↗</a>
+    <button id="presentation-estimate-open" type="button">Estimation FCFA</button>
+  </nav>
+  <dialog id="presentation-estimate" aria-labelledby="presentation-estimate-title">
+    <form method="dialog"><button class="estimate-close" aria-label="Fermer l’estimation">×</button></form>
+    <p class="estimate-kicker">ORDRE DE GRANDEUR INDICATIF</p>
+    <h2 id="presentation-estimate-title">Estimation budgétaire</h2>
+    <label for="presentation-standing">Niveau de finition</label>
+    <select id="presentation-standing"><option value="moyen">Moyen standing</option><option value="haut">Haut standing</option></select>
+    <div id="presentation-estimate-data" aria-live="polite"></div>
+    <p class="estimate-disclaimer">Estimation indicative en FCFA, à confirmer auprès des entreprises. Ces montants ne constituent pas un devis contractuel.</p>
+  </dialog>
 
   <div id="client-annotations"></div>
   <div id="client-measure-status" role="status" hidden></div>

@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "sejour-veranda-reference",
+      "type": "image",
+      "file": "projects/residence-verandas/generated/images/interieur-sejour-reference.jpg",
+      "preview": "projects/residence-verandas/generated/images/interieur-sejour-reference-apercu.webp",
+      "label": "Séjour / Véranda — vue intérieure de référence (maquette 3D)",
+      "notes": "Capture issue de la maquette Three.js ; vue de référence, et non photographie ni rendu IA.",
+      "room": "living",
+      "catalog": true,
+      "book": true,
+      "cover": false
+    },
+    {
+      "id": "perspective-01",
+      "type": "image",
+      "file": "projects/residence-verandas/generated/images/perspective-01.jpg",
+      "preview": "projects/residence-verandas/generated/images/perspective-01-apercu.webp",
+      "label": "Façade et perron",
+      "catalog": true,
+      "book": true,
+      "cover": true
+    },
+    {
+      "id": "perspective-02",
+      "type": "image",
+      "file": "projects/residence-verandas/generated/images/perspective-02.jpg",
+      "preview": "projects/residence-verandas/generated/images/perspective-02-apercu.webp",
+      "label": "Véranda arrière",
+      "catalog": true,
+      "book": true,
+      "cover": false
+    },
+    {
+      "id": "perspective-03",
+      "type": "image",
+      "file": "projects/residence-verandas/generated/images/perspective-03.jpg",
+      "preview": "projects/residence-verandas/generated/images/perspective-03-apercu.webp",
+      "label": "Portique d’entrée",
+      "catalog": true,
+      "book": true,
+      "cover": false
+    },
+    {
+      "id": "perspective-04",
+      "type": "image",
+      "file": "projects/residence-verandas/generated/images/perspective-04.jpg",
+      "preview": "projects/residence-verandas/generated/images/perspective-04-apercu.webp",
+      "label": "Jardin latéral",
+      "catalog": true,
+      "book": true,
+      "cover": false
+    },
+    {
+      "id": "perspective-05",
+      "type": "image",
+      "file": "projects/residence-verandas/generated/images/perspective-05.jpg",
+      "preview": "projects/residence-verandas/generated/images/perspective-05-apercu.webp",
+      "label": "Terrasse haute",
+      "catalog": true,
+      "book": true,
+      "cover": false
+    }
+  ]
+}

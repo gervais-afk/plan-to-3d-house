@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 120" width="580" height="120">
+  <defs>
+    <!-- Dégradé Or Satiné / Bronze d'architecte multi-reflets -->
+    <linearGradient id="goldLuxury" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#8C6326"/>
+      <stop offset="25%" stop-color="#B38646"/>
+      <stop offset="50%" stop-color="#D9B775"/>
+      <stop offset="75%" stop-color="#F2DFB3"/>
+      <stop offset="100%" stop-color="#A67B3B"/>
+    </linearGradient>
+
+    <!-- Dégradé or pour les traits millimétriques -->
+    <linearGradient id="goldHairline" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E2CCA0" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#9C7334" stop-opacity="0.65"/>
+    </linearGradient>
+
+    <!-- Dégradé de profondeur pour le sceau encre vert-graphite -->
+    <linearGradient id="sealBackground" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1B231E"/>
+      <stop offset="60%" stop-color="#141A16"/>
+      <stop offset="100%" stop-color="#0E1310"/>
+    </linearGradient>
+
+    <!-- Lueur subtile pour l'oculus central -->
+    <filter id="lensGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- ============================================================ -->
+  <!-- 1. LE SCEAU MONOGRAMME (Emblème d'Atelier, 92 × 92 px)         -->
+  <!-- ============================================================ -->
+  <g transform="translate(14, 14)">
+    <!-- Boîtier porteur : Encre vert-graphite profond avec angles architecturaux adoucis -->
+    <rect x="0" y="0" width="92" height="92" rx="20" fill="url(#sealBackground)"/>
+    
+    <!-- Filet extérieur millimétrique -->
+    <rect x="0" y="0" width="92" height="92" rx="20" fill="none" stroke="#B38646" stroke-opacity="0.25" stroke-width="1.2"/>
+    
+    <!-- Filet intérieur de reliure d'art (Double cadre à l'anglaise) -->
+    <rect x="4.5" y="4.5" width="83" height="83" rx="16" fill="none" stroke="#B38646" stroke-opacity="0.14" stroke-width="0.75" stroke-dasharray="3 2"/>
+
+    <!-- Repères de cadrage optique / cibles de géomètre aux 4 angles -->
+    <path d="M 8 15 L 8 8 L 15 8" fill="none" stroke="#D9B775" stroke-width="1" stroke-opacity="0.6"/>
+    <path d="M 84 15 L 84 8 L 77 8" fill="none" stroke="#D9B775" stroke-width="1" stroke-opacity="0.6"/>
+    <path d="M 8 77 L 8 84 L 15 84" fill="none" stroke="#D9B775" stroke-width="1" stroke-opacity="0.6"/>
+    <path d="M 84 77 L 84 84 L 77 84" fill="none" stroke="#D9B775" stroke-width="1" stroke-opacity="0.6"/>
+
+    <!-- L'Arche circulaire de vision (Caméra & Courbure de Véranda) -->
+    <circle cx="46" cy="46" r="27.5" fill="none" stroke="url(#goldHairline)" stroke-width="0.8" stroke-dasharray="2.5 2" stroke-opacity="0.5"/>
+    <path d="M 31 58 A 25 25 0 1 1 66 46" fill="none" stroke="url(#goldLuxury)" stroke-width="2.8" stroke-linecap="round"/>
+
+    <!-- Le Portique Monumental (Le « A » d'ArchiCam) -->
+    <path d="M 28 71 L 44 24 L 48 24 L 64 71" fill="none" stroke="url(#goldLuxury)" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Entablement / Ligne d'horizon -->
+    <line x1="34" y1="55" x2="58" y2="55" stroke="url(#goldLuxury)" stroke-width="3" stroke-linecap="round"/>
+
+    <!-- Embase architecturale (Socles des jambages) -->
+    <line x1="25" y1="72" x2="31" y2="72" stroke="url(#goldHairline)" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="61" y1="72" x2="67" y2="72" stroke="url(#goldHairline)" stroke-width="1.8" stroke-linecap="round"/>
+
+    <!-- Oculus / Cœur Optique de l'Objectif 3D -->
+    <circle cx="46" cy="39" r="3.2" fill="url(#goldLuxury)" filter="url(#lensGlow)"/>
+    <circle cx="46" cy="39" r="1.2" fill="#141A16"/>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- 2. BLOC TYPOGRAPHIQUE ARCHITECTURAL (Éditorial & Précision)  -->
+  <!-- ============================================================ -->
+  <g transform="translate(130, 0)">
+    
+    <!-- Ligne de Titre Principale : ARCHICAM -->
+    <text x="0" y="55" 
+          font-family="'Source Serif 4', 'Source Serif', Georgia, 'Times New Roman', serif" 
+          font-size="34" 
+          font-weight="600" 
+          letter-spacing="4.5" 
+          fill="#161C19">ARCHICAM</text>
+
+    <!-- Point architectural de signature or après ARCHICAM -->
+    <circle cx="270" cy="46" r="3" fill="url(#goldLuxury)"/>
+
+    <!-- Ligne Médiane : STUDIO & Cible de Centrage -->
+    <text x="2" y="80" 
+          font-family="'Manrope', -apple-system, BlinkMacSystemFont, sans-serif" 
+          font-size="13" 
+          font-weight="800" 
+          letter-spacing="7" 
+          fill="#B38646">STUDIO</text>
+
+    <!-- Filet séparateur d'orfèvrerie avec losange central (Signature de Maître d'Œuvre) -->
+    <line x1="94" y1="76" x2="152" y2="76" stroke="#B38646" stroke-width="1" stroke-opacity="0.45"/>
+    <polygon points="156,76 159,73 162,76 159,79" fill="#B38646"/>
+    <line x1="166" y1="76" x2="224" y2="76" stroke="#B38646" stroke-width="1" stroke-opacity="0.45"/>
+
+    <!-- Ligne Inférieure : Baseline de Rigueur Professionnelle -->
+    <text x="2" y="102" 
+          font-family="'Manrope', -apple-system, BlinkMacSystemFont, sans-serif" 
+          font-size="9" 
+          font-weight="700" 
+          letter-spacing="3.2" 
+          fill="#616A64">LE COCKPIT ARCHITECTURAL IMMERSIF</text>
+  </g>
+</svg>

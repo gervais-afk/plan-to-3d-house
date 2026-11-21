@@ -16,17 +16,23 @@
   font-display: swap;
   font-weight: 200 900;
 }
+@font-face {
+  font-family: "Source Serif 4";
+  src: url("../assets/fonts/source-serif-4.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 200 900;
+}
 
 :root {
   /* Surfaces claires */
-  --paper: #f4f2eb;
-  --paper-2: #ebe8de;
-  --surface: #fbfaf6;
+  --paper: #F7F5F0;
+  --paper-2: #EEEAE2;
+  --surface: #FCFBF8;
   --rule: #cdcec1;
   --rule-soft: #e0dfd3;
   /* Encre */
-  --ink: #1b2320;
-  --ink-2: #4a544d;
+  --ink: #161C19;
+  --ink-2: #46504A;
   --muted: #5f6a63;
   /* Surfaces sombres (galerie, visionneuse, couverture) */
   --night: #141a16;
@@ -37,7 +43,7 @@
   --on-night-muted: #9aa597;
   --night-rule: rgba(238, 240, 232, 0.14);
   /* Accent unique sable / or */
-  --accent: #b78a3c;
+  --accent: #B38646;
   --accent-soft: #d8c7a0;
   --accent-ink: #7a5a20;      /* texte d'accent sur fond clair, contraste AA */
   --accent-wash: #f1e8d4;
@@ -49,7 +55,7 @@
   --focus-on-night: #e4cf9a;
 
   /* Typographie */
-  --serif: "Source Serif", Georgia, "Times New Roman", serif;
+  --serif: "Source Serif 4", "Source Serif", Georgia, "Times New Roman", serif;
   --sans: Manrope, "Segoe UI", system-ui, sans-serif;
   --text-xs: 0.72rem;
   --text-sm: 0.82rem;

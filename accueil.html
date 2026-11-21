@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta name="theme-color" content="#f4f2eb" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#141a16" media="(prefers-color-scheme: dark)">
-  <meta name="description" content="Le dossier architectural, du plan à la visite 3D.">
-  <title>Plan to 3D — Dossier architectural</title>
+  <meta name="theme-color" content="#F7F5F0" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161C19" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="ArchiCam Studio — Le cockpit architectural immersif. Visite 3D, héliodon, gabarits et estimation budgétaire.">
+  <title>ArchiCam Studio — Dossier architectural</title>
   <meta property="og:type" content="website">
   <meta property="og:locale" content="fr_FR">
-  <meta property="og:title" content="Dossier architectural — du plan à la visite 3D">
-  <meta property="og:description" content="Plans, rendus et maquette interactive du projet.">
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Crect width='36' height='36' rx='6' fill='%231f2a1f'/%3E%3Cg fill='none' stroke='%23dcea9f'%3E%3Cpath d='M6 28V8h24v20H6Zm0-11h14V8m0 9v11m0-5h10' stroke-width='1.9'/%3E%3Cpath d='M9 11h8v3H9zm14 15h4' stroke-width='1.3'/%3E%3C/g%3E%3C/svg%3E">
+  <meta property="og:title" content="ArchiCam Studio — Dossier architectural">
+  <meta property="og:description" content="Le cockpit architectural immersif. Plans, rendus et maquette interactive du projet.">
+  <link rel="icon" type="image/svg+xml" href="assets/archicam-icon.svg">
   <meta name="color-scheme" content="light dark">
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/motion.css">
@@ -28,15 +28,14 @@
   <div id="editorial-workspace">
   <a href="#contenu" class="skip">Aller au projet</a>
   <header class="masthead shell">
-    <a class="brand" id="home-brand" href="accueil.html" aria-label="Plan to 3D, accueil">
-      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 36 36" fill="none"><path d="M6 28V8h24v20H6Zm0-11h14V8m0 9v11m0-5h10" stroke="currentColor" stroke-width="1.6"/><path d="M9 11h8v3H9zm14 15h4" stroke="currentColor" stroke-width="1.1"/></svg></span>
-      <img id="home-brand-logo" alt="" hidden>
-      <span id="home-brand-name">Plan / 3D</span>
+    <a class="brand" id="home-brand" href="accueil.html" aria-label="ArchiCam Studio, accueil">
+      <img id="home-brand-logo" src="assets/archicam-logo-horizontal.svg" alt="ArchiCam Studio" height="36">
     </a>
     <nav class="workspace-nav" aria-label="Sections du projet">
       <a href="#visite" data-view="visit">Visite 3D</a>
       <a href="#planbook-preview" data-view="dossier">Dossier <span>&amp; Plans</span></a>
       <a href="#workspace-estimate" data-view="estimate">Estimation</a>
+      <a id="home-synthesis-nav" href="projects/residence-verandas/planches/cahier.pdf" aria-label="Planche de Synthèse" title="Planche de Synthèse" target="_blank" rel="noopener" hidden>Synthèse</a>
       <a href="#workspace-gallery" data-view="gallery">Galerie</a>
     </nav>
     <nav class="masthead-links" aria-label="Navigation principale">
@@ -64,7 +63,9 @@
         <div class="cover-signature" id="cover-signature" aria-label="Signature du cabinet"><img id="cover-logo" alt="" hidden><span id="cover-cabinet-name">Plan / 3D</span></div>
         <div class="cover-edition"><span>Édition</span><time id="cover-edition-date"></time></div>
         <div class="cover-actions">
-          <a id="cover-enter" class="primary" data-view="visit" href="index.html">Découvrir en 3D <span aria-hidden="true">↓</span></a>
+          <a id="cover-enter" class="primary" data-view="visit" href="index.html">Visite 3D <span aria-hidden="true">↓</span></a>
+          <a id="cover-synthesis" class="cover-print" href="projects/residence-verandas/planches/cahier.pdf" target="_blank" rel="noopener" hidden>Planche de Synthèse <span aria-hidden="true">↗</span></a>
+          <a id="cover-estimate" class="cover-print" data-view="estimate" href="#workspace-estimate">Estimation <span aria-hidden="true">↓</span></a>
           <button class="cover-print" type="button" data-print="catalog">Imprimer l’aperçu A4</button>
         </div>
       </div>
@@ -124,7 +125,7 @@
       <p class="section-kicker"><span>03</span> / CAHIER DE PLANS</p>
       <div class="planbook-cover" id="planbook-cover">
         <div class="planbook-heading">
-          <div class="planbook-signature" aria-label="Signature du cabinet"><img id="planbook-logo" alt="" hidden><span id="planbook-cabinet-name">Plan / 3D</span></div>
+          <div class="planbook-signature" id="planbook-signature" aria-label="Signature ArchiCam Studio"><img id="planbook-logo" src="assets/archicam-logo-horizontal.svg" alt="ArchiCam Studio"><span id="planbook-cabinet-name" hidden>ArchiCam Studio</span></div>
           <span class="planbook-rule"></span><p class="planbook-mark">DOSSIER TECHNIQUE · APERÇU</p><button class="cover-print" type="button" data-print="planbook">Imprimer l’aperçu A4</button>
         </div>
         <div class="planbook-drawing" id="planbook-drawing" aria-label="Dessin au trait issu du projet"></div>
@@ -142,6 +143,7 @@
           <p class="no-scale" id="planbook-scale-notice">Aperçu — sans échelle</p>
         </div>
       </div>
+      <article id="edition-reader" hidden aria-label="Collection de planches"></article>
       <p class="workspace-export"><button type="button" class="cover-print" id="workspace-book">Composer le cahier A3</button></p>
       <div class="planbook-contents" id="planbook-contents-page"><p class="section-kicker">DOCUMENTS DISPONIBLES</p><h3>Sommaire</h3><ol id="planbook-contents"></ol><p id="planbook-empty" hidden>Aucun document ni plan de niveau disponible.</p></div>
     </section>
