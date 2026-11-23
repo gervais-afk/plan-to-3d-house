@@ -12,7 +12,7 @@ const ViewOrder = (() => {
 
   function category(item, text) {
     const words = text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-    if (/\bplan\b|masse/.test(words)) return 'plan';
+    if (/\bplan\b|masse|coupe/.test(words)) return 'plan';
     if (/facade|porche|entree/.test(words)) return 'facade';
     if (/aerien|ensemble|drone|survol/.test(words)) return 'aerial';
     if (item.room === 'living' || /sejour|salon|living/.test(words)) return 'living';
@@ -67,7 +67,8 @@ const ViewOrder = (() => {
       const kind = category(item, `${item.id || ''} ${label} ${source.split('/').pop()}`);
       return [{ id: String(item.id || ''), label, source, preview: pathInProject(item.preview, slug), reference: pathInProject(item.reference, slug), notes,
         category: kind, rank: item.cover === true ? RANK.cover : RANK[kind], kind: KIND[kind], alt: notes ? `${label} : ${notes}` : label, published: true,
-        catalog: item.catalog === true || item.catalog === undefined, book: item.book === true, room: item.room || null }];
+        catalog: item.catalog === true || item.catalog === undefined, book: item.book === true, room: item.room || null,
+        fidelity: item.fidelity && typeof item.fidelity === 'object' ? item.fidelity : null, fidelityAccepted: item.fidelityAccepted === true }];
     });
     const captures = (media?.renders || []).flatMap(value => {
       const source = pathInProject(value, slug);

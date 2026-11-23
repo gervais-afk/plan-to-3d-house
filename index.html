@@ -211,6 +211,7 @@
                 <button type="button" id="btn-timelapse" class="btn-toggle btn-small">Chantier 4D</button>
                 <button type="button" id="btn-photo-mode" class="btn-toggle btn-small is-active" title="Touche F" aria-pressed="true">Mode photo</button>
                 <button type="button" id="btn-export-video" class="btn-toggle btn-small">Exporter l’animation vidéo</button>
+                <button type="button" id="btn-ai-sequence" class="btn-toggle btn-small" title="Images par images, profondeur et contours, pour Runway, Luma ou ComfyUI">Séquence pour l’IA</button>
               </div>
             </div>
           </details>
@@ -330,9 +331,11 @@
         <div id="book-images" class="book-images" role="group" aria-labelledby="book-images-title"></div>
       </section>
       <section class="book-block" aria-labelledby="book-annex-title">
-        <h3 id="book-annex-title"><span>3</span> Vos PDF en annexe <small>facultatif</small></h3>
+        <h3 id="book-annex-title"><span>3</span> Vos planches PDF <small>architecte, BET — facultatif</small></h3>
+        <p class="book-note">Chaque page est identifiée d’après son cartouche et son contenu (plan de distribution, coffrage, façade, coupe…), puis rangée à sa place dans le cahier. Corrigez une proposition si besoin.</p>
         <label class="btn-toggle btn-small book-files">＋ Ajouter des PDF<input id="book-files" type="file" accept="application/pdf,.pdf" multiple></label>
-        <ul id="book-files-list" class="book-files-list"></ul>
+        <ul id="book-files-list" class="book-files-list book-sheet-list"></ul>
+        <div id="book-completeness" class="book-completeness" hidden></div>
       </section>
       <section class="book-block book-approve" aria-labelledby="book-approve-title">
         <h3 id="book-approve-title"><span>4</span> Approbation</h3>
@@ -351,7 +354,7 @@
     <div class="rg-header">
       <div>
         <h2 id="rg-title" class="rg-title">Galerie des vues</h2>
-        <p class="rg-intro">Les vues 3D sont capturées gratuitement depuis la maquette. Les rendus IA sont facultatifs et facturés par appel.</p>
+        <p class="rg-intro">Les vues 3D sont capturées depuis la maquette. Un rendu IA est une proposition d’ambiance payante : comparez-le à la source, car l’IA peut modifier des détails. Non contractuel.</p>
         <p id="rg-status" class="rg-status" role="status"></p>
       </div>
       <div class="rg-actions">
@@ -404,6 +407,22 @@
         <div id="rg-prompt-text"></div>
       </div>
     </dialog>
+  </dialog>
+
+  <dialog id="rg-publish-dialog" class="rg-publish-dialog" aria-labelledby="rg-publish-title">
+    <form method="dialog" id="rg-publish-form">
+      <p class="rg-publish-kicker">VALIDER LE RENDU IA</p>
+      <h2 id="rg-publish-title">Où souhaitez-vous le publier ?</h2>
+      <p id="rg-publish-caption" class="rg-publish-caption"></p>
+      <p class="rg-publish-warning">L’image est une proposition d’ambiance générée par IA. Vérifiez-la face à la maquette avant publication ; elle ne remplace pas un document technique.</p>
+      <label><input id="rg-publish-catalog" type="checkbox"> Catalogue d’intérieurs</label>
+      <label><input id="rg-publish-book" type="checkbox"> Images d’ambiance du cahier</label>
+      <p id="rg-publish-status" role="status"></p>
+      <div class="rg-publish-actions">
+        <button type="submit" value="later" class="btn-toggle btn-small">Plus tard</button>
+        <button id="rg-publish-save" type="submit" value="save" class="btn-toggle btn-small" autofocus>Enregistrer mes choix</button>
+      </div>
+    </form>
   </dialog>
 
   </section>

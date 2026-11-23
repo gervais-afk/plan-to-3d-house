@@ -86,6 +86,8 @@ Rules:
     return out;
   }
 
+  const assessProposal = window.PlanProposalReview.assessProposal;
+
   function convert(ai, img, opts) {
     const S = E.S;
     const pi = S.p.config.planImage;
@@ -185,7 +187,20 @@ Rules:
   // Dialogue
   // ---------------------------------------------------------------------------
   const sel = $('ai-model');
+  let pendingProposal = null;
+  const applyButton = $('ai-apply');
+  const review = $('ai-review');
   sel.innerHTML = MODELS.map(m => `<option value="${m.id}">${m.label}</option>`).join('');
+  applyButton.disabled = true;
+  applyButton.addEventListener('click', () => {
+    if (!pendingProposal) return;
+    const { out, opts } = pendingProposal;
+    applyResult(out, opts);
+    pendingProposal = null;
+    applyButton.disabled = true;
+    $('dlg-ai').close();
+    E.toast('Proposition IA appliquée — vérifiez le tracé dans l’éditeur.');
+  });
   try { const saved = localStorage.getItem('ed-ai-model'); if (MODELS.some(m => m.id === saved)) sel.value = saved; } catch (e) { /* stockage indisponible */ }
   function updateCostEstimate() {
     const selected = MODELS.find(model => model.id === sel.value);
@@ -201,6 +216,9 @@ Rules:
     if (!S.planImg) { E.toast('Importez d\'abord l\'image du plan', true); return; }
     $('ai-scale').value = S.p.config.planImage && S.p.config.planImage.calibrated ? 'calibrated' : 'ai';
     $('ai-mode').value = S.p.walls.length ? 'merge' : 'replace';
+    pendingProposal = null;
+    applyButton.disabled = true;
+    review.textContent = '';
     $('ai-status').textContent = 'Vérification de la clé OpenRouter…';
     $('dlg-ai').showModal();
     try {
@@ -224,6 +242,9 @@ Rules:
     try { localStorage.setItem('ed-ai-model', model); } catch (e) { /* stockage indisponible */ }
     const opts = { scale: $('ai-scale').value, furniture: $('ai-furniture').checked, mode: $('ai-mode').value };
     const img = prepareImage();
+    pendingProposal = null;
+    applyButton.disabled = true;
+    review.textContent = 'La lecture est une proposition : rien ne sera ajouté au projet avant votre validation.';
     $('ai-run').disabled = true;
     const t0 = performance.now();
     $('ai-status').textContent = `Analyse du plan par ${model}… (20 à 90 s)`;
@@ -246,12 +267,14 @@ Rules:
       if (!res.ok || data.error) throw new Error((data.error && (data.error.message || data.error)) || `HTTP ${res.status}`);
       const ai = parseJson(data.choices[0].message.content);
       const out = convert(ai, img, opts);
-      applyResult(out, opts);
+      const assessment = assessProposal(ai, out, opts);
+      if (!out.walls.length || !out.rooms.length) throw new Error('La proposition ne contient pas assez de murs et de pièces pour être relue. Le projet n’a pas été modifié.');
+      pendingProposal = { out, opts, assessment };
+      applyButton.disabled = false;
       const cost = data.usage && data.usage.cost !== undefined ? ` · coût ${Number(data.usage.cost).toFixed(3)} $` : '';
       const secs = ((performance.now() - t0) / 1000).toFixed(0);
-      $('ai-status').textContent = `✓ ${out.walls.length} murs, ${out.walls.reduce((s, w) => s + w.openings.length, 0)} ouvertures, ${out.rooms.length} pièces, ${out.furniture.length} meubles en ${secs} s${cost}.` + (out.reference ? ` Échelle : ${out.reference}.` : '');
-      E.toast('Lecture IA appliquée — vérifiez et corrigez (Ctrl+Z pour annuler)');
-      setTimeout(() => $('dlg-ai').close(), 2500);
+      $('ai-status').textContent = `Proposition prête : ${out.walls.length} murs, ${assessment.mappedOpenings} ouvertures rattachées, ${out.rooms.length} pièces, ${out.columns.length} poteaux${opts.furniture ? `, ${out.furniture.length} meubles` : ''} · ${secs} s${cost}. Rien n’est encore appliqué.` + (out.reference ? ` Référence d’échelle : ${out.reference}.` : '');
+      review.textContent = `${opts.mode === 'replace' ? 'Mode : remplacer le tracé existant.' : 'Mode : ajouter au tracé existant.'} ${assessment.warnings.join(' ')}`;
     } catch (e) {
       $('ai-status').textContent = '✗ ' + e.message;
     } finally {
@@ -277,5 +300,5 @@ Rules:
   }
 
   // Exposé pour les tests (conversion sans appel réseau)
-  window.EditorAI = { convert, applyResult, prepareImage, INSTRUCTIONS };
+  window.EditorAI = { convert, assessProposal, applyResult, prepareImage, INSTRUCTIONS };
 })();

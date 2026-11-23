@@ -25,6 +25,7 @@
       <button id="btn-cabinet" type="button" title="Profil du cabinet">Profil Cabinet</button>
       <label class="ed-btn-file" title="Importer une image ou un PDF de plan">Plan PDF / image…<input id="file-plan" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,.png,.jpg,.jpeg"></label>
       <button id="btn-ai-read" title="Lecture automatique du plan par IA (OpenRouter)"><svg class="i" aria-hidden="true"><use href="#i-sparkle"></use></svg> Lecture IA</button>
+      <button id="btn-plan-cleanup" type="button" disabled title="Importez d’abord une image de plan">Nettoyage visuel…</button>
       <button id="btn-undo" aria-label="Annuler" title="Annuler (Ctrl+Z)">↶</button>
       <button id="btn-redo" aria-label="Rétablir" title="Rétablir (Ctrl+Y)">↷</button>
       <button id="btn-save" class="ed-primary" title="Enregistrer dans projects/ (Ctrl+S)">Enregistrer</button>
@@ -91,7 +92,7 @@
 
   <dialog id="dlg-ai" class="ed-dialog" aria-labelledby="dlg-ai-title">
     <h3 id="dlg-ai-title">Lecture automatique du plan</h3>
-    <p class="ed-note">L'image du plan est envoyée au modèle choisi via OpenRouter. Il renvoie murs, portes, fenêtres, pièces et mobilier, que vous corrigez ensuite dans l'éditeur.</p>
+    <p class="ed-note">L’image est analysée par le modèle choisi via OpenRouter. Le résultat est une proposition à contrôler, jamais un relevé certifié ; il ne modifie le projet qu’après votre validation.</p>
     <div class="ed-field"><label for="ai-model">Modèle</label><select id="ai-model"></select></div>
     <p id="ai-cost-estimate" class="ed-note" aria-live="polite"></p>
     <div class="ed-field"><label for="ai-mode">Tracé existant</label>
@@ -100,9 +101,11 @@
       <select id="ai-scale"><option value="ai">Détectée par l'IA (cotes du plan)</option><option value="calibrated">Celle que j'ai calibrée (K)</option></select></div>
     <div class="ed-field"><label for="ai-furniture">Mobilier</label><input type="checkbox" id="ai-furniture" checked></div>
     <p id="ai-status" class="ed-note" role="status"></p>
-    <div class="ed-dialog-actions">
+    <p id="ai-review" class="ed-ai-review" aria-live="polite">La proposition sera vérifiable ici avant son application au projet.</p>
+    <div class="ed-dialog-actions ed-ai-actions">
       <button id="ai-cancel">Fermer</button>
-      <button id="ai-run" class="ed-primary">Lancer la lecture</button>
+      <button id="ai-apply" type="button" class="ed-primary" disabled>Valider et appliquer</button>
+      <button id="ai-run" type="button">Lancer la lecture</button>
     </div>
   </dialog>
   <dialog id="dlg-estimate" class="ed-dialog ed-estimate" aria-labelledby="dlg-estimate-title">
@@ -159,6 +162,28 @@
     <div class="ed-dialog-actions"><button id="cabinet-close" type="button">Fermer</button><button id="cabinet-save" type="button" class="ed-primary">Enregistrer le profil</button></div>
   </dialog>
 
+  <dialog id="dlg-plan-cleanup" class="ed-dialog ed-cleanup" aria-labelledby="dlg-plan-cleanup-title">
+    <h3 id="dlg-plan-cleanup-title">Nettoyage visuel du plan</h3>
+    <p class="ed-note warn"><strong>Présentation uniquement — pas d’interprétation structurelle.</strong> Ce traitement local ne redessine ni ne reconnaît les cotes, axes, libellés, armatures ou lignes porteuses. Le plan original et la géométrie du projet restent inchangés.</p>
+    <div class="ed-cleanup-controls">
+      <label><input id="cleanup-grayscale" type="checkbox" checked> Niveaux de gris</label>
+      <label for="cleanup-contrast">Contraste <output id="cleanup-contrast-value">50</output><input id="cleanup-contrast" type="range" min="0" max="100" value="50"></label>
+      <label for="cleanup-lines">Renforcement visuel des traits <output id="cleanup-lines-value">25</output><input id="cleanup-lines" type="range" min="0" max="100" value="25"></label>
+      <label><input id="cleanup-threshold" type="checkbox"> Seuil noir/blanc</label>
+      <label for="cleanup-threshold-value">Seuil <output id="cleanup-threshold-output">160</output><input id="cleanup-threshold-value" type="range" min="0" max="255" value="160" disabled></label>
+    </div>
+    <p id="cleanup-status" class="ed-note" role="status">Aperçu local côte à côte. L’image exportée est un nouveau fichier PNG.</p>
+    <div class="ed-cleanup-previews">
+      <figure><figcaption>Original — inchangé</figcaption><canvas id="cleanup-before" aria-label="Aperçu du plan original"></canvas></figure>
+      <figure><figcaption>Nettoyage visuel — aperçu</figcaption><canvas id="cleanup-after" aria-label="Aperçu du plan traité"></canvas></figure>
+    </div>
+    <div class="ed-field ed-cleanup-filename"><label for="cleanup-filename">Nom du nouveau fichier</label><input id="cleanup-filename" type="text" maxlength="100" value="plan-nettoye.png"></div>
+    <div class="ed-dialog-actions">
+      <button id="cleanup-close" type="button">Fermer</button>
+      <button id="cleanup-download" type="button" class="ed-primary">Télécharger le PNG</button>
+    </div>
+  </dialog>
+
   <div id="ed-toast" class="ed-toast" role="status"></div>
 
   <script src="js/icons.js"></script>
@@ -170,6 +195,8 @@
   <script src="js/costEstimate.js"></script>
   <script src="js/habitability.js"></script>
   <script src="js/editor.js"></script>
+  <script src="js/planCleanup.js"></script>
+  <script src="js/planProposalReview.js"></script>
   <script src="js/editorAI.js"></script>
   <script src="js/editorEstimate.js"></script>
 </body>

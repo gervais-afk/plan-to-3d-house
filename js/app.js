@@ -87,6 +87,7 @@ window.startProjectViewer = () => {
   const grid = document.getElementById('rg-grid');
   const status = document.getElementById('rg-status');
   const lightbox = document.getElementById('rg-lightbox');
+  const publishDialog = document.getElementById('rg-publish-dialog');
   let currentItem = null;
   let galleryTask;
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -106,17 +107,47 @@ window.startProjectViewer = () => {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  // Contrôle de fidélité (js/fidelityCheck.js) : score enregistré à la génération, sinon calculé localement
+  // une fois par image, l'un après l'autre pour ne pas figer la galerie.
+  const fidelityCache = new Map();
+  let fidelityQueue = Promise.resolve();
+  function fidelityFor(aiImage, referenceUrl) {
+    if (aiImage.fidelity?.version === FidelityCheck.VERSION) return Promise.resolve(aiImage.fidelity);
+    const key = `${referenceUrl}→${aiImage.file}`;
+    if (!fidelityCache.has(key)) {
+      const task = fidelityQueue.then(() => FidelityCheck.compareUrls(referenceUrl, aiImage.file)).catch(() => null);
+      fidelityQueue = task;
+      fidelityCache.set(key, task);
+    }
+    return fidelityCache.get(key);
+  }
+
+  function fidelityBadge(aiImage, referenceUrl) {
+    const badge = document.createElement('span');
+    badge.className = 'rg-fidelity is-pending';
+    badge.textContent = 'Contrôle géométrique…';
+    fidelityFor(aiImage, referenceUrl).then(result => {
+      if (!result) { badge.remove(); return; }
+      badge.className = `rg-fidelity is-${result.verdict}`;
+      badge.textContent = FidelityCheck.describe(result);
+      badge.title = 'Part des lignes de la vue 3D retrouvées dans le rendu IA, corrigée du hasard. Garde-fou automatique : le contrôle visuel reste nécessaire.';
+    });
+    return badge;
+  }
+
   function createViewCard(shot, aiImage, baseImage = null) {
     const card = document.createElement('article');
-    card.className = 'rg-card rg-view-card';
+    const isPlan = shot.category === 'plan' || /plan|coupe|facade|elevation|masse/i.test(`${shot.id || ''} ${shot.label || ''}`);
+    card.className = `rg-card rg-view-card${isPlan ? ' is-plan' : ''}`;
     card.dataset.id = shot.id;
-    card.dataset.category = '3d';
+    card.dataset.category = isPlan ? 'plan' : '3d';
 
     const thumbWrap = document.createElement('div');
     thumbWrap.className = 'rg-thumb-wrap';
     const badge = document.createElement('span');
-    badge.className = `rg-badge ${aiImage ? 'rg-badge-ultra' : 'rg-badge-3d'}`;
-    badge.textContent = aiImage ? 'Rendu IA disponible' : 'Vue 3D de base';
+    const isAi = Boolean(aiImage || shot.generator?.includes('OpenRouter'));
+    badge.className = `rg-badge ${isAi ? 'rg-badge-ultra' : 'rg-badge-3d'}`;
+    badge.textContent = aiImage ? 'Rendu IA disponible' : shot.generator?.includes('OpenRouter') ? (isPlan ? 'Rendu 2D sublimé' : 'Rendu IA') : 'Vue 3D de base';
     thumbWrap.appendChild(badge);
 
     const img = document.createElement('img');
@@ -124,11 +155,19 @@ window.startProjectViewer = () => {
     img.loading = 'lazy';
     img.src = shot.url;
     thumbWrap.appendChild(img);
+    // Le contrôle n'a de sens que face à l'image réellement envoyée à l'IA : le plan 2D IA part du plan
+    // dessiné d'origine, pas de cette capture ; sans référence enregistrée, on ne l'évalue pas.
+    const checked = aiImage || (shot.generator?.includes('OpenRouter') && shot.reference ? { ...shot, file: shot.url } : null);
+    const knownSource = checked && (checked.reference || shot.id !== 'plan-2d-presentation');
+    if (knownSource) thumbWrap.appendChild(fidelityBadge(checked, checked.reference || shot.url));
     card.appendChild(thumbWrap);
 
     const meta = document.createElement('div');
     meta.className = 'rg-card-meta';
-    meta.innerHTML = `<div><div class="rg-card-title">${escapeHtml(shot.label)}</div><div class="rg-card-sub">Vue capturée depuis la maquette Three.js</div></div>`;
+    const subText = shot.generator
+      ? `Rendu d’ambiance IA · ${isPlan ? 'Planche 2D' : 'Persp. 3D'}`
+      : (isPlan ? 'Planche architecturale' : 'Vue capturée depuis la maquette Three.js');
+    meta.innerHTML = `<div><div class="rg-card-title">${escapeHtml(shot.label)}</div><div class="rg-card-sub">${escapeHtml(subText)}</div></div>`;
     card.appendChild(meta);
 
     if (!invited && !aiImage && shot.ext !== 'png') {
@@ -153,6 +192,12 @@ window.startProjectViewer = () => {
       action.addEventListener('click', event => {
         event.stopPropagation();
         openLightbox(shot, aiImage, true);
+      });
+    } else if (shot.reference) {
+      Icons.label(action, 'compare', 'Comparer Source / Rendu IA');
+      action.addEventListener('click', event => {
+        event.stopPropagation();
+        openLightbox({ id: `${shot.id}-ref`, label: `${shot.label} (Source technique)`, url: shot.reference }, shot, true);
       });
     } else if (!invited && shot.ext !== 'png') {
       Icons.label(action, 'sparkle', 'Générer le rendu photoréaliste (IA)');
@@ -202,8 +247,11 @@ window.startProjectViewer = () => {
         card.appendChild(flags);
       };
       // La capture Three.js et sa retouche IA sont deux images distinctes, chacune avec ses propres choix.
-      appendFlags(baseImage || { id: `render-${shot.id}`, catalog: false, book: false }, 'vue 3D');
+      if (baseImage || !shot.reference) {
+        appendFlags(baseImage || { id: `render-${shot.id}`, catalog: false, book: false }, 'vue 3D');
+      }
       if (aiImage?.id) appendFlags(aiImage, 'retouche IA');
+      else if (shot.reference && shot.id) appendFlags(shot, 'rendu IA');
     }
     if (action.textContent !== 'Ouvrir la vue') {
       const view = document.createElement('button');
@@ -213,7 +261,13 @@ window.startProjectViewer = () => {
       view.setAttribute('aria-label', `Ouvrir la vue : ${shot.label}`);
       card.appendChild(view);
     }
-    card.onclick = () => openLightbox(shot, aiImage, false);
+    card.onclick = () => {
+      if (shot.reference) {
+        openLightbox({ id: `${shot.id}-ref`, label: `${shot.label} (Source technique)`, url: shot.reference }, shot, false);
+      } else {
+        openLightbox(shot, aiImage, false);
+      }
+    };
     return card;
   }
 
@@ -275,7 +329,43 @@ window.startProjectViewer = () => {
     return card;
   }
 
-  const PHOTOREAL_PROMPT = 'Create a photorealistic, magazine-quality architectural visualization of the attached image (Architectural Digest / Dwell editorial style): warm, inviting, lived-in, refined materials, layered natural light, rich but restrained styling, realistic shadows and reflections. Preserve the exact camera framing and architectural geometry: do not move, add, remove, resize, or redesign any walls, doors, windows, openings, ceiling lines, or main volumes; keep their positions and proportions strictly unchanged. Keep the room layout and the position and identity of all existing furniture. You may enrich interior styling with tasteful, correctly scaled decor that does not obstruct openings or alter architecture: elegant linen curtains at existing windows, a textured rug beneath the bed or seating, carefully arranged cushions and a soft throw on the bed, warm glowing bedside lamps, one contemporary artwork on a suitable blank wall, and a healthy green plant. Integrate these additions naturally and avoid clutter. For exterior views preserve the existing landscape and context. The result should feel warm, sophisticated, realistic, and inhabited—not sterile.';
+  /** Prompt IA déduit de l'état réel du projet : pièce de la vue, finitions affichées, soleil, ville (js/aiPrompt.js). */
+  function projectPrompt(item, is2DPlan) {
+    const room = item.shot?.room || item.room;
+    const roomData = room ? HOUSE_DATA.rooms.find(r => r.id === room) : null;
+    const night = Boolean(item.shot?.night || item.night);
+    const hour = night ? SolarStudy.evening : houseScene.solarTarget;
+    return AiPrompt.build({
+      kind: is2DPlan ? 'plan2d' : roomData ? 'interior' : 'exterior',
+      room: roomData,
+      finishes: { floor: document.getElementById('client-floor')?.value, facade: document.getElementById('client-facade')?.value },
+      sun: AiPrompt.sunAt(hour, houseScene.solarGeo, SolarStudy),
+      night,
+      city: HOUSE_DATA.estimate?.city || 'douala',
+      planVersion: AiPrompt.planVersion(HOUSE_DATA)
+    });
+  }
+
+  async function optimizeImageForAI(dataUrl, maxDim = 1376) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.naturalWidth, h = img.naturalHeight;
+        if (!w || !h || (w <= maxDim && h <= maxDim)) return resolve(dataUrl);
+        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else { w = Math.round(w * maxDim / h); h = maxDim; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.88));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  }
 
   async function imageDataUrl(url) {
     if (url && url.startsWith('data:image/')) return url;
@@ -309,6 +399,36 @@ window.startProjectViewer = () => {
     'bytedance-seed/seedream-5-0-flash': { label: 'Seedream 5.0 Flash — brouillon rapide, ≈ 0,018 $', estimate: 'Brouillon rapide : ≈ 0,018 $ pour une image 1K (4,31 $ par million de jetons image). Pour comparer des ambiances avant le rendu final.' }
   };
 
+  function choosePublicationTargets(label, fidelity = null) {
+    if (!publishDialog?.showModal) return Promise.resolve(null);
+    const form = document.getElementById('rg-publish-form');
+    const catalog = document.getElementById('rg-publish-catalog');
+    const book = document.getElementById('rg-publish-book');
+    const warning = fidelity?.verdict === 'unfaithful'
+      ? ` Contrôle géométrique : ${FidelityCheck.describe(fidelity)}. Le rendu semble s’écarter de la vue source (cadrage, ouvertures ou volumes) ; régénérez-le plutôt que de le publier.`
+      : fidelity ? ` Contrôle géométrique : ${FidelityCheck.describe(fidelity)}.` : '';
+    document.getElementById('rg-publish-caption').textContent = `« ${label} » a été généré et enregistré. Sélectionnez les livrables souhaités.${warning}`;
+    document.getElementById('rg-publish-status').textContent = '';
+    catalog.checked = false;
+    book.checked = false;
+    publishDialog.returnValue = '';
+    return new Promise(resolve => {
+      publishDialog.addEventListener('close', () => {
+        const chosen = publishDialog.returnValue === 'save' ? { catalog: catalog.checked, book: book.checked } : null;
+        // Un rendu en écart géométrique n'entre dans un livrable qu'après une confirmation explicite.
+        if (chosen && fidelity?.verdict === 'unfaithful' && (chosen.catalog || chosen.book)
+          && !confirm('Ce rendu IA s’écarte de la géométrie du projet. Le publier quand même dans les livrables ?')) {
+          resolve({ catalog: false, book: false });
+          return;
+        }
+        // Choix explicite mémorisé : le contrôle à l'export ne réécartera pas ce rendu.
+        resolve(chosen && fidelity?.verdict === 'unfaithful' && (chosen.catalog || chosen.book) ? { ...chosen, fidelityAccepted: true } : chosen);
+      }, { once: true });
+      publishDialog.showModal();
+      form.querySelector('[value="save"]')?.focus();
+    });
+  }
+
   async function photorealize(item, button, model) {
     const costEstimate = IMAGE_MODELS[model]?.estimate || 'Coût variable selon le modèle.';
     if (!confirm(`Générer un rendu IA pour « ${item.label} » avec ${model} ?\n\n${costEstimate}\n\nL’appel est facturable ; le coût réel sera affiché après génération. Continuer ?`)) return;
@@ -316,12 +436,17 @@ window.startProjectViewer = () => {
     button.textContent = '⏳ Génération…';
     status.textContent = `Photoréalisation de « ${item.label} » avec ${model}…`;
     try {
-      const source = await imageDataUrl(item.url);
+      const is2DPlan = item.id === 'plan-2d-presentation';
+      const originalPlanUrl = is2DPlan && window.HOUSE_DATA?.config?.planImage?.url;
+      const sourceUrl = originalPlanUrl || item.url;
+      const { prompt: promptToUse, tags: promptTags } = projectPrompt(item, is2DPlan);
+      const rawSource = await imageDataUrl(sourceUrl);
+      const source = await optimizeImageForAI(rawSource, 1376);
       const response = await fetch('api/ai/images', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model, prompt: PHOTOREAL_PROMPT, aspect_ratio: '16:9',
+          model, prompt: promptToUse, aspect_ratio: is2DPlan ? '1:1' : '16:9',
           input_references: [{ type: 'image_url', image_url: { url: source } }]
         })
       });
@@ -334,6 +459,8 @@ window.startProjectViewer = () => {
       if (!output) throw new Error('Le modèle n’a pas renvoyé d’image.');
       const image = await imageDataUrl(output);
       const dimensions = await imageDimensions(image);
+      status.textContent = 'Contrôle géométrique du rendu face à la vue source…';
+      const fidelity = await FidelityCheck.compareUrls(rawSource, image).catch(() => null);
       const id = `photor-${item.id}`;
       const saveResponse = await fetch(projectApi('api/save-generated'), {
         method: 'POST',
@@ -341,11 +468,13 @@ window.startProjectViewer = () => {
         body: JSON.stringify({
           id, data: image,
           metadata: {
-            reference: item.ext === 'png' ? projectMedia('renders/plan-2d-presentation.png') : projectMedia(`renders/${item.id}.jpg`),
+            reference: is2DPlan
+              ? (originalPlanUrl ? projectMedia(originalPlanUrl.replace(/^projects\/[^/]+\//, '')) : projectMedia('renders/plan-2d-presentation.png'))
+              : (item.ext === 'png' ? projectMedia('renders/plan-2d-presentation.png') : projectMedia(`renders/${item.id}.jpg`)),
             room: item.shot?.room || null,
-            label: `${item.label} — photoréaliste`,
+            label: `${item.label} — ${is2DPlan ? 'plan colorisé IA' : 'photoréaliste'}`,
             width: dimensions.width, height: dimensions.height, model,
-            prompt: PHOTOREAL_PROMPT
+            prompt: promptToUse, tags: promptTags, fidelity
           }
         })
       });
@@ -353,21 +482,28 @@ window.startProjectViewer = () => {
       if (!saveResponse.ok || !saved.ok) throw new Error(saved.error || `Enregistrement impossible (HTTP ${saveResponse.status})`);
       galleryMediaCache = null;
       photoAvailability.clear();
-      const media = await loadGalleryMedia(true);
+      let media = await loadGalleryMedia(true);
+      let aiImage = aiImageForShot(item, media.images) || saved.item;
+      const cost = result.usage?.cost !== undefined ? ` · ${Number(result.usage.cost).toFixed(3)} $` : '';
+      const check = fidelity ? ` · ${FidelityCheck.describe(fidelity)}` : '';
+      status.textContent = `Proposition IA enregistrée${cost}${check}. Vérifiez-la face à la maquette ; elle n’est pas encore publiée.`;
+      const destinations = await choosePublicationTargets(item.label, fidelity);
+      if (destinations) {
+        try {
+          await setImageFlags(id, destinations);
+          media = await loadGalleryMedia(true);
+          aiImage = aiImageForShot(item, media.images) || saved.item;
+          const published = [destinations.catalog && 'catalogue d’intérieurs', destinations.book && 'cahier d’ambiance'].filter(Boolean);
+          status.textContent = published.length
+            ? `Rendu ajouté au ${published.join(' et au ')}.`
+            : 'Rendu conservé dans la galerie, sans ajout aux livrables.';
+        } catch (error) {
+          document.getElementById('rg-publish-status').textContent = `Enregistrement des choix impossible : ${error.message}`;
+          status.textContent = `Rendu enregistré, mais publication non mise à jour : ${error.message}`;
+        }
+      } else status.textContent += ' Vous pourrez choisir ses destinations depuis la galerie.';
       galleryInitialized = false;
       await buildGallery();
-      const aiImage = aiImageForShot(item, media.images) || saved.item;
-      const cost = result.usage?.cost !== undefined ? ` · ${Number(result.usage.cost).toFixed(3)} $` : '';
-      status.textContent = `Rendu IA enregistré${cost}. Vérifiez sa fidélité au plan.`;
-      // Proposition immédiate : rejoindre le catalogue des intérieurs (modifiable ensuite depuis la carte).
-      if (confirm(`Ajouter « ${item.label} » au catalogue des intérieurs ?\n\nLe client pourra l’exporter en PDF avec les autres vues du catalogue.`)) {
-        try {
-          await setImageFlags(id, { catalog: true });
-          status.textContent += ' Ajouté au catalogue.';
-          galleryInitialized = false;
-          await buildGallery();
-        } catch (error) { status.textContent += ` Ajout au catalogue impossible : ${error.message}`; }
-      }
       openLightbox(item, aiImage, true);
     } catch (error) {
       status.textContent = `Photoréalisation impossible : ${error.message}`;
@@ -406,7 +542,7 @@ window.startProjectViewer = () => {
     const ref = shot.id === 'plan-2d-presentation'
       ? projectMedia('renders/plan-2d-presentation.png')
       : projectMedia(`renders/${shot.id}.jpg`);
-    const aliases = shot.id === 'plan-2d-presentation' ? ['plan-2d-photoshop'] : [];
+    const aliases = shot.id === 'plan-2d-presentation' ? ['plan-2d-photoshop', 'photor-plan-2d'] : [];
     const matches = images.filter(image => image.reference === ref || image.id === shot.id || image.id === `photor-${shot.id}` || aliases.includes(image.id));
     matches.sort((a, b) => Number(b.id === `photor-${shot.id}`) - Number(a.id === `photor-${shot.id}`));
     return matches[0] || null;
@@ -454,9 +590,9 @@ window.startProjectViewer = () => {
       grid.appendChild(createViewCard(shot, aiImage, baseImage));
     });
 
-    if (invited) {
-      const extra = media.images.filter(image => !shots3D.some(shot => aiImageForShot(shot, [image])));
-      if (extra.length) addSection('Rendus disponibles', 'Images enregistrées dans ce projet');
+    const extra = media.images.filter(image => !shots3D.some(shot => aiImageForShot(shot, [image])));
+    if (extra.length) {
+      addSection('Planches & élévations architecturales (IA)', 'Rendus d’ambiance 2D, élévations et coupes sublimés par IA');
       extra.forEach(image => grid.appendChild(createViewCard({ ...image, url: image.file, ext: image.file.split('.').pop() }, null)));
     }
     if (media.videos.length) {
@@ -517,8 +653,24 @@ window.startProjectViewer = () => {
     } else {
       const baseUrl = item.url || item.file;
       const matchingShot = item.shot || studio.shots.find(shot => shot.id === item.id);
+      const isPlanLike = item.category === 'plan' || /plan|coupe|facade|elevation|masse/i.test(`${item.id || ''} ${item.label || ''} ${aiImage?.label || ''}`);
+      lightbox.classList.toggle('is-plan-view', Boolean(isPlanLike));
+      fullImg.classList.toggle('is-plan-media', Boolean(isPlanLike));
+      compareView.querySelectorAll('.rg-compare-panel').forEach(p => p.classList.toggle('is-plan-view', Boolean(isPlanLike)));
+
       captionEl.textContent = item.label;
-      metaEl.textContent = aiImage ? 'Vue Three.js avant · rendu IA après' : 'Capture locale de la maquette Three.js';
+      if (item.reference || (aiImage && aiImage.reference)) {
+        metaEl.textContent = 'Planche technique avant · rendu d’ambiance IA après';
+      } else if (aiImage) {
+        metaEl.textContent = 'Vue Three.js avant · rendu IA après';
+      } else {
+        metaEl.textContent = item.generator || (isPlanLike ? 'Planche architecturale' : 'Capture locale de la maquette Three.js');
+      }
+      if (aiImage && (aiImage.reference || item.id !== 'plan-2d-presentation')) {
+        fidelityFor(aiImage, aiImage.reference || baseUrl).then(result => {
+          if (result && currentItem === item) metaEl.textContent += ` · ${FidelityCheck.describe(result)}`;
+        });
+      }
       dlLink.href = aiImage ? aiImage.file : baseUrl;
       dlLink.download = `${aiImage ? aiImage.id : item.id}.${aiImage ? (aiImage.file.split('.').pop() || 'png') : (item.ext || 'jpg')}`;
       btnGoto.style.display = matchingShot ? '' : 'none';
@@ -560,10 +712,15 @@ window.startProjectViewer = () => {
     if (videoEl) {
       videoEl.pause();
       videoEl.removeAttribute('src');
-    videoEl.load();
+      videoEl.load();
     }
-    if (lightbox.open) lightbox.close();
-    lightbox.classList.add('hidden');
+    const fullImg = document.getElementById('rg-full');
+    if (fullImg) fullImg.classList.remove('is-plan-media');
+    if (lightbox) {
+      lightbox.classList.remove('is-plan-view');
+      if (lightbox.open) lightbox.close();
+      lightbox.classList.add('hidden');
+    }
   }
 
   async function generateRenders() {
@@ -1028,6 +1185,150 @@ window.startProjectViewer = () => {
   const catalogButton = document.getElementById('catalog-pdf');
   bookOpen.hidden = invited;
   let bookViews = [];
+  let bookSheets = []; // pages PDF de l'architecte, lues et identifiées (PlanBook.readSheets)
+
+  // ---------- Planches PDF de l'architecte : identification, corrections, contenu du dossier ----------
+  const modelLevels = () => [...new Set(HOUSE_DATA.walls.map(w => Number(w.level) || 0))].sort((a, b) => a - b);
+  const CONFIDENCE = { title: ['Lu dans le cartouche', 'is-sure'], likely: ['Probable', 'is-likely'], low: ['À confirmer', 'is-doubt'], none: ['Non identifié — à choisir', 'is-doubt'] };
+  // ---------- « Sublimer cette planche » : version d'ambiance IA d'un plan importé ----------
+  // Plans vus de dessus seulement (distribution, masse) : le prompt « plan colorisé » impose de garder
+  // la géométrie ; le contrôle de fidélité le vérifie ensuite. Appel facturable, toujours confirmé.
+  const SUBLIMABLE = ['distribution', 'masse'];
+  const SUBLIME_MODEL = 'google/gemini-3.1-flash-image';
+  const aspectFor = (w, h) => { const r = w / h; return r >= 1.6 ? '16:9' : r >= 1.2 ? '4:3' : r >= 0.85 ? '1:1' : r >= 0.68 ? '3:4' : '9:16'; };
+  const sheetSlug = page => `${page.name.replace(/\.pdf$/i, '')}-p${page.page}`.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50);
+
+  function sublimeBlock(page) {
+    const box = document.createElement('div');
+    box.className = 'book-sheet-ai';
+    const s = page.sublimed;
+    if (s) {
+      const verdict = s.fidelity ? FidelityCheck.describe(s.fidelity) : 'Contrôle géométrique indisponible';
+      const bad = s.fidelity?.verdict === 'unfaithful';
+      box.innerHTML = `<img alt="Version d’ambiance générée"><div><span class="book-sheet-chip ${bad ? 'is-doubt' : s.fidelity?.verdict === 'faithful' ? 'is-sure' : 'is-likely'}"></span>
+        <label class="book-sheet-check"><input type="checkbox" data-sublime-include> Ajouter au cahier, à côté de la planche technique</label>
+        <small class="book-sheet-why"></small><button type="button" class="btn-toggle btn-small" data-sublime>Régénérer</button></div>`;
+      box.querySelector('img').src = s.data;
+      box.querySelector('.book-sheet-chip').textContent = `Version d’ambiance · ${verdict}`;
+      box.querySelector('.book-sheet-why').textContent = bad ? 'Le rendu s’écarte du plan : régénérez-le plutôt que de l’ajouter.' : `${s.model}${s.cost ? ` · ${s.cost}` : ''} · illustratif, non contractuel`;
+      const include = box.querySelector('[data-sublime-include]');
+      include.checked = page.sublimedInclude;
+      include.addEventListener('change', () => {
+        if (include.checked && bad && !confirm('Cette version d’ambiance s’écarte de la géométrie du plan. L’ajouter quand même au cahier ?')) { include.checked = false; return; }
+        page.sublimedInclude = include.checked; bookChanged();
+      });
+    } else {
+      box.innerHTML = `<button type="button" class="btn-toggle btn-small book-sublime" data-sublime>✦ Sublimer cette planche (IA)</button>
+        <small class="book-sheet-why">Version colorisée « plan commercial » : sols, mobilier, ombres — murs et cotes conservés. ${IMAGE_MODELS[SUBLIME_MODEL]?.estimate || ''}</small>`;
+    }
+    box.querySelector('[data-sublime]').addEventListener('click', event => sublimeSheet(page, event.currentTarget));
+    return box;
+  }
+
+  async function sublimeSheet(page, button) {
+    const label = SheetClassifier.label(page.type, page.level);
+    if (!confirm(`Générer la version d’ambiance de « ${label} » avec ${SUBLIME_MODEL} ?\n\n${IMAGE_MODELS[SUBLIME_MODEL]?.estimate || ''}\n\nL’appel est facturable ; le coût réel sera affiché après génération. Continuer ?`)) return;
+    button.disabled = true;
+    button.textContent = '⏳ Génération…';
+    bookDialogStatus.textContent = `Sublimation de « ${label} »…`;
+    try {
+      const { prompt, tags } = AiPrompt.build({
+        kind: 'plan2d',
+        finishes: { floor: document.getElementById('client-floor')?.value, facade: document.getElementById('client-facade')?.value },
+        city: HOUSE_DATA.estimate?.city || 'douala', planVersion: AiPrompt.planVersion(HOUSE_DATA)
+      });
+      const source = await optimizeImageForAI(page.data, 1376);
+      const response = await fetch('api/ai/images', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: SUBLIME_MODEL, prompt, aspect_ratio: aspectFor(page.width, page.height), input_references: [{ type: 'image_url', image_url: { url: source } }] })
+      });
+      const result = await response.json();
+      if (!response.ok || result.error) throw new Error(result.error?.message || result.error || `HTTP ${response.status}`);
+      const generated = result.data?.[0];
+      const output = generated?.b64_json ? `data:${generated.media_type || 'image/png'};base64,${generated.b64_json}` : generated?.url;
+      if (!output) throw new Error('Le modèle n’a pas renvoyé d’image.');
+      const image = await imageDataUrl(output);
+      bookDialogStatus.textContent = 'Contrôle géométrique face à la planche d’origine…';
+      const fidelity = await FidelityCheck.compareUrls(page.data, image).catch(() => null);
+      const dims = await imageDimensions(image);
+      // Enregistré dans le projet (galerie), hors catalogue et hors cahier tant que rien n'est choisi.
+      const id = `photor-planche-${sheetSlug(page)}`;
+      const saved = await fetch(projectApi('api/save-generated'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, data: image, metadata: { label: `${label} — version d’ambiance`, width: dims.width, height: dims.height, model: SUBLIME_MODEL, prompt, tags, fidelity } })
+      }).then(r => r.json()).catch(() => null);
+      const cost = result.usage?.cost !== undefined ? `${Number(result.usage.cost).toFixed(3)} $` : '';
+      page.sublimed = { data: image, fidelity, model: SUBLIME_MODEL, cost, id: saved?.ok ? id : null };
+      page.sublimedInclude = fidelity?.verdict !== 'unfaithful';
+      bookDialogStatus.textContent = `Version d’ambiance prête${cost ? ` (${cost})` : ''} · ${fidelity ? FidelityCheck.describe(fidelity) : 'contrôle indisponible'}${saved?.ok ? ' · enregistrée dans la galerie' : ''}.`;
+    } catch (error) {
+      bookDialogStatus.textContent = `Sublimation impossible : ${error.message}`;
+    }
+    bookSheetsChanged();
+  }
+
+  function renderBookSheets() {
+    const list = document.getElementById('book-files-list');
+    const levelOptions = [['', '—'], ['-1', 'Sous-sol'], ['0', 'Rez-de-chaussée'], ['1', 'Étage 1'], ['2', 'Étage 2']];
+    list.replaceChildren(...bookSheets.map(page => {
+      const li = document.createElement('li');
+      li.className = 'book-sheet' + (page.include ? '' : ' is-excluded');
+      const [chip, chipClass] = CONFIDENCE[page.type === page.guess.type ? page.guess.confidence : 'title'] || CONFIDENCE.none;
+      const userChoice = page.type !== page.guess.type || page.level !== page.guess.level;
+      li.innerHTML = `<img alt="" src="${page.thumb}"><div class="book-sheet-body">
+          <strong></strong><small class="book-sheet-source"></small>
+          <span class="book-sheet-chip ${userChoice ? 'is-sure' : chipClass}"></span><small class="book-sheet-why"></small>
+          <div class="book-sheet-fields">
+            <label>Type <select data-field="type">${Object.entries(SheetClassifier.TYPES).map(([k, t]) => `<option value="${k}">${t.label}</option>`).join('')}</select></label>
+            <label>Niveau <select data-field="level">${levelOptions.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>
+            <label class="book-sheet-check"><input type="checkbox" data-field="include"> Inclure</label>
+            <label class="book-sheet-check" data-replace hidden><input type="checkbox" data-field="replaceGenerated"> Remplace le plan tiré de la maquette</label>
+          </div></div>`;
+      li.querySelector('strong').textContent = SheetClassifier.label(page.type, page.level, {
+        orientation: page.type === 'facade' ? (page.guess.label.match(/^Façade (.+)$/) || [])[1] : '',
+        cut: page.type === 'coupe' ? (page.guess.label.match(/^Coupe (.+)$/) || [])[1] : '' });
+      li.querySelector('.book-sheet-source').textContent = `${page.name}${page.total > 1 ? ` — page ${page.page}/${page.total}` : ''}${page.guess.scale ? ` · ${page.guess.scale}` : ''}`;
+      li.querySelector('.book-sheet-chip').textContent = userChoice ? 'Choisi par vous' : chip;
+      li.querySelector('.book-sheet-why').textContent = userChoice ? '' : page.guess.reasons.join(' · ');
+      const type = li.querySelector('[data-field="type"]'), level = li.querySelector('[data-field="level"]');
+      const include = li.querySelector('[data-field="include"]'), replace = li.querySelector('[data-field="replaceGenerated"]');
+      type.value = page.type; level.value = page.level ?? ''; include.checked = page.include; replace.checked = page.replaceGenerated;
+      level.disabled = !SheetClassifier.TYPES[page.type]?.levels;
+      const canReplace = page.type === 'distribution' && modelLevels().includes(page.level);
+      li.querySelector('[data-replace]').hidden = !canReplace;
+      type.addEventListener('change', () => { page.type = type.value; if (!SheetClassifier.TYPES[page.type]?.levels) page.level = null; bookSheetsChanged(); });
+      level.addEventListener('change', () => { page.level = level.value === '' ? null : Number(level.value); bookSheetsChanged(); });
+      include.addEventListener('change', () => { page.include = include.checked; bookSheetsChanged(); });
+      replace.addEventListener('change', () => { page.replaceGenerated = replace.checked; bookSheetsChanged(); });
+      if (SUBLIMABLE.includes(page.type) && !invited) li.querySelector('.book-sheet-body').append(sublimeBlock(page));
+      return li;
+    }));
+    renderCompleteness();
+  }
+  function renderCompleteness() {
+    const box = document.getElementById('book-completeness');
+    const chosen = bookSheets.filter(page => page.include);
+    box.hidden = !bookSheets.length;
+    if (!bookSheets.length) return;
+    const rows = SheetClassifier.completeness(chosen, modelLevels());
+    const plansOn = document.querySelector('#book-sheets input[data-section="plans"]')?.checked !== false;
+    const STATUS = {
+      provided: ['Fourni', 'is-sure'],
+      generated: plansOn ? ['Tiré de la maquette', 'is-likely'] : ['Absent (planche « Plans cotés » décochée)', 'is-doubt'],
+      missing: ['Manquant', 'is-doubt']
+    };
+    box.innerHTML = '<h4>Contenu du dossier</h4><ul></ul><p class="book-note">La maquette produit les plans de distribution cotés ; elle ne fabrique ni façades d’architecte, ni plans de structure (fondations, coffrage) : ceux-là viennent de l’architecte ou du bureau d’études.</p>';
+    box.querySelector('ul').replaceChildren(...rows.map(row => {
+      const li = document.createElement('li');
+      const [label, cls] = row.status === 'provided' && row.key.startsWith('distribution') && chosen.some(p => p.type === 'distribution' && !p.replaceGenerated)
+        ? ['Fourni (le plan de la maquette est gardé aussi)', 'is-sure'] : STATUS[row.status];
+      li.innerHTML = '<span></span><em></em>';
+      li.firstChild.textContent = row.label + (row.count > 1 ? ` (${row.count})` : '');
+      li.lastChild.textContent = label; li.lastChild.className = cls;
+      return li;
+    }));
+  }
+  function bookSheetsChanged() { renderBookSheets(); bookChanged(); }
 
   // Toute modification de la composition retire l’approbation : on approuve ce que l’on voit.
   function bookChanged() {
@@ -1035,11 +1336,12 @@ window.startProjectViewer = () => {
     bookExport.disabled = true;
     const sheets = [...document.querySelectorAll('#book-sheets input:checked')].map(input => input.closest('label').querySelector('strong').textContent);
     const chosen = bookViews.filter(view => view.book).length;
-    const annexes = bookFiles.files.length;
+    const annexes = bookSheets.filter(page => page.include).length;
+    renderCompleteness();
     document.getElementById('book-images-count').textContent = chosen ? `${chosen} sélectionnée${chosen > 1 ? 's' : ''}` : 'aucune sélection';
     document.getElementById('book-summary').textContent = `Couverture et cartouche, ${sheets.length ? sheets.map(name => name.charAt(0).toLowerCase() + name.slice(1)).join(', ') : 'aucune autre planche'}`
       + `${sheets.includes('Ambiances') ? ` (${chosen || Math.min(4, bookViews.length)} image${(chosen || Math.min(4, bookViews.length)) > 1 ? 's' : ''})` : ''}`
-      + `${annexes ? `, ${annexes} PDF en annexe` : ''}.`;
+      + `${annexes ? `, ${annexes} planche${annexes > 1 ? 's' : ''} de l’architecte rangée${annexes > 1 ? 's' : ''} à leur place` : ''}.`;
   }
   function renderBookImages() {
     const grid = document.getElementById('book-images');
@@ -1085,15 +1387,23 @@ window.startProjectViewer = () => {
     renderBookImages();
     bookChanged();
   });
-  bookFiles.addEventListener('change', () => {
-    document.getElementById('book-files-list').replaceChildren(...Array.from(bookFiles.files, file => {
-      const li = document.createElement('li');
-      li.innerHTML = '<span></span><small></small>';
-      li.firstChild.textContent = file.name;
-      li.lastChild.textContent = `${Math.round(file.size / 1024)} Ko`;
-      return li;
-    }));
-    bookChanged();
+  bookFiles.addEventListener('change', async () => {
+    // Les PDF s'ajoutent à ceux déjà lus : l'architecte peut déposer ses planches en plusieurs fois.
+    const files = Array.from(bookFiles.files);
+    if (!files.length) return;
+    bookFiles.disabled = true;
+    try {
+      const pages = await PlanBook.readSheets(files, message => { bookDialogStatus.textContent = message; });
+      bookSheets = bookSheets.concat(pages);
+      const sure = pages.filter(page => page.guess.confidence === 'title').length;
+      bookDialogStatus.textContent = `${pages.length} page${pages.length > 1 ? 's' : ''} lue${pages.length > 1 ? 's' : ''} : ${sure} identifiée${sure > 1 ? 's' : ''} par le cartouche${pages.length - sure ? `, ${pages.length - sure} à vérifier` : ''}.`;
+    } catch (error) {
+      bookDialogStatus.textContent = `Lecture des PDF impossible : ${error.message}`;
+    } finally {
+      bookFiles.value = '';
+      bookFiles.disabled = false;
+    }
+    bookSheetsChanged();
   });
   bookApproved.addEventListener('change', () => {
     bookExport.disabled = !bookApproved.checked;
@@ -1105,9 +1415,9 @@ window.startProjectViewer = () => {
     exportingPDF = bookExport.disabled = pdfButton.disabled = true;
     try {
       await assetsReady;
-      const result = await PlanBook.exportBook({ data: HOUSE_DATA, studio, files: bookFiles.files, sections,
+      const result = await PlanBook.exportBook({ data: HOUSE_DATA, studio, annexes: bookSheets, sections, screen: screenForDelivery,
         onStatus: message => { bookDialogStatus.textContent = message; } });
-      const done = `Cahier de ${result.pages} planches téléchargé${result.annexes ? `, dont ${result.annexes} en annexe` : ''}.`;
+      const done = `Cahier de ${result.pages} planches téléchargé${result.annexes ? `, dont ${result.annexes} de l’architecte` : ''}.${excludedNote(result.excluded)}`;
       Motion.success(bookDialogStatus, done);
       Motion.success(bookStatus, done);
     } catch (error) {
@@ -1119,13 +1429,25 @@ window.startProjectViewer = () => {
     }
   });
 
+  // ---------- Contrôle des rendus IA avant un livrable (catalogue, ambiances du cahier) ----------
+  // Un rendu en écart géométrique est écarté, sauf si l'architecte a confirmé sa publication.
+  async function screenForDelivery(view) {
+    if (view.fidelityAccepted || (!view.reference && !view.fidelity)) return null;
+    const result = await fidelityFor({ file: view.source, fidelity: view.fidelity }, view.reference);
+    return result?.verdict === 'unfaithful' ? { exclude: true, reason: FidelityCheck.describe(result) } : null;
+  }
+  const excludedNote = excluded => excluded?.length
+    ? ` ${excluded.length} rendu${excluded.length > 1 ? 's' : ''} écarté${excluded.length > 1 ? 's' : ''} pour écart géométrique : ${excluded.map(e => `${e.label} (${e.reason})`).join(', ')}.`
+    : '';
+
   // ---------- Catalogue des intérieurs : ouvert aux clients ----------
   catalogButton.addEventListener('click', async () => {
     if (exportingPDF) return;
     exportingPDF = catalogButton.disabled = true;
     try {
-      const result = await PlanBook.exportCatalog({ data: HOUSE_DATA, onStatus: message => { bookStatus.textContent = message; } });
-      Motion.success(bookStatus, `Catalogue de ${result.images} image${result.images > 1 ? 's' : ''} téléchargé.`);
+      const result = await PlanBook.exportCatalog({ data: HOUSE_DATA, screen: screenForDelivery, onStatus: message => { bookStatus.textContent = message; } });
+      const low = result.lowRes?.length ? ` Définition faible pour une pleine page imprimée : ${result.lowRes.map(r => `${r.label} (${r.dpi} dpi)`).join(', ')}.` : '';
+      Motion.success(bookStatus, `Catalogue de ${result.images} image${result.images > 1 ? 's' : ''} téléchargé.${excludedNote(result.excluded)}${low}`);
     } catch (error) {
       Motion.error(bookStatus, error.message, catalogButton);
     } finally {
@@ -1429,6 +1751,120 @@ window.startProjectViewer = () => {
 
   exportVideoButton.addEventListener('click', exportCinematicVideo);
 
+  // ---------- Séquence pour l'IA : images exactes, profondeur et contours, segment par segment ----------
+  const aiSequenceButton = document.getElementById('btn-ai-sequence');
+  if (aiSequenceButton) aiSequenceButton.hidden = invited;
+  let aiSequenceRun = null;
+  function aiSequenceDialog() {
+    let dialog = document.getElementById('ai-sequence-dialog');
+    if (dialog) return dialog;
+    dialog = document.createElement('dialog');
+    dialog.id = 'ai-sequence-dialog';
+    dialog.className = 'book-dialog ai-sequence-dialog';
+    dialog.innerHTML = `<form method="dialog" class="book-form">
+      <header class="book-head"><div><p class="book-kicker">Vidéo vers vidéo</p><h2>Séquence pour l’IA</h2>
+        <p class="book-intro">Le parcours est rendu image par image, à cadence exacte, en segments courts. Chaque image est livrée en trois passes : <strong>couleur</strong>, <strong>profondeur</strong> et <strong>contours</strong>. Avec Runway, Luma ou ComfyUI (Wan VACE), la profondeur et les contours verrouillent la géométrie : l’IA ne change que la matière et la lumière.</p></div>
+        <button type="submit" value="close" class="btn-toggle btn-small" aria-label="Fermer">×</button></header>
+      <section class="book-block ai-seq-settings">
+        <label>Images par seconde <select data-seq="fps"><option value="12">12 (aperçu)</option><option value="24" selected>24 (cinéma)</option></select></label>
+        <label>Définition <select data-seq="size"><option value="1280x720" selected>1280 × 720 (720p)</option><option value="1920x1080">1920 × 1080 (1080p)</option></select></label>
+        <label>Durée de chaque segment <select data-seq="max"><option value="5" selected>5 s (Runway, Luma, Wan)</option><option value="10">10 s</option></select></label>
+        <fieldset><legend>Passes</legend>
+          <label><input type="checkbox" data-pass="color" checked> Couleur (JPEG)</label>
+          <label><input type="checkbox" data-pass="depth" checked> Profondeur (PNG)</label>
+          <label><input type="checkbox" data-pass="edges" checked> Contours (PNG)</label></fieldset>
+      </section>
+      <section class="book-block"><h3>Segments du parcours</h3><p class="book-note">La phase d’élévation des murs est écartée : elle n’a pas d’équivalent réaliste.</p><ul class="ai-seq-list" data-seq="list"></ul></section>
+      <section class="book-block book-approve"><p class="book-summary" data-seq="summary"></p>
+        <div class="book-actions"><span role="status" data-seq="status"></span><button type="button" class="btn-toggle book-primary" data-seq="go">Rendre la séquence</button></div></section>
+    </form>`;
+    document.body.append(dialog);
+    const q = sel => dialog.querySelector(`[data-seq="${sel}"]`);
+    const settings = () => {
+      const [width, height] = q('size').value.split('x').map(Number);
+      return { fps: Number(q('fps').value), width, height, max: Number(q('max').value), passes: [...dialog.querySelectorAll('[data-pass]:checked')].map(i => i.dataset.pass) };
+    };
+    const refresh = () => {
+      const o = settings();
+      const segments = AiSequence.plan(HOUSE_DATA.tourWaypoints, { totalSeconds: TOUR_RECORD_SECONDS, fps: o.fps, maxSegmentSeconds: o.max, skipBefore: HOUSE_DATA.config.elevationEnd || 0 });
+      const previous = new Map([...q('list').querySelectorAll('input')].map(i => [i.dataset.label, i.checked]));
+      q('list').replaceChildren(...segments.map(s => {
+        const li = document.createElement('li');
+        li.innerHTML = '<label><input type="checkbox" checked> <span></span></label><small></small>';
+        li.querySelector('input').dataset.label = s.label;
+        li.querySelector('input').checked = previous.get(s.label) ?? true;
+        li.querySelector('span').textContent = `${String(s.index).padStart(2, '0')} · ${s.label}`;
+        li.querySelector('small').textContent = `${String(s.seconds).replace('.', ',')} s · ${s.frames} images${s.aerial ? ' · vue aérienne' : ''}`;
+        // Cocher un segment ne reconstruit pas la liste : seul le résumé change.
+        li.querySelector('input').addEventListener('change', summarize);
+        li._segment = s;
+        return li;
+      }));
+      summarize();
+    };
+    const summarize = () => {
+      const o = settings();
+      const chosen = [...q('list').children].filter(li => li.querySelector('input').checked).map(li => li._segment);
+      const images = chosen.reduce((n, s) => n + s.frames, 0) * Math.max(1, o.passes.length);
+      q('summary').textContent = `${chosen.length} segment${chosen.length > 1 ? 's' : ''} · ${images} images à rendre (${o.passes.length} passe${o.passes.length > 1 ? 's' : ''}). Le rendu est local et gratuit ; comptez quelques minutes.`;
+      dialog._chosen = chosen; dialog._settings = o;
+    };
+    dialog.querySelectorAll('select, [data-pass]').forEach(input => input.addEventListener('change', refresh));
+    q('go').addEventListener('click', () => renderAiSequence(dialog));
+    dialog.addEventListener('close', () => { if (aiSequenceRun) aiSequenceRun.stop = true; });
+    dialog._refresh = refresh;
+    return dialog;
+  }
+  async function renderAiSequence(dialog) {
+    const q = sel => dialog.querySelector(`[data-seq="${sel}"]`);
+    if (aiSequenceRun) { aiSequenceRun.stop = true; q('go').textContent = '⏳ Arrêt…'; return; }
+    const segments = dialog._chosen || [], o = dialog._settings;
+    if (!segments.length || !o.passes.length) { q('status').textContent = 'Choisissez au moins un segment et une passe.'; return; }
+    const run = aiSequenceRun = { stop: false };
+    const sequence = `seq-${new Date().toISOString().replace(/[-:]/g, '').replace(/\..*$/, '').toLowerCase()}`;
+    const total = segments.reduce((n, s) => n + s.frames, 0);
+    let done = 0;
+    q('go').textContent = '⏹ Arrêter';
+    try {
+      await assetsReady;
+      if (currentMode === 'walk') setMode('scroll');
+      hidePhotoOverlay();
+      for (const segment of segments) {
+        const far = segment.aerial ? 60 : 10; // profondeur contrastée : une pièce fait 3 à 6 m
+        for (let k = 0; k < segment.frames; k++) {
+          if (run.stop) throw new Error('arrêtée à votre demande');
+          const frame = AiSequence.captureFrame({ hs: houseScene, studio, tour: scrollTour }, AiSequence.frameProgress(segment, k), { width: o.width, height: o.height, passes: o.passes, far });
+          for (const pass of o.passes) {
+            const response = await fetch(projectApi('api/save-sequence-frame'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sequence, segment: segment.index, pass, frame: k + 1, data: frame[pass] }) });
+            if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || `HTTP ${response.status}`);
+          }
+          done++;
+          q('status').textContent = `Segment ${segment.index} · image ${k + 1}/${segment.frames} · ${Math.round(done / total * 100)} %`;
+          await new Promise(requestAnimationFrame); // l'interface reste réactive
+        }
+      }
+      const response = await fetch(projectApi('api/save-sequence-manifest'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sequence, manifest: { fps: o.fps, width: o.width, height: o.height, passes: o.passes, segments } }) });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      q('status').textContent = `Séquence prête : ${total} images × ${o.passes.length} passes, dans ${result.folder} (mode d’emploi : LISEZMOI.txt).`;
+    } catch (error) {
+      q('status').textContent = `Séquence interrompue : ${error.message}.`;
+    } finally {
+      aiSequenceRun = null;
+      q('go').textContent = 'Rendre la séquence';
+      scrollTour.update(scrollProgress);
+      houseScene.render();
+    }
+  }
+  if (aiSequenceButton) aiSequenceButton.addEventListener('click', () => {
+    if (invited || tourRecording) return;
+    const dialog = aiSequenceDialog();
+    dialog._refresh();
+    dialog.showModal();
+  });
+
   window.addEventListener('keydown', (e) => {
     if (!inVisit() || e.defaultPrevented || gallery.open) return;
     if (tourRecording) {
@@ -1589,7 +2025,7 @@ window.startProjectViewer = () => {
     setMode('walk'); walkController.clearMovement();
     climb = {elapsed:0,lastStep:-1};
     stairsButton.dataset.progress='0.00';
-    guidedAnnouncement.textContent='Montée vers le palier de l’étage : 16 marches, deux volées.';
+    guidedAnnouncement.textContent=`Montée vers l’étage : 16 marches${{ return: ', deux volées et un palier', quarter: ', quart tournant avec palier', winder: ', quart tournant balancé', helical: ' en hélice autour du poteau', straight: ' d’une seule volée' }[houseScene.stairType] || ''}.`;
   };
   function advanceStair(dt) {
     const pts=houseScene.stairPath, end=pts.length-1;
@@ -1597,7 +2033,7 @@ window.startProjectViewer = () => {
     const t=motion.matches?end:Math.min(end,climb.elapsed*3.6), i=Math.min(end-1,Math.floor(t)), f=t-i;
     stairsButton.dataset.progress=(t/end).toFixed(2);
     const step=Math.min(16,Math.ceil(t/end*16));
-    if(step!==climb.lastStep){climb.lastStep=step;guidedAnnouncement.textContent=`Montée de l’escalier : marche ${step} sur 16${i>=9?' · palier de retournement':' .'}`;}
+    if(step!==climb.lastStep){climb.lastStep=step;guidedAnnouncement.textContent=`Montée de l’escalier : marche ${step} sur 16${step===8&&['return','quarter'].includes(houseScene.stairType)?' · palier':''}.`;}
     const a=pts[i], b=pts[i+1], camera=houseScene.camera;
     camera.position.lerpVectors(a,b,f);
     camera.position.y=1.59+a.y+(b.y-a.y)*f*f*(3-2*f);

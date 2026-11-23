@@ -6,15 +6,16 @@
   const targeted = Boolean(context?.decision);
   const fragment = new URLSearchParams(url.hash.slice(1));
   const legacyGallery = url.searchParams.get('galerie') === '1';
-  const cockpitEntry = !legacyGallery && !targeted && !url.hash && !url.searchParams.has('decision') && (context?.project || url.searchParams.get('project') || 'residence-verandas') === 'residence-verandas';
+  const cockpitEntry = !legacyGallery && !targeted && !url.hash && !url.searchParams.has('decision') &&
+    (url.pathname.endsWith('/index.html') || (url.pathname === '/' && url.searchParams.has('project')));
   const directVisit = cockpitEntry || targeted || url.pathname.endsWith('/index.html') || url.searchParams.has('decision') ||
     ['wp', 'variant', 'retours'].some(key => fragment.has(key));
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
   const knownViews = ['cover', 'visit', 'dossier', 'estimate', 'gallery'];
   const common = ['motion', 'houseDataCore', 'viewOrder', 'costEstimate'];
   const viewer = ['icons', 'data', 'projectLoader', 'scene', 'variantState', 'solarStudy', 'realism', 'assets', 'presentationPlan',
-    'renderStudio', 'scrollTour', 'walkController', 'minimap', 'clientFinishes', 'solarOptions', 'clientTools', 'clientVariants',
-    'clientDecisions', 'clientFeedback', 'clientBrochure', 'planBook', 'app', 'presentMode'];
+    'renderStudio', 'aiSequence', 'scrollTour', 'walkController', 'minimap', 'clientFinishes', 'solarOptions', 'clientTools', 'clientVariants',
+    'clientDecisions', 'clientFeedback', 'clientBrochure', 'sheetClassifier', 'woodGrain', 'planBook', 'aiPrompt', 'fidelityCheck', 'app', 'presentMode'];
   const scripts = new Map();
   const status = el('workspace-status');
   let active = 'cover';
@@ -139,7 +140,7 @@
       } catch (error) {
         if (token !== revision) return;
         if (studio) openedFromGallery = false;
-        message('La maquette 3D ne peut pas démarrer. Le dossier et les plans restent accessibles.');
+        message('La maquette 3D ne peut pas démarrer. La présentation du projet reste accessible.');
         console.error(error);
       }
     } else if (focus) {

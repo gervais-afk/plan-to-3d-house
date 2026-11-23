@@ -104,7 +104,7 @@ function saveRender(req, res, url) {
 function galleryFlags(req, res, url) {
   readBody(req, res, 4 * 1024, body => {
     const { id } = body || {};
-    const flags = Object.fromEntries(['catalog', 'book'].filter(key => typeof body?.[key] === 'boolean').map(key => [key, body[key]]));
+    const flags = Object.fromEntries(['catalog', 'book', 'fidelityAccepted'].filter(key => typeof body?.[key] === 'boolean').map(key => [key, body[key]]));
     if (typeof id !== 'string' || !/^[a-z0-9_-]{1,80}$/i.test(id) || !Object.keys(flags).length) {
       return sendJson(res, 422, { error: 'Indiquez une image et un choix catalogue ou cahier.' });
     }
@@ -169,6 +169,33 @@ function presentationApi(req, res, url, pathname) {
 const IMAGE_MODELS = ['google/gemini-3.1-flash-image', 'microsoft/mai-image-2.7-flash', 'bytedance-seed/seedream-5-0-flash'];
 
 // Enregistre une photoréalisation en ajoutant/remplaçant uniquement son entrée dans le manifeste.
+// Étiquettes du prompt piloté par le projet (js/aiPrompt.js) : clés connues, valeurs courtes, rien d'autre.
+const PROMPT_TAG_KEYS = ['kind', 'room', 'use', 'floor', 'facade', 'hour', 'sun', 'city', 'planVersion'];
+function promptTags(tags) {
+  if (!tags || typeof tags !== 'object') return null;
+  const clean = {};
+  for (const key of PROMPT_TAG_KEYS) {
+    const value = tags[key];
+    if (typeof value === 'number' && Number.isFinite(value)) clean[key] = value;
+    else if (typeof value === 'string' && value) clean[key] = value.slice(0, 40);
+    else clean[key] = null;
+  }
+  return clean;
+}
+
+// Contrôle géométrique calculé dans le navigateur (js/fidelityCheck.js) : nombres bornés, verdict connu.
+function fidelityResult(value) {
+  if (!value || typeof value !== 'object' || !['faithful', 'review', 'unfaithful'].includes(value.verdict)) return null;
+  const unit = n => Number.isFinite(Number(n)) ? Math.max(0, Math.min(1, Math.round(Number(n) * 1000) / 1000)) : 0;
+  const offset = n => Number.isFinite(Number(n)) ? Math.max(-1, Math.min(1, Math.round(Number(n) * 1000) / 1000)) : 0;
+  return {
+    version: Number.isInteger(value.version) ? value.version : 0,
+    verdict: value.verdict, score: unit(value.score), recall: unit(value.recall), chance: unit(value.chance),
+    shift: { x: offset(value.shift?.x), y: offset(value.shift?.y) },
+    aspect: Number.isFinite(Number(value.aspect)) ? Math.round(Number(value.aspect) * 1000) / 1000 : null
+  };
+}
+
 function saveGenerated(req, res, url) {
   readBody(req, res, 30 * 1024 * 1024, body => {
     try {
@@ -199,6 +226,8 @@ function saveGenerated(req, res, url) {
         generator: IMAGE_MODELS.includes(metadata.model)
           ? `OpenRouter · ${metadata.model}` : 'OpenRouter · google/gemini-3.1-flash-image',
         prompt: String(metadata.prompt || '').slice(0, 6000),
+        tags: promptTags(metadata.tags),
+        fidelity: fidelityResult(metadata.fidelity),
         notes: 'Image issue du rendu Three.js ; géométrie à vérifier visuellement.',
         catalog: false,
         book: false
@@ -317,8 +346,9 @@ function galleryMedia(res, url, access = {}) {
       return {
         id: String(item.id || ''), type: 'image', file: item.file,
         preview: preview && fs.statSync(path.join(media.images, preview), { throwIfNoEntry: false })?.isFile() ? imagePrefix + preview : null,
-        reference: typeof item.reference === 'string' && item.reference.startsWith(renderPrefix)
-          && /^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp)$/i.test(item.reference.slice(renderPrefix.length)) ? item.reference : null,
+        reference: typeof item.reference === 'string' && [renderPrefix, imagePrefix].some(prefix => item.reference.startsWith(prefix)
+          && /^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp)$/i.test(item.reference.slice(prefix.length))) ? item.reference : null,
+        fidelity: fidelityResult(item.fidelity), fidelityAccepted: item.fidelityAccepted === true,
         room: item.room || null, label: item.label || item.id || 'Image générée', cover: item.cover === true,
         // Les anciennes images publiées restent visibles si le choix catalogue n’existait pas encore.
         catalog: item.catalog === true || item.catalog === undefined, book: item.book === true,
@@ -384,15 +414,34 @@ function readBody(req, res, limit, cb) {
   });
 }
 
+/** Vignette d'un projet pour l'index de l'atelier : couverture choisie, sinon façade, vue aérienne ou plan. */
+function projectCover(slug) {
+  const base = path.join(PROJECTS, slug);
+  const prefix = `projects/${slug}/`;
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(base, 'generated', 'manifest.json'), 'utf8'));
+    const chosen = (manifest.items || []).find(item => item && item.cover === true && typeof item.file === 'string'
+      && item.file.startsWith(prefix) && /\.(?:jpe?g|png|webp)$/i.test(item.file) && !item.file.includes('..'));
+    if (chosen && fs.existsSync(path.join(ROOT, chosen.file))) return chosen.file;
+  } catch { /* pas de manifeste : on cherche une capture */ }
+  const fallback = ['generated/renders/facade.jpg', 'generated/renders/vue-aerienne.jpg', 'plan.jpg']
+    .find(file => fs.existsSync(path.join(base, file)));
+  return fallback ? prefix + fallback : null;
+}
+
 function listProjects(res, only) {
   fs.mkdirSync(PROJECTS, { recursive: true });
   const defaultSlug = portal.enabled ? process.env.PORTAL_DEFAULT_PROJECT || projectSlug() : projectSlug();
   const items = fs.readdirSync(PROJECTS, { withFileTypes: true })
     .filter(d => (!only || d.name === only) && d.isDirectory() && /^[a-z0-9-]{1,60}$/i.test(d.name) && fs.existsSync(path.join(PROJECTS, d.name, 'project.json')))
     .map(d => {
-      let name = d.name;
-      try { name = JSON.parse(fs.readFileSync(path.join(PROJECTS, d.name, 'project.json'), 'utf8')).meta.name || d.name; } catch (e) { /* nom par défaut */ }
-      return { slug: d.name, name, default: d.name === defaultSlug, updated: fs.statSync(path.join(PROJECTS, d.name, 'project.json')).mtimeMs };
+      let name = d.name, subtitle = '';
+      try {
+        const meta = JSON.parse(fs.readFileSync(path.join(PROJECTS, d.name, 'project.json'), 'utf8')).meta || {};
+        name = meta.name || d.name;
+        subtitle = typeof meta.subtitle === 'string' ? meta.subtitle.slice(0, 120) : '';
+      } catch (e) { /* nom par défaut */ }
+      return { slug: d.name, name, subtitle, cover: projectCover(d.name), default: d.name === defaultSlug, updated: fs.statSync(path.join(PROJECTS, d.name, 'project.json')).mtimeMs };
     })
     .sort((a, b) => b.updated - a.updated);
   res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -594,6 +643,69 @@ function aiImage(req, res) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Séquences pour l'IA (js/aiSequence.js) : images du parcours rendues une à une, par segment et par passe.
+// projects/<slug>/generated/sequences/<séquence>/seg-01/{color,depth,edges}/0001.jpg|png
+// ---------------------------------------------------------------------------
+const SEQUENCE_PASSES = { color: 'jpg', depth: 'png', edges: 'png' };
+function sequenceDir(url, sequence) {
+  if (!/^seq-[0-9]{8}t[0-9]{6}$/i.test(String(sequence || ''))) throw new Error('identifiant de séquence invalide');
+  const media = ensureProjectMedia(projectSlug(url.searchParams.get('project')));
+  return { dir: path.join(media.generated, 'sequences', sequence), prefix: `${media.prefix}sequences/${sequence}/` };
+}
+function saveSequenceFrame(req, res, url) {
+  readBody(req, res, 12 * 1024 * 1024, body => {
+    try {
+      const { sequence, segment, pass, frame, data } = body || {};
+      const ext = SEQUENCE_PASSES[pass];
+      if (!ext || !Number.isInteger(segment) || segment < 1 || segment > 99 || !Number.isInteger(frame) || frame < 1 || frame > 9999) throw new Error('image de séquence invalide');
+      const mime = ext === 'jpg' ? 'jpeg' : 'png';
+      const match = new RegExp(`^data:image/${mime};base64,([A-Za-z0-9+/=]+)$`).exec(data || '');
+      if (!match) throw new Error('format d’image inattendu');
+      const { dir } = sequenceDir(url, sequence);
+      const folder = path.join(dir, `seg-${String(segment).padStart(2, '0')}`, pass);
+      fs.mkdirSync(folder, { recursive: true });
+      fs.writeFileSync(path.join(folder, `${String(frame).padStart(4, '0')}.${ext}`), Buffer.from(match[1], 'base64'));
+      sendJson(res, 200, { ok: true });
+    } catch (error) { sendJson(res, 400, { error: error.message }); }
+  });
+}
+function saveSequenceManifest(req, res, url) {
+  readBody(req, res, 256 * 1024, body => {
+    try {
+      const { sequence, manifest } = body || {};
+      const { dir, prefix } = sequenceDir(url, sequence);
+      if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.segments)) throw new Error('manifeste de séquence invalide');
+      fs.mkdirSync(dir, { recursive: true });
+      const clean = {
+        sequence, project: projectSlug(url.searchParams.get('project')), created: new Date().toISOString(),
+        fps: Number(manifest.fps) || 24, width: Number(manifest.width) || 1280, height: Number(manifest.height) || 720,
+        passes: (manifest.passes || []).filter(p => SEQUENCE_PASSES[p]),
+        segments: manifest.segments.slice(0, 99).map(s => ({ index: Number(s.index), label: String(s.label || '').slice(0, 120), frames: Number(s.frames), seconds: Number(s.seconds), start: Number(s.start), end: Number(s.end) })),
+        notice: 'Rendu d’ambiance illustratif non contractuel : l’IA ne doit modifier que les matières et la lumière.'
+      };
+      fs.writeFileSync(path.join(dir, 'sequence.json'), JSON.stringify(clean, null, 2));
+      const lines = [
+        'SÉQUENCE POUR L’IA — ArchiCam Studio',
+        `Projet : ${clean.project} · ${clean.fps} images/s · ${clean.width}×${clean.height}`,
+        '',
+        'Dossiers : seg-XX/color (rendu de la maquette), seg-XX/depth (profondeur, proche = blanc), seg-XX/edges (contours).',
+        '',
+        'Utilisation :',
+        ' - Runway (Aleph / Gen-4, vidéo vers vidéo) ou Luma (Modify) : importer la vidéo color d’un segment, structure élevée.',
+        ' - ComfyUI + Wan VACE : séquence color en entrée, depth et/ou edges en contrôle (la géométrie reste verrouillée).',
+        '',
+        'Assembler un segment en vidéo (ffmpeg) :',
+        ...clean.segments.map(s => `  ffmpeg -framerate ${clean.fps} -i seg-${String(s.index).padStart(2, '0')}/color/%04d.jpg -c:v libx264 -pix_fmt yuv420p -crf 16 seg-${String(s.index).padStart(2, '0')}-color.mp4   # ${s.label} (${s.seconds} s)`),
+        '',
+        clean.notice
+      ];
+      fs.writeFileSync(path.join(dir, 'LISEZMOI.txt'), lines.join('\n'));
+      sendJson(res, 200, { ok: true, folder: prefix });
+    } catch (error) { sendJson(res, 400, { error: error.message }); }
+  });
+}
+
 function sendJson(res, status, body) {
   if (res.headersSent) return;
   res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -603,9 +715,31 @@ function sendJson(res, status, body) {
 const VIDEO_MODEL = 'bytedance/seedance-2.5-flash';
 const VIDEO_COST_PER_SECOND_ESTIMATE = 0.06726;
 const VIDEO_CLIPS = {
-  'anim-arrivee': { sourceName: 'facade-sud.jpg', label: 'Arrivée porche & façade', movement: 'Travelling avant lent vers le porche' },
-  'anim-sejour': { sourceName: 'sejour.jpg', label: 'Visite panoramique du séjour', movement: 'Panoramique horizontal lent de gauche à droite' }
+  'anim-arrivee': {
+    candidates: ['photor-perspective-01.png', 'perspective-01.jpg', 'facade-sud.jpg', 'facade.jpg'],
+    label: 'Arrivée porche & façade',
+    movement: 'Travelling avant fluide et lent vers le porche et la façade principale'
+  },
+  'anim-sejour': {
+    candidates: ['photor-sejour-veranda.png', 'interieur-sejour-reference.jpg', 'sejour.jpg', 'r12.jpg'],
+    label: 'Visite panoramique du séjour',
+    movement: 'Panoramique horizontal fluide du grand séjour et de la véranda'
+  },
+  'anim-veranda': {
+    candidates: ['photor-perspective-02.png', 'perspective-02.jpg'],
+    label: 'Véranda arrière & terrasse',
+    movement: 'Travelling latéral le long de la terrasse arrière ouverte sur le jardin'
+  }
 };
+
+function resolveClipSource(clip, media) {
+  if (!clip) return null;
+  const candidates = clip.candidates || (clip.sourceName ? [clip.sourceName] : []);
+  for (const name of candidates) {
+    if (fs.existsSync(path.join(media.images, name))) return name;
+  }
+  return clip.sourceName || candidates[0] || null;
+}
 const videoJobs = new Map();
 const videoJobKey = (slug, clipId) => `${slug}:${clipId}`;
 
@@ -620,7 +754,8 @@ function updateVideoManifest(slug, clipId, details) {
   const manifest = JSON.parse(fs.readFileSync(media.manifest, 'utf8'));
   if (!manifest || !Array.isArray(manifest.items)) throw new Error('Manifeste invalide.');
   const clip = VIDEO_CLIPS[clipId];
-  const sourceImage = `${media.prefix}images/${clip.sourceName}`;
+  const sourceName = resolveClipSource(clip, media) || 'source.jpg';
+  const sourceImage = `${media.prefix}images/${sourceName}`;
   const index = manifest.items.findIndex(item => item && item.id === clipId);
   const previous = index >= 0 ? manifest.items[index] : {};
   const item = {
@@ -656,17 +791,28 @@ async function submitVideo(req, res, body) {
   try { slug = projectSlug(body && body.project); media = ensureProjectMedia(slug); }
   catch (error) { return sendJson(res, 400, { error: error.message }); }
   if (!clip) return sendJson(res, 400, { error: 'Clip vidéo non autorisé.' });
-  const sourceImage = `${media.prefix}images/${clip.sourceName}`;
-  const sourcePath = path.join(media.images, clip.sourceName);
+  const sourceName = resolveClipSource(clip, media);
+  if (!sourceName) return sendJson(res, 400, { error: 'Image source introuvable pour ce clip.' });
+  const sourceImage = `${media.prefix}images/${sourceName}`;
+  const sourcePath = path.join(media.images, sourceName);
+  if (!fs.existsSync(sourcePath)) return sendJson(res, 400, { error: `Fichier source introuvable : ${sourcePath}` });
+
   const jobKey = videoJobKey(slug, clipId);
   const active = videoJobs.get(jobKey);
   if (active && !['failed', 'cancelled', 'expired', 'completed'].includes(active.status)) {
     return sendJson(res, 409, { error: 'Une génération est déjà en cours pour ce clip.', status: active.status });
   }
   const manifest = JSON.parse(fs.readFileSync(media.manifest, 'utf8'));
-  const metadata = manifest.items.find(item => item && item.id === clipId && item.type === 'video');
-  if (!metadata || metadata.sourceImage !== sourceImage || !fs.existsSync(sourcePath)) {
-    return sendJson(res, 400, { error: 'Image de première image ou métadonnées manquantes.' });
+  let metadata = manifest.items.find(item => item && item.id === clipId && item.type === 'video');
+  if (!metadata) {
+    metadata = {
+      id: clipId, type: 'video', file: `${media.prefix}videos/${clipId}.mp4`, mimeType: 'video/mp4',
+      sourceImage, poster: sourceImage, duration: 5, durationIsEstimated: true,
+      label: clip.label, sourceLabel: '✨ Rendu IA', generator: `OpenRouter · ${VIDEO_MODEL}`,
+      movement: clip.movement, catalog: true, book: true, generationStatus: 'pending'
+    };
+    manifest.items.push(metadata);
+    fs.writeFileSync(media.manifest, JSON.stringify(manifest, null, 2));
   }
   if (metadata.jobId && ['pending', 'in_progress', 'completed'].includes(metadata.generationStatus)
     && !fs.existsSync(path.join(media.videos, `${clipId}.mp4`))) {
@@ -826,7 +972,8 @@ http.createServer((req, res) => {
     if (/[\u0000-\u001f\u007f]/.test(requestedPath)) throw new Error('Chemin invalide');
   } catch { res.writeHead(400); return res.end('URL invalide'); }
   // Les anciens liens racine avec ?project= et l’entrée privée restent des liens de visite.
-  const entry = portal.enabled || requestUrl.searchParams.has('project') ? '/index.html' : '/accueil.html';
+  // Sans projet désigné, l'atelier s'ouvre sur son entrée de marque (studio.html), sans aucun projet affiché.
+  const entry = portal.enabled || requestUrl.searchParams.has('project') ? '/index.html' : '/studio.html';
   const file = path.resolve(ROOT, '.' + (requestedPath === '/' ? entry : requestedPath));
   const nativeRelative = path.relative(ROOT, file);
   if (!nativeRelative || nativeRelative.startsWith('..' + path.sep) || nativeRelative === '..' || path.isAbsolute(nativeRelative)) { res.writeHead(403); return res.end(); }
@@ -851,6 +998,8 @@ http.createServer((req, res) => {
   if (req.method === 'POST' && urlPath === '/api/save-generated') return saveGenerated(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/gallery/flags') return galleryFlags(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/save-video') return saveVideo(req, res, requestUrl);
+  if (req.method === 'POST' && urlPath === '/api/save-sequence-frame') return saveSequenceFrame(req, res, requestUrl);
+  if (req.method === 'POST' && urlPath === '/api/save-sequence-manifest') return saveSequenceManifest(req, res, requestUrl);
   if (req.method === 'GET' && urlPath === '/api/gallery/media') return galleryMedia(res, requestUrl, access);
   if (req.method === 'GET' && urlPath === '/api/projects') return listProjects(res, access.only);
   if (req.method === 'POST' && urlPath === '/api/save-project') return saveProject(req, res);

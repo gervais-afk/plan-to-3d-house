@@ -50,7 +50,7 @@ async function serve(root, variables = {}) {
 }
 
 function fixture(root) {
-  for (const file of ['serve.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'presentationStore.js', 'cabinetStore.js', 'portal.html', 'accueil.html', 'index.html', 'editor.html']) fs.copyFileSync(path.join(source, file), path.join(root, file));
+  for (const file of ['serve.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'presentationStore.js', 'cabinetStore.js', 'portal.html', 'accueil.html', 'studio.html', 'index.html', 'editor.html']) fs.copyFileSync(path.join(source, file), path.join(root, file));
   fs.mkdirSync(path.join(root, 'js'));
   for (const file of ['variantState.js', 'data.js', 'coverImage.js', 'workspace.js']) fs.copyFileSync(path.join(source, 'js', file), path.join(root, 'js', file));
   fs.mkdirSync(path.join(root, 'css'));
@@ -96,7 +96,8 @@ test('Mode démo conservé sans exposer les fichiers cachés', async t => {
   fixture(root);
   fs.writeFileSync(path.join(root, '.env'), 'TEST=NON_PUBLIC');
   const server = track(await serve(root));
-  assert.match(await (await server.request('/')).text(), /id="home-cover"/);
+  assert.match(await (await server.request('/')).text(), /id="door-open"/, 'la racine ouvre l’entrée de l’atelier');
+  assert.match(await (await server.request('/accueil.html?project=plan-a')).text(), /id="home-cover"/, 'chaque projet garde sa couverture');
   const projectEntry = await server.request('/?project=plan-a');
   assert.equal(projectEntry.status, 200, 'le projet répond à la racine sans redirection');
   const entryHtml = await projectEntry.text();
