@@ -21,6 +21,7 @@ window.ProjectCoverReady = (() => {
   let presentationCatalog = [];
   let currentMedia = { images: [], renders: [] };
   let currentProject = null;
+  let projectPresentationOpen = false;
   let loadedProjectRecord = null;
   let loadedProjectData = null;
   let loadedProjectMedia = null;
@@ -48,14 +49,28 @@ window.ProjectCoverReady = (() => {
       projectSheet(loadedProjectRecord, loadedProjectData);
     }
   }).catch(() => renderCabinet());
-  el('cover-edition-date').textContent = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date());
+  const editionDate = el('cover-edition-date');
+  if (editionDate) editionDate.textContent = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date());
 
   el('home-account').hidden = !context?.role;
+  // Retour à l'entrée de l'atelier (studio.html), seulement hors portail : en privé, « / » ouvre la visite.
+  const studioLink = el('home-studio');
+  if (studioLink) studioLink.hidden = Boolean(context?.role);
   // L’outil de saisie n’apparaît dans l’en-tête que pour l’architecte connecté ; en démo il reste en pied de page.
   el('home-editor').hidden = context?.role !== 'architect';
   el('footer-editor').hidden = Boolean(context?.role);
   el('home-brand').dataset.view = 'cover';
   el('home-brand').removeAttribute('aria-label');
+  el('welcome-present').addEventListener('click', () => {
+    projectPresentationOpen = !projectPresentationOpen;
+    el('project-sheet').hidden = !projectPresentationOpen;
+    el('welcome-present').setAttribute('aria-expanded', String(projectPresentationOpen));
+    el('welcome-present-label').textContent = projectPresentationOpen ? 'Fermer la présentation' : 'Présenter le projet';
+    el('welcome-present-icon').textContent = projectPresentationOpen ? '↑' : '↓';
+    if (projectPresentationOpen) {
+      el('project-sheet').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    }
+  });
 
   function viewerLink(project, gallery = false) {
     const link = new URL('index.html', url);
@@ -67,13 +82,7 @@ window.ProjectCoverReady = (() => {
     window.ProjectWorkspace.setProject(project);
     el('home-brand').href = `/?project=${encodeURIComponent(project)}`;
     el('cover-enter').href = viewerLink(project);
-    el('cover-gallery').href = viewerLink(project, true);
-    const synthesis = el('cover-synthesis');
-    synthesis.hidden = project !== 'residence-verandas';
-    synthesis.href = `projects/${encodeURIComponent(project)}/planches/cahier.pdf`;
-    const synthesisNav = el('home-synthesis-nav');
-    synthesisNav.hidden = project !== 'residence-verandas';
-    synthesisNav.href = synthesis.href;
+    el('welcome-enter-from-presentation').href = viewerLink(project);
   }
   const nameForDisplay = name => name === name.toLocaleUpperCase('fr-FR')
     ? name.toLocaleLowerCase('fr-FR').replace(/(^|[\s-])\p{L}/gu, start => start.toLocaleUpperCase('fr-FR')) : name;
@@ -90,7 +99,7 @@ window.ProjectCoverReady = (() => {
   }
   // L’ordre historique reste le repli ; les sélections ne sont appliquées que si disponibles.
   const makeViews = (media, slug) => {
-    const published = ViewOrder.views({ images: media?.images || [], renders: [] }, slug).filter(view => view.catalog);
+    const published = ViewOrder.views({ images: media?.images || [], renders: [] }, slug).filter(view => view.catalog && view.category !== 'plan');
     const automatic = published.slice(0, 3);
     return ViewOrder.selectSlots(automatic, media?.presentation?.slots, published);
   };
@@ -102,7 +111,7 @@ window.ProjectCoverReady = (() => {
     const focal = current === 0 ? presentation?.focal : null;
     if (!shot.published) {
       image.hidden = true;
-      cover.dataset.art = 'plan';
+      cover.dataset.art = 'ambient';
       el('cover-caption').textContent = shot.label;
       el('cover-number').textContent = `${counter(current + 1)} / ${counter(activeViews.length)}`;
       return;
@@ -111,8 +120,8 @@ window.ProjectCoverReady = (() => {
     const source = new URL(shot.preview || shot.source, url).href;
     el('cover-number').textContent = `${counter(current + 1)} / ${counter(activeViews.length)}`;
     Array.from(views.children).forEach((button, i) => button.setAttribute('aria-pressed', String(i === current)));
-    // Réseau lent : le plan dessiné couvre l’attente plutôt qu’une trame vide.
-    const patience = setTimeout(() => { if (version === pictureVersion && cover.dataset.art !== 'photo') cover.dataset.art = 'plan'; }, 1200);
+    // Réseau lent : un fond architectural abstrait couvre l’attente, sans afficher de dessin de plan.
+    const patience = setTimeout(() => { if (version === pictureVersion && cover.dataset.art !== 'photo') cover.dataset.art = 'ambient'; }, 1200);
     try {
       const next = await CoverImage.replace(image, {
         ImageConstructor: Image, source, original, alt: shot.alt, focal,
@@ -125,8 +134,8 @@ window.ProjectCoverReady = (() => {
     } catch {
       if (version !== pictureVersion) return;
       image.hidden = true;
-      cover.dataset.art = 'plan';
-      el('cover-caption').textContent = 'Vue indisponible · plan du projet';
+      cover.dataset.art = 'ambient';
+      el('cover-caption').textContent = 'Visuel du projet indisponible';
     } finally {
       clearTimeout(patience);
     }
@@ -136,7 +145,7 @@ window.ProjectCoverReady = (() => {
     pictureVersion++;
     image.hidden = true;
     image.removeAttribute('src');
-    el('cover-caption').textContent = shots.length || cover.dataset.art === 'loading' ? '' : 'Plan du projet';
+    el('cover-caption').textContent = shots.length || cover.dataset.art === 'loading' ? '' : 'Visuel du projet';
     el('cover-index').hidden = shots.length < 2;
     el('cover-empty').hidden = shots.length > 0;
     views.replaceChildren(...shots.map((shot, i) => {
@@ -156,9 +165,9 @@ window.ProjectCoverReady = (() => {
       });
       return button;
     }));
-    // Le plan dessiné ne sert de couverture que s’il n’y a aucun rendu : pas de plan entrevu avant la photo.
+    // Sans photographie disponible, la couverture garde son fond architectural abstrait — jamais un plan.
     if (shots.length) void showView(0);
-    else if (cover.dataset.art !== 'loading') cover.dataset.art = 'plan';
+    else if (cover.dataset.art !== 'loading') cover.dataset.art = 'ambient';
   }
   function projectDrawing(walls) {
     const all = (Array.isArray(walls) ? walls : []).filter(wall => [wall?.from, wall?.to].every(point => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)));
@@ -231,22 +240,42 @@ window.ProjectCoverReady = (() => {
     const section = el('project-sheet');
     const meta = project?.meta || {};
     const concept = String(meta.concept || '').trim();
-    el('sheet-concept').textContent = concept || String(meta.subtitle || '').trim();
-    el('sheet-concept-block').hidden = !el('sheet-concept').textContent;
     const rooms = data?.rooms || [];
     const levels = new Set(rooms.map(r => r.level)).size;
     const annex = rooms.filter(r => !r.habitable).reduce((s, r) => s + r.area, 0);
+    const habitableRooms = rooms.filter(r => r.habitable);
+    const plain = name => String(name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const bedrooms = habitableRooms.filter(r => /chambre|suite/.test(plain(r.name))).length;
+    const baths = rooms.filter(r => /salle d.?eau|salle de bain|douche|\bwc\b|toil|sdb/.test(plain(r.name))).length;
+    const levelsLabel = levels === 1 ? 'Plain-pied' : levels > 1 ? `R+${levels - 1}` : '';
+    // Sans texte d'intention saisi, une phrase tirée du projet lui-même plutôt qu'une formule générique.
+    const derived = data?.totals?.habitable
+      ? `${levels > 1 ? `Maison ${levelsLabel}` : 'Maison de plain-pied'} de ${number.format(data.totals.habitable)} m² habitables : ${habitableRooms.length} pièces de vie${bedrooms ? `, dont ${bedrooms} chambre${bedrooms > 1 ? 's' : ''}` : ''}${levels > 1 ? `, réparties sur ${levels} niveaux` : ''}${annex ? `, prolongées par ${number.format(annex)} m² d’espaces extérieurs couverts` : ''}.`
+      : '';
+    el('sheet-concept').textContent = concept || derived || 'Une exploration des volumes, des espaces et des intentions qui donnent au projet son caractère.';
+    el('sheet-concept-block').hidden = !el('sheet-concept').textContent;
     const updated = Date.parse(meta.updated);
+    let footprint = '';
+    try {
+      const ground = (data?.walls || []).filter(w => (w.level || 0) === 0);
+      const xs = ground.flatMap(w => [w.from[0], w.to[0]]), zs = ground.flatMap(w => [w.from[1], w.to[1]]);
+      if (xs.length) footprint = `${number.format(Math.max(...xs) - Math.min(...xs))} × ${number.format(Math.max(...zs) - Math.min(...zs))} m`;
+    } catch { /* emprise facultative */ }
     const rows = [
       ['Lieu', meta.location], ['Référence projet', meta.reference],
       ['Maître d’ouvrage', meta.clientVisible === true ? meta.client : ''],
       ['Architecte responsable', meta.architect || currentCabinet.architect], ['Phase', PHASES[meta.phase] || meta.phase],
       ['Surface habitable', data?.totals?.habitable ? `${number.format(data.totals.habitable)} m²` : ''],
-      ['Annexes', annex ? `${number.format(annex)} m²` : ''],
-      ['Pièces de vie', String(rooms.filter(r => r.habitable).length || '')],
-      ['Niveaux', levels === 1 ? 'Plain-pied' : levels > 1 ? `R+${levels - 1}` : ''],
+      ['Espaces extérieurs couverts', annex ? `${number.format(annex)} m²` : ''],
+      ['Pièces de vie', String(habitableRooms.length || '')],
+      ['Chambres', bedrooms ? String(bedrooms) : ''],
+      ['Salles d’eau et WC', baths ? String(baths) : ''],
+      ['Niveaux', levelsLabel],
+      ['Emprise du bâti', footprint],
+      ['Hauteur sous plafond', data?.config?.wallHeight ? `${number.format(data.config.wallHeight)} m` : ''],
       ['Mise à jour', Number.isFinite(updated) ? new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(updated) : '']
     ].filter(([, value]) => value && String(value).trim());
+    scheduleTable(rooms);
     el('sheet-facts').replaceChildren(...rows.map(([label, value]) => {
       const row = document.createElement('div');
       const dt = document.createElement('dt'); dt.textContent = label;
@@ -254,7 +283,54 @@ window.ProjectCoverReady = (() => {
       row.append(dt, dd);
       return row;
     }));
-    section.hidden = !rows.length && !el('sheet-concept').textContent;
+    // Couverture : quatre chiffres clés de même rang (la surface n'est plus isolée dans une pastille).
+    const highlights = [
+      ['Surface habitable', data?.totals?.habitable ? `${number.format(data.totals.habitable)} m²` : ''],
+      ['Extérieurs couverts', annex ? `${number.format(annex)} m²` : ''],
+      ['Pièces de vie', String(habitableRooms.length || '')],
+      ['Niveaux', levelsLabel]
+    ].filter(([, value]) => value);
+    el('welcome-stats').replaceChildren(...highlights.map(([label, value]) => {
+      const item = document.createElement('div');
+      const dt = document.createElement('dt'); dt.textContent = label;
+      const dd = document.createElement('dd'); dd.textContent = value;
+      item.append(dt, dd);
+      return item;
+    }));
+    el('welcome-stats').hidden = !highlights.length;
+    section.hidden = !projectPresentationOpen;
+  }
+  /** Tableau des surfaces : une colonne par niveau, pièces à points de conduite, sous-totaux. */
+  function scheduleTable(rooms) {
+    const host = el('sheet-schedule-levels'), section = el('sheet-schedule');
+    if (!host || !section) return;
+    const byLevel = new Map();
+    rooms.filter(r => r.area > 0).forEach(r => { const l = Number(r.level) || 0; if (!byLevel.has(l)) byLevel.set(l, []); byLevel.get(l).push(r); });
+    const levelName = l => l === 0 ? 'Rez-de-chaussée' : l < 0 ? 'Sous-sol' : `Étage ${l}`;
+    host.replaceChildren(...[...byLevel.keys()].sort((a, b) => a - b).map(level => {
+      const list = byLevel.get(level).sort((a, b) => Number(b.habitable) - Number(a.habitable) || b.area - a.area);
+      const block = document.createElement('div');
+      block.className = 'schedule-level';
+      const head = document.createElement('h4');
+      head.textContent = levelName(level);
+      const table = document.createElement('table');
+      table.innerHTML = '<thead><tr><th scope="col">Pièce</th><th scope="col">Surface</th></tr></thead><tbody></tbody><tfoot></tfoot>';
+      list.forEach(r => {
+        const tr = document.createElement('tr');
+        if (!r.habitable) tr.className = 'is-annex';
+        const name = document.createElement('th'); name.scope = 'row';
+        const label = document.createElement('span'); label.textContent = roomName(r.name);
+        name.append(label);
+        const area = document.createElement('td'); area.textContent = `${number.format(r.area)} m²`;
+        tr.append(name, area);
+        table.tBodies[0].append(tr);
+      });
+      const hab = list.filter(r => r.habitable).reduce((s, r) => s + r.area, 0), ext = list.filter(r => !r.habitable).reduce((s, r) => s + r.area, 0);
+      table.tFoot.innerHTML = `<tr><th scope="row">Surface habitable</th><td>${number.format(hab)} m²</td></tr>${ext ? `<tr class="is-annex"><th scope="row">Extérieurs couverts</th><td>${number.format(ext)} m²</td></tr>` : ''}`;
+      block.append(head, table);
+      return block;
+    }));
+    section.hidden = !byLevel.size;
   }
   /** Plan du niveau principal à proportions exactes (unités SVG = mètres). */
   function planFigure(data, slug) {
@@ -690,7 +766,7 @@ window.ProjectCoverReady = (() => {
     renderViews(makeViews(media, item.slug));
     renderPlanBook(projectRecord, projectData, media);
     if (gallery.status === 'rejected') el('cover-empty').textContent = 'Les rendus sont momentanément indisponibles. Vous pouvez toujours ouvrir la maquette.';
-    else el('cover-empty').textContent = 'Aucun rendu publié. Explorez le plan et les volumes dans la maquette.';
+    else el('cover-empty').textContent = 'Aucun visuel publié. Entrez dans le cockpit pour découvrir la maquette.';
   }
 
   document.querySelectorAll('[data-print]').forEach(button => button.addEventListener('click', () => {

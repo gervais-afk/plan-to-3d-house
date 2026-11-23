@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="fr" data-scheme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#F7F5F0">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="ArchiCam Studio — atelier numérique d’architecture : plans cotés, maquette 3D, ambiances et dossiers d’agence.">
+  <title>ArchiCam Studio</title>
+  <link rel="icon" type="image/svg+xml" href="assets/archicam-icon.svg">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="preload" as="image" href="assets/studio/plan-rdc.jpg">
+  <link rel="stylesheet" href="css/studio.css">
+  <script src="js/woodGrain.js" defer></script>
+  <script src="js/studio.js" defer></script>
+</head>
+<body class="studio">
+  <a href="#studio-doors" class="studio-skip">Aller aux accès</a>
+
+  <!-- Fil de bois généré (js/woodGrain.js) -->
+  <div class="studio-wood" id="studio-wood" aria-hidden="true"></div>
+  <!-- Feuille d'atelier : cadre, repères de coupe -->
+  <div class="studio-sheet" aria-hidden="true">
+    <span class="mark mark-tl"></span><span class="mark mark-tr"></span>
+    <span class="mark mark-bl"></span><span class="mark mark-br"></span>
+  </div>
+
+  <header class="studio-head">
+    <a class="studio-brand" href="./" aria-label="ArchiCam Studio">
+      <img src="assets/archicam-icon.svg" alt="" width="34" height="34">
+      <span class="studio-wordmark">Archicam<span class="studio-dot" aria-hidden="true"></span><small>Studio</small></span>
+    </a>
+    <p class="studio-motto">Atelier numérique d’architecture</p>
+  </header>
+
+  <main class="studio-main">
+    <section class="studio-hero" aria-labelledby="studio-title">
+      <p class="studio-kicker"><span aria-hidden="true"></span>Le cockpit architectural immersif</p>
+      <h1 id="studio-title">Du trait<br><em>à l’espace.</em></h1>
+      <p class="studio-lead">Plans cotés, maquette 3D, ambiances et dossiers d’agence&nbsp;: chaque projet de l’atelier se dessine, se visite et se décide ici.</p>
+      <ul class="studio-crafts" aria-label="Savoir-faire de l’atelier">
+        <li>Plans cotés</li><li>Maquette 3D</li><li>Ambiances IA</li><li>Dossiers A3</li>
+      </ul>
+    </section>
+
+    <!-- Tirage encadré : plan commercial colorisé (recadré sans cartouche ni nom), RDC / R+1 -->
+    <figure class="studio-print" id="studio-print">
+      <div class="print-frame">
+        <div class="print-mat">
+          <div class="print-stage" id="print-stage">
+            <img class="print-img is-active" src="assets/studio/plan-rdc.jpg" alt="Plan commercial colorisé d’une maison : rez-de-chaussée meublé et coté" width="936" height="874" fetchpriority="high" data-level="rdc">
+            <img class="print-img" src="assets/studio/plan-etage.jpg" alt="Plan commercial colorisé d’une maison : étage meublé et coté" width="936" height="874" loading="lazy" decoding="async" data-level="r1">
+            <span class="print-loupe" id="print-loupe" aria-hidden="true"></span>
+          </div>
+        </div>
+      </div>
+      <figcaption class="print-caption">
+        <span class="print-ref" id="print-ref">PL. 01</span>
+        <span class="print-title" id="print-title">Rez-de-chaussée</span>
+        <span class="print-levels" role="group" aria-label="Niveau du plan">
+          <button type="button" data-level="rdc" aria-pressed="true">RDC</button>
+          <button type="button" data-level="r1" aria-pressed="false">R+1</button>
+        </span>
+      </figcaption>
+      <p class="print-note">Plan commercial colorisé · rendu d’ambiance illustratif non contractuel</p>
+    </figure>
+
+    <nav class="studio-doors" id="studio-doors" aria-label="Accès à l’atelier">
+      <button type="button" class="studio-door" id="door-open" aria-haspopup="dialog" aria-controls="studio-index">
+        <span class="door-num">01</span>
+        <span class="door-title">Ouvrir un projet</span>
+        <span class="door-desc">Reprendre un dossier de l’atelier</span>
+        <span class="door-arrow" aria-hidden="true">→</span>
+      </button>
+      <a class="studio-door" href="editor.html">
+        <span class="door-num">02</span>
+        <span class="door-title">Nouveau projet</span>
+        <span class="door-desc">Importer un plan ou le dessiner</span>
+        <span class="door-arrow" aria-hidden="true">↗</span>
+      </a>
+    </nav>
+  </main>
+
+  <footer class="studio-foot">
+    <dl class="studio-cartouche" aria-label="Cartouche">
+      <div><dt>Planche</dt><dd>00</dd></div>
+      <div><dt>Objet</dt><dd>Entrée de l’atelier</dd></div>
+      <div><dt>Édition</dt><dd id="studio-year">MMXXVI</dd></div>
+    </dl>
+  </footer>
+
+  <!-- Index des projets : n'apparaît qu'à la demande -->
+  <dialog class="studio-index" id="studio-index" aria-labelledby="index-title">
+    <div class="index-head">
+      <div>
+        <p class="studio-kicker"><span aria-hidden="true"></span>Index de l’atelier</p>
+        <h2 id="index-title">Les dossiers</h2>
+        <p class="index-count" id="index-count" role="status"></p>
+      </div>
+      <button type="button" class="index-close" id="index-close" aria-label="Fermer l’index">×</button>
+    </div>
+    <label class="index-search" id="index-search-wrap" hidden>
+      <span class="visually-hidden">Rechercher un projet</span>
+      <input type="search" id="index-search" placeholder="Rechercher un dossier…" autocomplete="off">
+    </label>
+    <ol class="index-list" id="index-list"></ol>
+    <div class="index-empty" id="index-empty" hidden>
+      <p>Aucun dossier dans l’atelier pour l’instant.</p>
+      <a class="index-new" href="editor.html">Commencer un nouveau projet <span aria-hidden="true">↗</span></a>
+    </div>
+  </dialog>
+</body>
+</html>

@@ -6,12 +6,12 @@
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#F7F5F0" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#161C19" media="(prefers-color-scheme: dark)">
-  <meta name="description" content="ArchiCam Studio — Le cockpit architectural immersif. Visite 3D, héliodon, gabarits et estimation budgétaire.">
-  <title>ArchiCam Studio — Dossier architectural</title>
+  <meta name="description" content="Bienvenue chez ArchiCam Studio. Découvrez une présentation soignée du projet ou entrez dans le cockpit architectural immersif.">
+  <title>ArchiCam Studio — Bienvenue</title>
   <meta property="og:type" content="website">
   <meta property="og:locale" content="fr_FR">
-  <meta property="og:title" content="ArchiCam Studio — Dossier architectural">
-  <meta property="og:description" content="Le cockpit architectural immersif. Plans, rendus et maquette interactive du projet.">
+  <meta property="og:title" content="ArchiCam Studio — Bienvenue">
+  <meta property="og:description" content="Découvrez le projet à votre rythme, puis entrez dans une visite architecturale immersive.">
   <link rel="icon" type="image/svg+xml" href="assets/archicam-icon.svg">
   <meta name="color-scheme" content="light dark">
   <link rel="stylesheet" href="css/tokens.css">
@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="css/accueil.css">
   <link rel="stylesheet" href="css/presentation.css">
   <link rel="stylesheet" href="css/workspace.css">
+  <link rel="stylesheet" href="css/welcome.css">
   <script src="js/portal-context.js" defer></script>
   <script src="js/workspace.js" defer></script>
 </head>
@@ -29,16 +30,15 @@
   <a href="#contenu" class="skip">Aller au projet</a>
   <header class="masthead shell">
     <a class="brand" id="home-brand" href="accueil.html" aria-label="ArchiCam Studio, accueil">
-      <img id="home-brand-logo" src="assets/archicam-logo-horizontal.svg" alt="ArchiCam Studio" height="36">
+      <picture>
+        <!-- En mode sombre, logo à texte clair : l'en-tête reste lisible. -->
+        <source srcset="assets/archicam-logo-dark.svg" media="(prefers-color-scheme: dark)">
+        <img id="home-brand-logo" src="assets/archicam-logo-horizontal.svg" alt="ArchiCam Studio" height="36">
+      </picture>
     </a>
-    <nav class="workspace-nav" aria-label="Sections du projet">
-      <a href="#visite" data-view="visit">Visite 3D</a>
-      <a href="#planbook-preview" data-view="dossier">Dossier <span>&amp; Plans</span></a>
-      <a href="#workspace-estimate" data-view="estimate">Estimation</a>
-      <a id="home-synthesis-nav" href="projects/residence-verandas/planches/cahier.pdf" aria-label="Planche de Synthèse" title="Planche de Synthèse" target="_blank" rel="noopener" hidden>Synthèse</a>
-      <a href="#workspace-gallery" data-view="gallery">Galerie</a>
-    </nav>
+    <nav class="workspace-nav" aria-label="Sections du projet" hidden></nav>
     <nav class="masthead-links" aria-label="Navigation principale">
+      <a class="nav-link" id="home-studio" href="./" hidden><span aria-hidden="true">←</span> L’atelier</a>
       <div class="project-picker" id="home-picker" hidden>
         <label for="home-project">Projet</label>
         <select id="home-project"></select>
@@ -48,25 +48,23 @@
     </nav>
   </header>
 
-  <main id="contenu" class="shell">
-    <div class="folio" aria-hidden="true"><span><i></i> DOSSIER ARCHITECTURAL</span><span>PLAN / VOLUME / MATIÈRE</span></div>
-    <section class="cover" aria-labelledby="cover-title" id="home-cover" tabindex="-1">
+  <main id="contenu" class="shell welcome-main">
+    <section class="cover welcome-cover" aria-labelledby="cover-title" id="home-cover" tabindex="-1">
       <div class="cover-art"><div id="cover-drawing" class="cover-drawing" aria-hidden="true"></div><img id="cover-image" alt="" fetchpriority="high" hidden></div>
       <div class="cover-shade" aria-hidden="true"></div>
       <span class="registration registration-top" aria-hidden="true"></span><span class="registration registration-bottom" aria-hidden="true"></span>
       <div class="cover-copy">
-        <p class="plate-label"><span></span> CATALOGUE D’IMAGES</p>
-        <h1 id="cover-title">L’architecture<br>en volume.</h1>
-        <p class="cover-description" id="cover-description">Du dessin à l’espace : découvrez le projet à votre rythme dans la maquette interactive.</p>
+        <p class="plate-label"><span></span> BIENVENUE CHEZ ARCHICAM STUDIO</p>
+        <h1 id="cover-title">L’architecture<br>à découvrir.</h1>
+        <p class="cover-description" id="cover-description">Découvrez le projet à votre rythme, puis entrez dans une visite architecturale immersive.</p>
         <p id="cover-area" class="cover-area" hidden></p>
         <p id="cover-client" class="cover-client" hidden></p>
+        <dl id="welcome-stats" class="welcome-stats" aria-label="Quelques repères du projet" hidden></dl>
         <div class="cover-signature" id="cover-signature" aria-label="Signature du cabinet"><img id="cover-logo" alt="" hidden><span id="cover-cabinet-name">ArchiCam Studio</span></div>
-        <div class="cover-edition"><span>Édition</span><time id="cover-edition-date"></time></div>
-        <div class="cover-actions">
-          <a id="cover-enter" class="primary" data-view="visit" href="index.html">Visite 3D <span aria-hidden="true">↓</span></a>
-          <a id="cover-synthesis" class="cover-print" href="projects/residence-verandas/planches/cahier.pdf" target="_blank" rel="noopener" hidden>Planche de Synthèse <span aria-hidden="true">↗</span></a>
-          <a id="cover-estimate" class="cover-print" data-view="estimate" href="#workspace-estimate">Estimation <span aria-hidden="true">↓</span></a>
-          <button class="cover-print" type="button" data-print="catalog">Imprimer l’aperçu A4</button>
+        <p class="welcome-declaration">Le cockpit architectural immersif.</p>
+        <div class="cover-actions welcome-actions">
+          <button id="welcome-present" class="welcome-secondary" type="button" aria-controls="project-sheet" aria-expanded="false"><span id="welcome-present-label">Présenter le projet</span><span id="welcome-present-icon" aria-hidden="true">↓</span></button>
+          <a id="cover-enter" class="primary" data-view="visit" href="index.html">Entrer dans le cockpit <span aria-hidden="true">↗</span></a>
         </div>
       </div>
       <div class="cover-index" id="cover-index" hidden aria-label="Navigation entre les vues">
@@ -74,39 +72,16 @@
         <span id="cover-number">01 / 01</span>
         <button id="cover-next" type="button" aria-label="Vue suivante">→</button>
       </div>
-      <div class="cover-caption"><span class="caption-key" aria-hidden="true">FIG.</span><span id="cover-caption" role="status">PLAN DE PROJET</span></div>
+      <div class="cover-caption"><span class="caption-key" aria-hidden="true">AC</span><span id="cover-caption" role="status">UNE ARCHITECTURE À DÉCOUVRIR</span></div>
     </section>
-    <div id="workspace-scroll-entry" class="workspace-scroll-entry" data-panel="cover">
-      <a href="index.html" data-view="visit"><span>01 / IMMERSION</span><strong>Du trait au volume <span aria-hidden="true">↓</span></strong></a>
-    </div>
     <p id="home-status" class="load-status" role="status"></p>
 
+    <div id="welcome-hidden-content" hidden aria-hidden="true">
     <div class="dossier" id="project-details">
       <section class="dossier-intro" aria-labelledby="dossier-title">
         <p class="section-kicker"><span>01</span> / LE DOSSIER</p>
         <h2 id="dossier-title">Du trait<br> à l’espace.</h2>
         <dl class="project-facts" id="project-facts" hidden></dl>
-      </section>
-      <section class="view-section" aria-labelledby="view-title">
-        <div class="views-heading"><p class="section-kicker"><span>02</span> / LES VUES</p><a id="cover-gallery" data-view="gallery" class="more-link" href="index.html?galerie=1">Toute la galerie <span aria-hidden="true">↗</span></a></div>
-        <h2 id="view-title" class="sr-only">Aperçus du projet</h2>
-        <div id="cover-views" class="views-grid"></div>
-        <p id="cover-empty" class="empty-views" hidden>Aucun rendu publié. Explorez le plan et les volumes dans la maquette.</p>
-        <div class="author-panel" id="presentation-admin" hidden>
-          <h3>01 · Choisir les trois vues d’accueil</h3>
-          <p>Les images restent à leur emplacement d’origine. Laissez « Automatique » pour conserver l’ordre habituel.</p>
-          <div class="slot-controls" id="presentation-slots"></div>
-          <fieldset class="focal-controls"><legend>Point focal de la couverture</legend>
-            <label>Horizontal <input id="focal-x" type="range" min="0" max="100" value="50"><output id="focal-x-value">50 %</output></label>
-            <label>Vertical <input id="focal-y" type="range" min="0" max="100" value="50"><output id="focal-y-value">50 %</output></label>
-          </fieldset>
-          <div class="crop-previews" aria-label="Aperçus du cadrage">
-            <figure><div class="crop-preview crop-desktop"><img id="crop-desktop-image" alt="Aperçu ordinateur de la couverture"></div><figcaption>Ordinateur</figcaption></figure>
-            <figure><div class="crop-preview crop-mobile"><img id="crop-mobile-image" alt="Aperçu téléphone de la couverture"></div><figcaption>Téléphone</figcaption></figure>
-          </div>
-          <button class="primary" id="presentation-save" type="button">Enregistrer la présentation</button>
-          <p class="author-status" id="presentation-status" role="status"></p>
-        </div>
       </section>
     </div>
 
@@ -148,16 +123,50 @@
       <div class="planbook-contents" id="planbook-contents-page"><p class="section-kicker">DOCUMENTS DISPONIBLES</p><h3>Sommaire</h3><ol id="planbook-contents"></ol><p id="planbook-empty" hidden>Aucun document ni plan de niveau disponible.</p></div>
     </section>
 
-    <section data-panel="dossier" class="project-sheet" id="project-sheet" aria-labelledby="sheet-title" hidden>
-      <p class="section-kicker"><span>04</span> / LE PROJET</p>
-      <div class="sheet-grid">
+    </div>
+
+    <section class="welcome-presentation" id="project-sheet" aria-labelledby="sheet-title" hidden>
+      <div class="welcome-presentation-intro">
+        <p class="welcome-section-label">PRÉSENTATION DU PROJET</p>
         <div class="sheet-concept" id="sheet-concept-block">
-          <h2 id="sheet-title" class="sheet-title">Le parti architectural</h2>
-          <p id="sheet-concept" class="sheet-lead"></p>
+          <h2 id="sheet-title" class="sheet-title">L’esprit du projet</h2>
+          <p id="sheet-concept" class="sheet-lead">Une exploration des volumes, des espaces et des intentions qui donnent au projet son caractère.</p>
+          <p class="welcome-trust">Maquette interprétée <span aria-hidden="true">·</span> Repères indicatifs</p>
         </div>
-        <dl id="sheet-facts" class="sheet-facts" aria-label="Fiche technique"></dl>
       </div>
+      <dl id="sheet-facts" class="sheet-facts" aria-label="Repères du projet"></dl>
+      <section class="sheet-schedule" id="sheet-schedule" aria-labelledby="schedule-title" hidden>
+        <div class="sheet-schedule-head">
+          <p class="welcome-section-label">TABLEAU DES SURFACES</p>
+          <h3 id="schedule-title">Pièce par pièce, niveau par niveau.</h3>
+        </div>
+        <div class="sheet-schedule-levels" id="sheet-schedule-levels"></div>
+        <p class="sheet-schedule-note">Surfaces calculées depuis la maquette, à l’axe des murs. Repères indicatifs, non contractuels.</p>
+      </section>
+      <section class="welcome-gallery" aria-labelledby="view-title">
+        <div class="welcome-gallery-heading"><p class="welcome-section-label">LE PROJET EN IMAGES</p><h3 id="view-title">Quelques vues pour entrer dans l’univers du projet.</h3></div>
+        <div id="cover-views" class="views-grid"></div>
+        <p id="cover-empty" class="empty-views" hidden>Aucun visuel publié. Entrez dans le cockpit pour découvrir la maquette.</p>
+        <div class="author-panel" id="presentation-admin" hidden>
+          <h3>Choisir les trois vues d’accueil</h3>
+          <p>Les images restent à leur emplacement d’origine. Laissez « Automatique » pour conserver l’ordre habituel.</p>
+          <div class="slot-controls" id="presentation-slots"></div>
+          <fieldset class="focal-controls"><legend>Point focal de la couverture</legend>
+            <label>Horizontal <input id="focal-x" type="range" min="0" max="100" value="50"><output id="focal-x-value">50 %</output></label>
+            <label>Vertical <input id="focal-y" type="range" min="0" max="100" value="50"><output id="focal-y-value">50 %</output></label>
+          </fieldset>
+          <div class="crop-previews" aria-label="Aperçus du cadrage">
+            <figure><div class="crop-preview crop-desktop"><img id="crop-desktop-image" alt="Aperçu ordinateur de la couverture"></div><figcaption>Ordinateur</figcaption></figure>
+            <figure><div class="crop-preview crop-mobile"><img id="crop-mobile-image" alt="Aperçu téléphone de la couverture"></div><figcaption>Téléphone</figcaption></figure>
+          </div>
+          <button class="primary" id="presentation-save" type="button">Enregistrer la présentation</button>
+          <p class="author-status" id="presentation-status" role="status"></p>
+        </div>
+      </section>
+      <a id="welcome-enter-from-presentation" class="welcome-presentation-enter" data-view="visit" href="index.html">Entrer dans le cockpit 3D <span aria-hidden="true">↗</span></a>
     </section>
+
+    <div id="welcome-hidden-sections" hidden aria-hidden="true">
 
     <section data-panel="dossier" class="plan-section" id="plan-section" aria-labelledby="plan-title" hidden>
       <div class="views-heading"><p class="section-kicker"><span>05</span> / LE PLAN</p><a id="plan-enter" data-view="visit" class="more-link" href="index.html">Explorer en 3D <span aria-hidden="true">↗</span></a></div>
@@ -181,8 +190,9 @@
         <div id="workspace-image-body"></div>
       </dialog>
     </section>
+    </div>
   </main>
-  <footer class="footer shell"><span>ARCHICAM STUDIO</span><span class="footer-signature" id="footer-signature" hidden><span id="footer-architect"></span> <a id="footer-contact" hidden></a></span><span>PRÉSENTATION ARCHITECTURALE INTERACTIVE</span><a class="footer-link" id="footer-editor" href="editor.html">ESPACE ATELIER</a></footer>
+  <footer class="footer shell"><span>ARCHICAM STUDIO</span><span class="footer-signature" id="footer-signature" hidden><span id="footer-architect"></span> <a id="footer-contact" hidden></a></span><span>Le cockpit architectural immersif.</span><a class="footer-link" id="footer-editor" href="editor.html">ESPACE ATELIER</a></footer>
   </div>
   <p id="workspace-status" class="workspace-status" role="status" hidden></p>
 </body>
