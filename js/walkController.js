@@ -178,31 +178,13 @@ class WalkController {
 
   /** Hauteur du dessus de marche (ou du palier) sous le point de déplacement. */
   stairFloorAt(x, z) {
-    for (const stair of HOUSE_DATA.stairwells || []) {
-      const upperLevel = Number(stair.level) || 1;
-      const rise = upperLevel * this.walkFloorHeight;
-      const landing = 0.84;
-      const width = (stair.zMax - stair.zMin - 0.12) / 2;
-      const turn = stair.xMin + landing;
-      const start = stair.xMax;
-      const tread = (start - turn) / 8;
-      const front = stair.zMax - width / 2;
-      const back = stair.zMin + width / 2;
-      const inFrontFlight = Math.abs(z - front) <= width / 2 + this.playerRadius * 0.55;
-      const inBackFlight = Math.abs(z - back) <= width / 2 + this.playerRadius * 0.55;
-
-      if (x >= stair.xMin - this.playerRadius && x <= turn &&
-          z >= stair.zMin - this.playerRadius && z <= stair.zMax + this.playerRadius) {
-        return { y: rise / 2, upperLevel, onStair: true };
-      }
-      if (x >= turn - this.playerRadius * 0.35 && x <= start + this.playerRadius * 0.35 && inFrontFlight) {
-        const step = Math.max(0, Math.min(7, Math.floor((start - x) / tread)));
-        return { y: (step + 1) * rise / 16, upperLevel, onStair: true };
-      }
-      if (x >= turn - this.playerRadius * 0.35 && x <= start + this.playerRadius * 0.35 && inBackFlight) {
-        const step = Math.max(0, Math.min(7, Math.floor((x - turn) / tread)));
-        return { y: rise / 2 + (step + 1) * rise / 16, upperLevel, onStair: true };
-      }
+    // Même géométrie que la 3D et le parcours (HouseAuto.stairGeometry) : droit, à retour ou quart tournant.
+    const auto = typeof HouseAuto !== 'undefined' ? HouseAuto : window.HouseAuto;
+    if (!auto) return null;
+    const fh = this.walkFloorHeight;
+    for (const stair of (HOUSE_DATA.stairwells || []).filter(auto.stairFits)) {
+      const hit = auto.stairFloorAt(stair, x, z, fh, this.playerRadius * 0.35);
+      if (hit) return { y: (hit.upperLevel - 1) * fh + hit.y, upperLevel: hit.upperLevel, onStair: true };
     }
     return null;
   }

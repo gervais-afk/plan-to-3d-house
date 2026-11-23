@@ -1,0 +1,354 @@
+{
+  "meta": {
+    "name": "Essai escalier — quart tournant avec palier",
+    "slug": "essai-escalier-quart-tournant",
+    "subtitle": "Projet d’essai : escalier quart tournant avec palier (généré par tools/generate-stair-test-projects.cjs)",
+    "client": "",
+    "clientVisible": false,
+    "updated": "2026-11-23T09:33:07.651Z"
+  },
+  "config": {
+    "wallHeight": 2.8,
+    "floorHeight": 3
+  },
+  "levels": [
+    {
+      "id": 0,
+      "name": "RDC",
+      "elevation": 0
+    },
+    {
+      "id": 1,
+      "name": "Étage",
+      "elevation": 3
+    }
+  ],
+  "walls": [
+    {
+      "from": [
+        -5,
+        -3.5
+      ],
+      "to": [
+        5,
+        -3.5
+      ],
+      "thick": 0.25,
+      "type": "ext",
+      "level": 0,
+      "openings": [
+        {
+          "type": "window",
+          "at": 2.5,
+          "w": 1.4,
+          "h": 1.25,
+          "sill": 0.95,
+          "level": 0
+        }
+      ]
+    },
+    {
+      "from": [
+        5,
+        -3.5
+      ],
+      "to": [
+        5,
+        3.5
+      ],
+      "thick": 0.25,
+      "type": "ext",
+      "level": 0,
+      "openings": [
+        {
+          "type": "window",
+          "at": 5.2,
+          "w": 1.2,
+          "h": 1.25,
+          "sill": 0.95,
+          "level": 0
+        }
+      ]
+    },
+    {
+      "from": [
+        5,
+        3.5
+      ],
+      "to": [
+        -5,
+        3.5
+      ],
+      "thick": 0.25,
+      "type": "ext",
+      "level": 0,
+      "openings": [
+        {
+          "type": "window",
+          "at": 2.5,
+          "w": 1.4,
+          "h": 1.25,
+          "sill": 0.95,
+          "level": 0
+        },
+        {
+          "type": "door",
+          "at": 7.5,
+          "w": 1,
+          "h": 2.1,
+          "sill": 0,
+          "hinge": "start",
+          "side": 1,
+          "entry": true,
+          "level": 0
+        }
+      ]
+    },
+    {
+      "from": [
+        -5,
+        3.5
+      ],
+      "to": [
+        -5,
+        -3.5
+      ],
+      "thick": 0.25,
+      "type": "ext",
+      "level": 0,
+      "openings": [
+        {
+          "type": "window",
+          "at": 3.5,
+          "w": 1.2,
+          "h": 1.25,
+          "sill": 0.95,
+          "level": 0
+        }
+      ]
+    },
+    {
+      "from": [
+        0,
+        -3.5
+      ],
+      "to": [
+        0,
+        3.5
+      ],
+      "thick": 0.15,
+      "type": "int",
+      "level": 0,
+      "openings": [
+        {
+          "type": "door",
+          "at": 5.5,
+          "w": 0.9,
+          "h": 2.1,
+          "sill": 0,
+          "hinge": "start",
+          "side": 1,
+          "level": 0
+        }
+      ]
+    },
+    {
+      "from": [
+        -5,
+        -3.5
+      ],
+      "to": [
+        5,
+        -3.5
+      ],
+      "thick": 0.25,
+      "type": "ext",
+      "level": 1,
+      "openings": [
+        {
+          "type": "window",
+          "at": 2.5,
+          "w": 1.4,
+          "h": 1.25,
+          "sill": 0.95,
+          "level": 1
+        }
+      ]
+    },
+    {
+      "from": [
+        5,
+        -3.5
+      ],
+      "to": [
+        5,
+        3.5
+      ],
+      "thick": 0.25,
+      "type": "ext",
+      "level": 1,
+      "openings": [
+        {
+          "type": "window",
+          "at": 5.2,
+          "w": 1.2,
+          "h": 1.25,
+          "sill": 0.95,
+          "level": 1
+        }
+      ]
+    },
+    {
+      "from": [
+        5,
+        3.5
+      ],
+      "to": [
+        -5,
+        3.5
+      ],
+      "thick": 0.25,
+      "type": "ext",
+      "level": 1,
+      "openings": [
+        {
+          "type": "window",
+          "at": 2.5,
+          "w": 1.4,
+          "h": 1.25,
+          "sill": 0.95,
+          "level": 1
+        },
+        {
+          "type": "window",
+          "at": 7.5,
+          "w": 1.4,
+          "h": 1.25,
+          "sill": 0.95,
+          "level": 1
+        }
+      ]
+    },
+    {
+      "from": [
+        -5,
+        3.5
+      ],
+      "to": [
+        -5,
+        -3.5
+      ],
+      "thick": 0.25,
+      "type": "ext",
+      "level": 1,
+      "openings": [
+        {
+          "type": "window",
+          "at": 3.5,
+          "w": 1.2,
+          "h": 1.25,
+          "sill": 0.95,
+          "level": 1
+        }
+      ]
+    },
+    {
+      "from": [
+        0,
+        -3.5
+      ],
+      "to": [
+        0,
+        3.5
+      ],
+      "thick": 0.15,
+      "type": "int",
+      "level": 1,
+      "openings": [
+        {
+          "type": "door",
+          "at": 5.5,
+          "w": 0.9,
+          "h": 2.1,
+          "sill": 0,
+          "hinge": "start",
+          "side": 1,
+          "level": 1
+        }
+      ]
+    }
+  ],
+  "rooms": [
+    {
+      "id": "sejour",
+      "name": "SÉJOUR",
+      "level": 0,
+      "bounds": {
+        "xMin": -5,
+        "xMax": 0,
+        "zMin": -3.5,
+        "zMax": 3.5
+      },
+      "floorType": "parquet",
+      "habitable": true,
+      "desc": ""
+    },
+    {
+      "id": "hall",
+      "name": "HALL D’ESCALIER",
+      "level": 0,
+      "bounds": {
+        "xMin": 0,
+        "xMax": 5,
+        "zMin": -3.5,
+        "zMax": 3.5
+      },
+      "floorType": "tiles",
+      "habitable": true,
+      "desc": ""
+    },
+    {
+      "id": "chambre",
+      "name": "CHAMBRE",
+      "level": 1,
+      "bounds": {
+        "xMin": -5,
+        "xMax": 0,
+        "zMin": -3.5,
+        "zMax": 3.5
+      },
+      "floorType": "parquet",
+      "habitable": true,
+      "desc": ""
+    },
+    {
+      "id": "palier",
+      "name": "PALIER",
+      "level": 1,
+      "bounds": {
+        "xMin": 0,
+        "xMax": 5,
+        "zMin": -3.5,
+        "zMax": 3.5
+      },
+      "floorType": "tiles",
+      "habitable": true,
+      "desc": ""
+    }
+  ],
+  "columns": [],
+  "canopies": [],
+  "furniture": [],
+  "stairwells": [
+    {
+      "name": "Escalier quart tournant avec palier",
+      "level": 1,
+      "stairType": "quarter",
+      "dir": "+x",
+      "xMin": 0.8,
+      "xMax": 3.6,
+      "zMin": -3.3,
+      "zMax": -0.5
+    }
+  ]
+}

@@ -557,9 +557,16 @@ class HouseScene {
         geo.computeVertexNormals(); mat.side = THREE.DoubleSide; add(geo, 0, canopyY, 0);
       } else if (cn.type === 'hip') {
         const a = [-w/2,0,-d/2], b = [w/2,0,-d/2], c = [w/2,0,d/2], e = [-w/2,0,d/2];
-        const ridge = Math.max(0,(d-w)/2), n = [0,cn.rise,-ridge], s = [0,cn.rise,ridge];
+        // Faîtage dans le sens le plus long (avant : toujours en profondeur, d'où une pyramide si w > d).
+        const rise = cn.rise || Math.tan(27 * Math.PI / 180) * Math.min(w, d) / 2;
         const geo = new THREE.BufferGeometry();
-        geo.setAttribute('position',new THREE.Float32BufferAttribute([a,n,b,b,n,s,b,s,c,c,s,e,e,s,n,e,n,a].flat(),3));
+        if (w > d) {
+          const half = (w - d) / 2, wR = [-half, rise, 0], eR = [half, rise, 0];
+          geo.setAttribute('position', new THREE.Float32BufferAttribute([a,wR,eR,a,eR,b, e,eR,wR,e,c,eR, a,e,wR, b,eR,c].flat(), 3));
+        } else {
+          const ridge = (d - w) / 2, n = [0, rise, -ridge], s = [0, rise, ridge];
+          geo.setAttribute('position',new THREE.Float32BufferAttribute([a,n,b,b,n,s,b,s,c,c,s,e,e,s,n,e,n,a].flat(),3));
+        }
         geo.computeVertexNormals(); mat.side = THREE.DoubleSide; add(geo,cx,canopyY,cz);
       } else if (cn.type === 'slab' && Array.isArray(cn.poly) && cn.poly.length >= 3) {
         const shape = new THREE.Shape();
@@ -586,10 +593,20 @@ class HouseScene {
   // MOBILIER
   // ---------------------------------------------------------------------------
   createFurniture() {
-    const well = HOUSE_DATA.meta?.slug === 'residence-verandas' && HOUSE_DATA.stairwells?.[0];
-    if (well) this.createReturnStair(well);
+    // Un escalier à retour par trémie d'étage, pour tout projet (la trémie doit être assez grande).
+    const fits = window.HouseAuto?.stairFits || (() => true);
+    const wells = (HOUSE_DATA.stairwells || []).filter(fits);
+    (HOUSE_DATA.stairwells || []).filter(s => !fits(s)).forEach(s => console.warn('Trémie trop petite pour un escalier à retour :', s));
+    this.stairPath = null;
+    wells.forEach(well => {
+      const first = this.stairPath, firstType = this.stairType;
+      this.createStair(well);
+      if (first) { this.stairPath = first; this.stairType = firstType; } // « Prendre l’escalier » suit le premier escalier
+    });
+    // Les marches posées à la main comme mobilier font doublon avec un escalier construit dans la même trémie.
+    const inWell = item => wells.some(s => item.x >= s.xMin - 0.3 && item.x <= s.xMax + 0.3 && item.z >= s.zMin - 0.3 && item.z <= s.zMax + 0.3);
     HOUSE_DATA.furniture.forEach(item => {
-      if (well && item.model === 'step') return;
+      if (item.model === 'step' && inWell(item)) return;
       const levelY = this.levelOffset(item.level);
       // Mobilier composé (realism.js) si disponible pour ce type
       const comp = this.buildComposite ? this.buildComposite(item) : null;
@@ -625,33 +642,79 @@ class HouseScene {
     });
   }
 
-  createReturnStair(s) {
-    const group = new THREE.Group(), path = [], H = this.levelOffset(s.level);
-    const width=(s.zMax-s.zMin-.12)/2, landing=.84, tread=(s.xMax-s.xMin-landing)/8;
-    const start=s.xMax, turn=s.xMin+landing, front=s.zMax-width/2, back=s.zMin+width/2;
-    const wood=new THREE.MeshStandardMaterial({color:0xceab80,map:this.getFloorTextureBase('parquet').tex,roughness:.52});
-    const steel=new THREE.MeshStandardMaterial({color:0x485449,metalness:.48,roughness:.38});
-    const v=(x,y,z)=>new THREE.Vector3(x,y,z);
-    function box(w,h,d,x,y,z,mat){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;group.add(m);return m;}
-    function bar(a,b,size){const delta=b.clone().sub(a),mid=a.clone().lerp(b,.5);const m=box(size,delta.length(),size,mid.x,mid.y,mid.z,steel);m.quaternion.setFromUnitVectors(v(0,1,0),delta.normalize());}
-    path.push(v(start+.42,0,front));
-    for(let flight=0;flight<2;flight++){
-      const z=flight?back:front, edge=z+(flight?1:-1)*(width/2-.045), ends=[];
-      for(let i=0;i<8;i++){
-        const x=flight?turn+(i+.5)*tread:start-(i+.5)*tread,y=(flight*8+i+1)*H/16;
-        box(tread+.008,.09,width,x,y-.045,z,wood);
-        // AO de contact très douce sous le nez de chaque marche, complémentaire aux ombres PCF.
-        this.createContactPatch(group, tread * 0.88, width * 0.9, x, y + 0.006, z, 0, 0.3);
-        path.push(v(x,y,z));
-        if(i===0||i===7||i===4)bar(v(x,y,edge),v(x,y+.91,edge),.032);
-        if(i===0||i===7)ends.push(v(x,y,edge));
+  /**
+   * Escalier d'une trémie (droit, à retour ou quart tournant) d'après HouseAuto.stairGeometry :
+   * marches bois, paliers, garde-corps acier côté vide, et trajectoire de « Prendre l'escalier ».
+   */
+  createStair(s) {
+    const group = new THREE.Group();
+    const fh = Number(HOUSE_DATA.config.floorHeight) || 3;
+    const g = HouseAuto.stairGeometry(s, fh);
+    const base = this.levelOffset(g.lower);
+    const wood = new THREE.MeshStandardMaterial({ color: 0xceab80, map: this.getFloorTextureBase('parquet').tex, roughness: .52 });
+    const steel = new THREE.MeshStandardMaterial({ color: 0x485449, metalness: .48, roughness: .38 });
+    const v = (x, y, z) => new THREE.Vector3(x, y, z);
+    const box = (w, h, d, x, y, z, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; group.add(m); return m; };
+    const bar = (a, b, size) => { const delta = b.clone().sub(a), mid = a.clone().lerp(b, .5); const m = box(size, delta.length(), size, mid.x, mid.y, mid.z, steel); m.quaternion.setFromUnitVectors(v(0, 1, 0), delta.normalize()); };
+    const wellX = (s.xMin + s.xMax) / 2, wellZ = (s.zMin + s.zMax) / 2;
+    // Marche tournante : polygone extrudé de 9 cm (dessus à la hauteur de la marche).
+    const polyStep = (r, y) => {
+      const shape = new THREE.Shape();
+      r.poly.forEach((p, i) => i ? shape.lineTo(p[0], -p[1]) : shape.moveTo(p[0], -p[1]));
+      shape.closePath();
+      const m = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: .09, bevelEnabled: false, curveSegments: 1 }), wood);
+      m.rotation.x = -Math.PI / 2; m.position.set(0, y - .09, 0); m.castShadow = m.receiveShadow = true; group.add(m);
+    };
+    g.flights.forEach(flight => {
+      const treads = flight.treads;
+      if (flight.helical) {
+        // Poteau central sur toute la hauteur, garde-corps hélicoïdal sur le bord extérieur.
+        const c = flight.centre;
+        box(.12, g.rise + .95, .12, c.x, base + (g.rise + .95) / 2, c.z, steel);
+        let prev = null;
+        treads.forEach((r, i) => {
+          polyStep(r, base + r.y);
+          const mid = r.poly[3]; // milieu de l'arc extérieur
+          const dx = c.x - mid[0], dz = c.z - mid[1], l = Math.hypot(dx, dz) || 1;
+          const post = v(mid[0] + dx / l * .05, base + r.y, mid[1] + dz / l * .05);
+          if (i % 2 === 0 || i === treads.length - 1) bar(post, post.clone().add(v(0, .91, 0)), .03);
+          const rail = post.clone().add(v(0, .91, 0));
+          if (prev) bar(prev, rail, .045);
+          prev = rail;
+        });
+        return;
       }
-      for(const dy of [-.14,.91])bar(...ends.map(p=>p.clone().add(v(0,dy,0))),dy<0?.14:.052);
-      if(!flight){box(landing,.14,s.zMax-s.zMin,s.xMin+landing/2,H/2-.07,(front+back)/2,wood);path.push(v(s.xMin+landing/2,H/2,front),v(s.xMin+landing/2,H/2,back));}
-    }
-    path.push(v(start+.55,H,back));this.stairPath=path;
-    group.userData.nominalY=0;this.scene.add(group);this.furnitureMeshes.push(group);
+      if (flight.winder) {
+        // Marches dansantes, noyau (poteau) à l'angle intérieur.
+        treads.forEach(r => polyStep(r, base + r.y));
+        const p = flight.pivot, top = treads[treads.length - 1].y;
+        box(.1, top + .95, .1, p.x, base + (top + .95) / 2, p.z, steel);
+        return;
+      }
+      const runsAlongX = Math.abs(treads[0].xMin - treads[treads.length - 1].xMin) > Math.abs(treads[0].zMin - treads[treads.length - 1].zMin);
+      const posts = [];
+      treads.forEach((r, i) => {
+        const w = r.xMax - r.xMin, d = r.zMax - r.zMin, cx = (r.xMin + r.xMax) / 2, cz = (r.zMin + r.zMax) / 2, y = base + r.y;
+        box(w + (runsAlongX ? .008 : 0), .09, d + (runsAlongX ? 0 : .008), cx, y - .045, cz, wood);
+        // AO de contact très douce sous le nez de chaque marche, complémentaire aux ombres PCF.
+        this.createContactPatch(group, w * 0.9, d * 0.9, cx, y + 0.006, cz, 0, 0.3);
+        // Garde-corps côté vide : le bord de la marche le plus proche du centre de la trémie.
+        const edge = runsAlongX
+          ? v(cx, y, Math.abs(r.zMin - wellZ) < Math.abs(r.zMax - wellZ) ? r.zMin + .045 : r.zMax - .045)
+          : v(Math.abs(r.xMin - wellX) < Math.abs(r.xMax - wellX) ? r.xMin + .045 : r.xMax - .045, y, cz);
+        const last = treads.length - 1;
+        if (i === 0 || i === last || i === Math.round(last / 2)) bar(edge, edge.clone().add(v(0, .91, 0)), .032);
+        if (i === 0 || i === last) posts.push(edge);
+      });
+      for (const dy of [-.14, .91]) bar(...posts.map(p => p.clone().add(v(0, dy, 0))), dy < 0 ? .14 : .052);
+    });
+    g.landings.forEach(r => box(r.xMax - r.xMin, .14, r.zMax - r.zMin, (r.xMin + r.xMax) / 2, base + r.y - .07, (r.zMin + r.zMax) / 2, wood));
+    this.stairPath = g.path.map(p => v(p.x, base + p.y, p.z));
+    this.stairType = g.type;
+    group.userData.nominalY = 0; this.scene.add(group); this.furnitureMeshes.push(group);
   }
+  // Compatibilité : ancien nom.
+  createReturnStair(s) { this.createStair(s); }
 
   // ---------------------------------------------------------------------------
   // PORTES : arcs de débattement (plan 2D) + vantaux entrouverts (3D)

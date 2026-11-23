@@ -5,8 +5,13 @@ const vm = require('node:vm');
 const { test } = require('node:test');
 
 const project = require('../projects/residence-verandas/project.json');
-const context = { window: {}, HOUSE_DATA: project, THREE: {} };
-vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../js/walkController.js'), 'utf8'), context);
+// La visite libre s'appuie sur la géométrie d'escalier commune (HouseAuto, projectLoader.js).
+const context = { HOUSE_DATA: project, THREE: {}, console, Math, JSON };
+context.window = context;
+vm.createContext(context);
+for (const file of ['houseDataCore.js', 'projectLoader.js', 'walkController.js']) {
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../js', file), 'utf8'), context, { filename: file });
+}
 const WalkController = context.window.WalkController;
 const stairs = project.stairwells[0];
 const width = (stairs.zMax - stairs.zMin - 0.12) / 2;

@@ -224,7 +224,7 @@
   // ---------------------------------------------------------------------------
   // CHARGEMENT
   // ---------------------------------------------------------------------------
-  const EDITABLE = ['meta', 'config', 'walls', 'rooms', 'columns', 'canopies', 'furniture', 'stairwells', 'levels', 'tourWaypoints', 'estimate'];
+  const EDITABLE = ['meta', 'config', 'walls', 'rooms', 'columns', 'canopies', 'furniture', 'stairwells', 'levels', 'tourWaypoints', 'tourPlanVersion', 'estimate'];
 
   function loadProject(data, { keepExtras = false } = {}) {
     const src = JSON.parse(JSON.stringify(data));
@@ -233,6 +233,7 @@
     if (!p.meta.architect && cabinetProfile.architect) p.meta.architect = cabinetProfile.architect;
     if (typeof p.meta.clientVisible !== 'boolean') p.meta.clientVisible = false;
     p.config = Object.assign(p.config, { wallHeight: (src.config && src.config.wallHeight) || 2.8, floorHeight: (src.config && src.config.floorHeight) || 3, planImage: src.config && src.config.planImage || null });
+    if (['hip', 'flat', 'none'].includes(src.config?.roofStyle)) p.config.roofStyle = src.config.roofStyle;
     if (src.config && src.config.elevationEnd) p.config.elevationEnd = src.config.elevationEnd;
     p.walls = (src.walls || []).map(w => {
       const L = wallLen(w);
@@ -266,6 +267,7 @@
     });
 
     if (Array.isArray(src.tourWaypoints)) p.tourWaypoints = JSON.parse(JSON.stringify(src.tourWaypoints));
+    if (typeof src.tourPlanVersion === 'string' && /^[0-9a-f]{8}$/.test(src.tourPlanVersion)) p.tourPlanVersion = src.tourPlanVersion;
     if (src.estimate && typeof src.estimate === 'object' && !Array.isArray(src.estimate)) p.estimate = src.estimate;
     const levelMetadata = Array.isArray(src.levels) ? src.levels : [];
     S.levelData = { 0: Object.fromEntries(LEVEL_ARRAYS.map(key => [key, []])), 1: Object.fromEntries(LEVEL_ARRAYS.map(key => [key, []])) };
@@ -497,7 +499,30 @@
       ctx.fillStyle = 'rgba(217,119,6,0.12)'; ctx.fillRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
       ctx.setLineDash([5, 3]); ctx.strokeStyle = '#d97706'; ctx.lineWidth = 2;
       ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y); ctx.setLineDash([]);
-      label('TRÉMIE', (p1.x + p2.x) / 2, (p1.y + p2.y) / 2, 9, '#b45309');
+      if (HouseAuto.stairFits(s)) {
+        // Marches et ligne de foulée avec flèche de montée, comme sur un plan d'architecte.
+        const g = HouseAuto.stairGeometry(s, Number(S.p.config.floorHeight) || 3);
+        ctx.strokeStyle = 'rgba(180,83,9,0.55)'; ctx.lineWidth = 1;
+        [...g.flights.flatMap(f => f.treads), ...g.landings].forEach(r => {
+          if (r.poly) { // marche tournante (balancée, hélicoïdale)
+            ctx.beginPath();
+            r.poly.forEach((p, i) => { const q = toScreen(p[0], p[1]); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); });
+            ctx.closePath(); ctx.stroke();
+            return;
+          }
+          const a = toScreen(r.xMin, r.zMin), b = toScreen(r.xMax, r.zMax);
+          ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
+        });
+        const pts = g.path.map(p => toScreen(p.x, p.z));
+        ctx.strokeStyle = '#b45309'; ctx.lineWidth = 1.5; ctx.beginPath();
+        pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+        const end = pts[pts.length - 1], prev = pts[pts.length - 2], ang = Math.atan2(end.y - prev.y, end.x - prev.x);
+        ctx.fillStyle = '#b45309'; ctx.beginPath(); ctx.moveTo(end.x, end.y);
+        ctx.lineTo(end.x - 9 * Math.cos(ang - 0.45), end.y - 9 * Math.sin(ang - 0.45));
+        ctx.lineTo(end.x - 9 * Math.cos(ang + 0.45), end.y - 9 * Math.sin(ang + 0.45)); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, 3.5, 0, Math.PI * 2); ctx.fill();
+        label('M', pts[0].x, pts[0].y - 10, 9, '#b45309', 700);
+      } else label('TRÉMIE TROP PETITE', (p1.x + p2.x) / 2, (p1.y + p2.y) / 2, 9, '#b91c1c');
     });
 
     // Auvents / pergolas
@@ -889,10 +914,22 @@
     HouseAuto.complete(clone);
     return clone.tourWaypoints;
   }
+  /** Empreinte actuelle du plan (tous niveaux), à comparer à celle mémorisée avec le parcours. */
+  const planVersionNow = () => HouseAuto.geometryVersion(toProjectJson());
+  /** 'fresh' : parcours fait sur ce plan ; 'stale' : le plan a changé depuis ; 'unknown' : parcours ancien, jamais daté. */
+  function tourState() {
+    if (!S.p.tourWaypoints || !S.p.tourWaypoints.length) return 'none';
+    if (!S.p.tourPlanVersion) return 'unknown';
+    return S.p.tourPlanVersion === planVersionNow() ? 'fresh' : 'stale';
+  }
+  function setGeneratedTour() {
+    S.p.tourWaypoints = generateCameras();
+    S.p.tourPlanVersion = planVersionNow();
+  }
   function ensureCameras() {
     if (S.p.tourWaypoints && S.p.tourWaypoints.length) return;
     if (!S.p.walls.length) return;
-    S.p.tourWaypoints = generateCameras();
+    setGeneratedTour();
   }
   function cameraHandles(wp) {
     const dx = wp.look[0] - wp.pos[0], dz = wp.look[2] - wp.pos[2], l = Math.hypot(dx, dz) || 1;
@@ -1337,13 +1374,18 @@
         { key: 'capital', label: 'Chapiteau (m)', type: 'number', step: 0.05 }
       ], null, del);
     } else if (s.kind === 'stairwell') {
+      const fitsNote = HouseAuto.stairFits(s.obj) ? '' : '<p class="ed-note warn">Trémie trop petite pour ce type d’escalier : agrandissez-la ou changez de type (aucun escalier ne sera construit en 3D).</p>';
       form('Trémie d’escalier', s.obj, [
         { key: 'name', label: 'Nom' },
+        { key: 'stairType', label: 'Type d’escalier', type: 'select', get: o => o.stairType || 'return',
+          options: { return: 'À retour (deux volées, palier)', straight: 'Droit (une volée)', quarter: 'Quart tournant (palier d’angle)', winder: 'Quart tournant balancé (marches dansantes)', helical: 'Hélicoïdal (poteau central)' } },
+        { key: 'dir', label: 'Sens de montée', type: 'select', get: o => o.dir || '-x',
+          options: { '-x': '← vers l’ouest (−X)', '+x': '→ vers l’est (+X)', '-z': '↑ vers le nord (−Z)', '+z': '↓ vers le sud (+Z)' } },
         { key: 'xMin', label: 'X min (m)', type: 'number', step: 0.05 },
         { key: 'xMax', label: 'X max (m)', type: 'number', step: 0.05 },
         { key: 'zMin', label: 'Z min (m)', type: 'number', step: 0.05 },
         { key: 'zMax', label: 'Z max (m)', type: 'number', step: 0.05 }
-      ], null, del);
+      ], null, fitsNote + del);
     } else if (s.kind === 'canopy') {
       form(s.obj.type === 'pergola' ? 'Pergola' : 'Auvent', s.obj, [
         { key: 'name', label: 'Nom' },
@@ -1372,14 +1414,27 @@
   function camerasPanel() {
     const list = S.p.tourWaypoints || [];
     const el = $('ed-props');
+    const state = tourState();
+    const freshness = {
+      fresh: '<p class="ed-note ed-tour-fresh">✓ Parcours à jour avec le plan actuel.</p>',
+      stale: '<p class="ed-note warn ed-tour-stale" role="status"><strong>Le plan a changé depuis ce parcours</strong> (murs, portes, pièces ou escalier). Certaines caméras peuvent traverser un mur ou viser une pièce disparue : régénérez-le, ou vérifiez chaque étape puis gardez-le.</p>',
+      unknown: '<p class="ed-note warn ed-tour-stale" role="status">Ce parcours a été enregistré avant le suivi des versions : on ne sait pas s’il correspond au plan actuel. Vérifiez-le en aperçu 3D, puis marquez-le comme à jour.</p>',
+      none: ''
+    }[state];
     el.innerHTML = `<h3>Parcours caméra</h3>
-      <p class="ed-note">${list.length ? list.length + ' étapes. Cliquez une caméra pour la régler, glissez-la sur le plan.' : 'Aucun parcours : il sera généré automatiquement (passage par les portes).'}</p>
+      ${freshness}
+      <p class="ed-note">${list.length ? list.length + ' étapes. Cliquez une caméra pour la régler, glissez-la sur le plan.' : 'Aucun parcours : il sera généré automatiquement (passage par les portes et l’escalier).'}</p>
+      ${state === 'stale' || state === 'unknown' ? '<div class="ed-row"><button id="btn-cam-keep">Garder ce parcours : il est à jour</button></div>' : ''}
       <div class="ed-list">${list.map((wp, i) => `<button data-wp="${i}"><span>${i + 1}. ${wp.label || 'Étape'}</span><small>${isEye(wp) ? 'intérieur' : 'vue aérienne'}</small></button>`).join('')}</div>
       <div class="ed-row"><button id="btn-cam-gen">${list.length ? 'Régénérer automatiquement' : 'Générer le parcours'}</button><button id="btn-cam-preview">Aperçu 3D ↗</button></div>`;
     el.querySelectorAll('[data-wp]').forEach(b => { b.onclick = () => select({ kind: 'camera', obj: list[+b.dataset.wp] }); });
     $('btn-cam-gen').onclick = () => {
       if (list.length && !confirm('Remplacer le parcours actuel par un parcours généré automatiquement ?')) return;
-      commit(); S.p.tourWaypoints = generateCameras(); refreshPanel(); draw(); toast('Parcours généré : passage par les portes');
+      commit(); setGeneratedTour(); refreshPanel(); draw(); toast('Parcours généré : passage par les portes et l’escalier');
+    };
+    const keep = $('btn-cam-keep');
+    if (keep) keep.onclick = () => {
+      commit(); S.p.tourPlanVersion = planVersionNow(); refreshPanel(); toast('Parcours marqué à jour avec le plan actuel');
     };
     $('btn-cam-preview').onclick = () => previewAt(0);
   }
@@ -1505,6 +1560,7 @@
       ${extrasNote}
       <p class="ed-note">${pi && S.planImg ? `Échelle du plan : <strong>${pi.pxPerMeter} px/m</strong>` : 'Commencez par importer l\'image du plan, puis calibrez l\'échelle (K).'}</p>
       ${warn}
+      ${diagnosticHtml()}
       <div class="ed-stats">
         <div class="ed-stat"><strong>${p.walls.length}</strong><span>murs</span></div>
         <div class="ed-stat"><strong>${nOps}</strong><span>ouvertures</span></div>
@@ -1533,6 +1589,57 @@
     if (chk) chk.onchange = e => { S.keepExtras = e.target.checked; };
     $('btn-fit').onclick = () => { fitView(); draw(); };
     $('btn-center').onclick = () => { commit(); centerProject(); fitView(); draw(); toast('Projet recentré sur l\'origine'); };
+    wireDiagnostic();
+  }
+
+  // ---------------------------------------------------------------------------
+  // DIAGNOSTIC DU PROJET : circulation (pièces isolées, couloirs non dessinés) et toiture.
+  // Calcul mis en cache par empreinte du plan : le panneau se rafraîchit à chaque modification.
+  // ---------------------------------------------------------------------------
+  let diagCache = null;
+  function projectDiagnostic() {
+    if (!allLevelItems('walls').length) return null;
+    const project = toProjectJson();
+    const key = HouseAuto.geometryVersion(project) + '|' + (project.config.roofStyle || 'auto') + '|'
+      + JSON.stringify(project.canopies.map(c => [c.type, c.xMin, c.xMax, c.zMin, c.zMax, c.level]));
+    if (!diagCache || diagCache.key !== key) {
+      try { diagCache = { key, result: HouseAuto.diagnose(project) }; } catch (error) { diagCache = { key, result: null }; }
+    }
+    return diagCache.result;
+  }
+  const levelName = level => (level ? 'Étage ' + level : 'RDC');
+  function diagnosticHtml() {
+    const d = projectDiagnostic();
+    if (!d) return '';
+    const items = [];
+    if (d.unreachable.length) {
+      items.push(`<p class="ed-note warn"><strong>Pièces non reliées à l’entrée</strong> : ${d.unreachable.map(r => `${escapeHtml(r.name)} (${levelName(r.level)})`).join(', ')}. Ajoutez une porte ou un passage : sinon la visite y saute sans franchir de seuil.</p>`);
+    } else {
+      items.push(`<p class="ed-note">✓ Circulation : toutes les pièces habitables sont reliées à l’entrée${d.entryRoom ? ` (${escapeHtml(d.entryRoom)})` : ''}.</p>`);
+    }
+    d.voids.forEach((v, i) => items.push(`<p class="ed-note warn">Couloir non dessiné (${levelName(v.level)}, ≈ ${String(v.area).replace('.', ',')} m²) : des portes y ouvrent sans pièce. La visite le traverse déjà, mais il manque au tableau des surfaces. <button type="button" data-add-void="${i}">Ajouter la pièce « Dégagement »</button></p>`));
+    const roofStyle = S.p.config.roofStyle || 'auto';
+    const roofNote = d.roof.length
+      ? `Aucune toiture tracée : la 3D pose une ${d.roof[0].type === 'hip' ? 'toiture 4 pans (pente 27°, débord 60 cm)' : 'toiture-terrasse (dalle sur l’emprise exacte)'} automatique.${d.roof[0].type === 'hip' && d.footprintFill < 0.85 ? ' Attention : l’emprise est découpée, le 4 pans couvrira aussi ses creux.' : ''}`
+      : roofStyle === 'none' ? 'Toiture automatique désactivée.' : '✓ Toiture tracée à la main : elle est utilisée telle quelle.';
+    const options = { auto: 'Automatique (toit-terrasse)', hip: '4 pans', flat: 'Toit-terrasse', none: 'Aucune' };
+    items.push(`<div class="ed-field"><label for="sel-roof">Toiture automatique</label><select id="sel-roof">${Object.entries(options).map(([k, l]) => `<option value="${k}"${k === roofStyle ? ' selected' : ''}>${l}</option>`).join('')}</select></div><p class="ed-note">${roofNote}</p>`);
+    return `<fieldset class="ed-sheet-fields ed-diagnostic"><legend>Diagnostic du projet</legend>${items.join('')}</fieldset>`;
+  }
+  function wireDiagnostic() {
+    const roof = $('sel-roof');
+    if (roof) roof.onchange = e => { commit(); if (e.target.value === 'auto') delete S.p.config.roofStyle; else S.p.config.roofStyle = e.target.value; refreshPanel(); };
+    document.querySelectorAll('[data-add-void]').forEach(button => button.addEventListener('click', () => {
+      const v = projectDiagnostic()?.voids[+button.dataset.addVoid];
+      const rooms = v && S.levelData[v.level] ? S.levelData[v.level].rooms : null;
+      if (!rooms) return;
+      commit();
+      let id = 'degagement', n = 2;
+      while (allLevelItems('rooms').some(r => r.id === id)) id = 'degagement-' + n++;
+      rooms.push({ id, name: 'DÉGAGEMENT', level: v.level, bounds: { ...v.bounds }, floorType: 'tiles', habitable: true, desc: 'Circulation intérieure' });
+      S.dirty = true; refreshPanel(); draw();
+      toast(`Pièce « Dégagement » ajoutée (${levelName(v.level)}) — vérifiez ses limites sur le plan.`);
+    }));
   }
 
   function buildLibrary() {
@@ -1567,6 +1674,10 @@
     allLevelItems('columns').forEach(c => { c.x = r2(c.x + dx); c.z = r2(c.z + dz); });
     ['canopies', 'stairwells'].forEach(key => allLevelItems(key).forEach(c => { c.xMin = r2(c.xMin + dx); c.xMax = r2(c.xMax + dx); c.zMin = r2(c.zMin + dz); c.zMax = r2(c.zMax + dz); }));
     allLevelItems('furniture').forEach(f => { f.x = r2(f.x + dx); f.z = r2(f.z + dz); });
+    // Le parcours suit la maison : sans ce décalage, les caméras enregistrées resteraient à côté des murs.
+    (p.tourWaypoints || []).forEach(wp => {
+      for (const key of ['pos', 'look']) if (Array.isArray(wp[key])) wp[key] = [r2(wp[key][0] + dx), wp[key][1], r2(wp[key][2] + dz)];
+    });
     const pi = p.config.planImage;
     if (pi && pi.originPx) pi.originPx = [pi.originPx[0] - dx * pi.pxPerMeter, pi.originPx[1] - dz * pi.pxPerMeter];
     S.view.ox -= dx * S.view.scale;
@@ -1612,7 +1723,11 @@
       })
     };
     if (p.config.elevationEnd) out.config.elevationEnd = p.config.elevationEnd;
-    if (Array.isArray(p.tourWaypoints) && p.tourWaypoints.length >= 2) out.tourWaypoints = p.tourWaypoints;
+    if (['hip', 'flat', 'none'].includes(p.config.roofStyle)) out.config.roofStyle = p.config.roofStyle;
+    if (Array.isArray(p.tourWaypoints) && p.tourWaypoints.length >= 2) {
+      out.tourWaypoints = p.tourWaypoints;
+      if (p.tourPlanVersion) out.tourPlanVersion = p.tourPlanVersion;
+    }
     if (p.estimate && typeof CostEstimate !== 'undefined') out.estimate = CostEstimate.settings(p.estimate);
     const pi = p.config.planImage;
     if (pi && pi.url) out.config.planImage = { url: pi.url.startsWith('data:') ? '' : pi.url, pxPerMeter: pi.pxPerMeter, originPx: pi.originPx, calibrated: !!pi.calibrated };
@@ -1648,8 +1763,14 @@
     if (!allLevelItems('walls').length) { setSaveState('Tracez au moins un mur avant d’enregistrer.', true); return null; }
     const slug = slugify(S.p.meta.slug || S.p.meta.name);
     S.p.meta.slug = slug;
+    const tourBefore = tourState();
     const shift = centerProject();
-    if (shift.dx || shift.dz) { S.keepExtras = false; draw(); }
+    if (shift.dx || shift.dz) {
+      S.keepExtras = false; draw();
+      // Le recentrage déplace plan et caméras ensemble : un parcours à jour le reste.
+      if (tourBefore === 'fresh') S.p.tourPlanVersion = planVersionNow();
+    }
+    if (tourBefore === 'stale') toast('Attention : le parcours caméra ne correspond plus au plan (outil Caméras).', true);
     const project = toProjectJson();
     const submitted = JSON.stringify(project);
     const planImage = S.planDataUrl;
