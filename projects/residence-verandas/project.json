@@ -10,7 +10,7 @@
     "wallHeight": 2.85,
     "floorHeight": 3,
     "planImage": {
-      "url": "projects/residence-verandas/planches/063306.webp",
+      "url": "projects/residence-verandas/generated/images/photor-plan-2d.png",
       "calibrated": false
     }
   },
@@ -1095,25 +1095,25 @@
       {
         "title": "Plan de masse",
         "preview": "projects/residence-verandas/planches/063243.webp",
-        "art": "projects/residence-verandas/planches/edition-art/063243.webp",
+        "art": "projects/residence-verandas/generated/images/photor-plan-masse.png",
         "page": 1
       },
       {
         "title": "Rez-de-chaussée",
         "preview": "projects/residence-verandas/planches/063306.webp",
-        "art": "projects/residence-verandas/planches/edition-art/063306.webp",
+        "art": "projects/residence-verandas/generated/images/photor-plan-2d.png",
         "page": 2
       },
       {
         "title": "Étage",
         "preview": "projects/residence-verandas/planches/063245.webp",
-        "art": "projects/residence-verandas/planches/edition-art/063245.webp",
+        "art": "projects/residence-verandas/generated/images/photor-plan-etage.png",
         "page": 3
       },
       {
         "title": "Façade avant",
         "preview": "projects/residence-verandas/planches/063252.webp",
-        "art": "projects/residence-verandas/planches/edition-art/063252.webp",
+        "art": "projects/residence-verandas/generated/images/photor-facade-avant.png",
         "page": 5
       },
       {
@@ -1143,7 +1143,7 @@
       {
         "title": "Coupe B–B",
         "preview": "projects/residence-verandas/planches/063240.webp",
-        "art": "projects/residence-verandas/planches/edition-art/063240.webp",
+        "art": "projects/residence-verandas/generated/images/photor-coupe-bb.png",
         "page": 10
       },
       {
