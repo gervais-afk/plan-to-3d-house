@@ -58,12 +58,13 @@ function house({ slug, label, stair }) {
   };
 }
 
-if (process.argv.includes('--remove')) {
+// N'écrit (ou ne supprime) que lancé en ligne de commande : importé par les tests, le module reste sans effet.
+if (require.main === module && process.argv.includes('--remove')) {
   for (const { slug } of STAIRS) {
     const dir = path.join(ROOT, PREFIX + slug);
     if (fs.existsSync(dir)) { fs.rmSync(dir, { recursive: true }); console.log('supprimé', PREFIX + slug); }
   }
-} else {
+} else if (require.main === module) {
   for (const spec of STAIRS) {
     const dir = path.join(ROOT, PREFIX + spec.slug);
     fs.mkdirSync(dir, { recursive: true });
