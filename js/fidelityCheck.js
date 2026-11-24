@@ -202,7 +202,23 @@ const FidelityCheck = (() => {
     return result;
   }
 
-  return { VERSION, THRESHOLDS, LABELS, toGray, edges, coverCrop, compareGray, compareUrls, verdictOf, describe };
+  /**
+   * Format attendu par RenderStudio.renderWithFidelityLoop (branche arena) : score en %, verdict booléen.
+   * « Réussi » seulement si le rendu est jugé fidèle ; « à vérifier » compte comme un échec pour relancer.
+   */
+  function toLoopResult(result) {
+    if (!result) return { score: 0, passed: false, details: null };
+    return { score: Math.floor(result.score * 100 + 1e-9), passed: result.verdict === 'faithful', details: result };
+  }
+
+  const asUrl = source => typeof source === 'string' ? source : source.toDataURL('image/png');
+
+  /** Compare une vue de référence et un rendu IA (canvas ou URL) avec le contrôle calibré ci-dessus. */
+  async function checkFidelity(original, generated) {
+    return toLoopResult(await compareUrls(asUrl(original), asUrl(generated)));
+  }
+
+  return { VERSION, THRESHOLDS, LABELS, toGray, edges, coverCrop, compareGray, compareUrls, verdictOf, describe, checkFidelity, toLoopResult };
 })();
 
 if (typeof module !== 'undefined') module.exports = FidelityCheck;

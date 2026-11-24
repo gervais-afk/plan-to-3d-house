@@ -1,0 +1,166 @@
+/* =========================================================
+   OUTILS AVANCÉS — Modules stratégiques
+   ========================================================= */
+
+.ed-dialog-wide {
+  max-width: 900px;
+  width: 90vw;
+}
+
+.ed-advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.ed-advanced-card {
+  background: var(--surface-2, #f4f4f4);
+  border: 1px solid var(--border, #ddd);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ed-advanced-card h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary, #1a1a1a);
+}
+
+.ed-advanced-card p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #666);
+}
+
+.ed-advanced-card button {
+  background: var(--accent, #2c5f2d);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+  margin-top: 0.25rem;
+}
+
+.ed-advanced-card button:hover:not(:disabled) {
+  background: var(--accent-hover, #1e4620);
+}
+
+.ed-advanced-card button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ed-advanced-result {
+  display: none;
+  background: var(--surface-3, #fff);
+  border: 1px solid var(--border, #ddd);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  font-size: 0.8rem;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 0.5rem;
+}
+
+.ed-advanced-result pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: monospace;
+  font-size: 0.75rem;
+}
+
+.ed-advanced-success {
+  color: #1a5c1a;
+  line-height: 1.5;
+}
+
+.ed-advanced-error {
+  color: #8b1a1a;
+  line-height: 1.5;
+}
+
+.ed-advanced-warning {
+  color: #8b6914;
+  line-height: 1.5;
+}
+
+/* Bouton Outils avancés dans la barre d'actions */
+#btn-advanced {
+  background: linear-gradient(135deg, #2c5f2d 0%, #4a8f4b 100%);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: transform 0.1s, box-shadow 0.2s;
+}
+
+#btn-advanced:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(44, 95, 45, 0.3);
+}
+
+#btn-advanced svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ed-advanced-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .ed-dialog-wide {
+    max-width: 95vw;
+  }
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .ed-advanced-card {
+    background: var(--surface-2-dark, #2a2a2a);
+    border-color: var(--border-dark, #444);
+  }
+  
+  .ed-advanced-card h4 {
+    color: var(--text-primary-dark, #f0f0f0);
+  }
+  
+  .ed-advanced-card p {
+    color: var(--text-secondary-dark, #aaa);
+  }
+  
+  .ed-advanced-result {
+    background: var(--surface-3-dark, #1a1a1a);
+    border-color: var(--border-dark, #444);
+  }
+  
+  .ed-advanced-success {
+    color: #4caf50;
+  }
+  
+  .ed-advanced-error {
+    color: #ef5350;
+  }
+  
+  .ed-advanced-warning {
+    color: #ffa726;
+  }
+}
