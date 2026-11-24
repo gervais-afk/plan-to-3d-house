@@ -1,48 +1,51 @@
 /**
- * BROCHURE PREMIUM — Catalogue digne des grands magazines immobiliers
- * 
- * Améliorations :
- * - Couverture avec image 3D plein cadre + overlay dégradé
- * - Typographie hiérarchisée (titres impactants)
- * - Ombres portées et profondeur
- * - Mise en page magazine avec grilles asymétriques
- * - Statistiques visuelles premium
- * - Intégration du bouton "Sublimer avec l'IA"
+ * BROCHURE PREMIUM — Catalogue de présentation client en 2 pages
+ *
+ * - 3 styles : Moderne, Luxe, Industriel (setStyle / getStyle)
+ * - Couverture : vue 3D de la façade si un studio 3D est disponible,
+ *   sinon le plan du rez-de-chaussée mis en valeur
+ * - Statistiques : surface habitable, surface totale, nombre de pièces
+ * - Page 2 : plan de masse + vues intérieures (studio 3D) ou programme des espaces
+ *
+ * Fonctionne dans la visite 3D (avec studio) comme dans l'éditeur (sans studio).
+ * Compatible navigateur et Node.js (tests).
  */
 
 const ClientBrochurePremium = (() => {
   'use strict';
 
   // =====================================================================
-  // PALETTE PREMIUM
+  // STYLES
   // =====================================================================
-  
-  const COLORS = {
-    // Couleurs principales
-    primary: '#1a1a2e',      // Bleu nuit profond
-    secondary: '#16213e',    // Bleu sombre
-    accent: '#e94560',       // Rouge corail vif
-    accentLight: '#ff6b9d',  // Rose clair
-    
-    // Neutres sophistiqués
-    dark: '#0f0f1e',
-    medium: '#4a4a5e',
-    light: '#a8a8c0',
-    paper: '#f8f9fa',
-    
-    // Or pour luxe
-    gold: '#d4af37',
-    goldLight: '#f4d03f'
+
+  const STYLES = {
+    modern: { label: 'Moderne', primary: '#1a1a2e', secondary: '#16213e', accent: '#e94560', paper: '#f8f9fa', light: '#a8a8c0', medium: '#4a4a5e' },
+    luxury: { label: 'Luxe', primary: '#064e3b', secondary: '#065f46', accent: '#d4af37', paper: '#fefdf8', light: '#b9c9bf', medium: '#3f5148' },
+    industrial: { label: 'Industriel', primary: '#1e293b', secondary: '#334155', accent: '#b87333', paper: '#f8fafc', light: '#a7b0bd', medium: '#475569' }
   };
+
+  let currentStyle = 'modern';
+  let COLORS = { ...STYLES.modern };
+
+  /** Choisit le style du catalogue ; renvoie le style retenu (Moderne si inconnu). */
+  function setStyle(name) {
+    currentStyle = Object.prototype.hasOwnProperty.call(STYLES, name) ? name : 'modern';
+    COLORS = { ...STYLES[currentStyle] };
+    return currentStyle;
+  }
+
+  function getStyle() {
+    return currentStyle;
+  }
 
   const margin = 20;
   const width = 170;
 
-  let pendingLibrary;
-
   // =====================================================================
   // CHARGEMENT JSPDF
   // =====================================================================
+
+  let pendingLibrary;
 
   function loadJsPDF() {
     if (window.jspdf?.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
@@ -68,369 +71,355 @@ const ClientBrochurePremium = (() => {
   }
 
   // =====================================================================
-  // UTILITAIRES VISUELS PREMIUM
+  // DONNÉES DU PROJET
   // =====================================================================
 
-  /**
-   * Dessine un dégradé vertical (simulé par bandes)
-   */
+  function polyArea(poly) {
+    let sum = 0;
+    for (let i = 0; i < poly.length; i++) {
+      const [x1, z1] = poly[i], [x2, z2] = poly[(i + 1) % poly.length];
+      sum += x1 * z2 - x2 * z1;
+    }
+    return Math.abs(sum) / 2;
+  }
+
+  function roomBounds(room) {
+    if (room.bounds) return room.bounds;
+    if (Array.isArray(room.poly) && room.poly.length >= 3) {
+      const xs = room.poly.map(p => p[0]), zs = room.poly.map(p => p[1]);
+      return { xMin: Math.min(...xs), xMax: Math.max(...xs), zMin: Math.min(...zs), zMax: Math.max(...zs) };
+    }
+    return null;
+  }
+
+  function roomArea(room) {
+    if (Number.isFinite(room.area)) return room.area;
+    if (Array.isArray(room.poly) && room.poly.length >= 3) return polyArea(room.poly);
+    const b = roomBounds(room);
+    return b ? Math.max(0, b.xMax - b.xMin) * Math.max(0, b.zMax - b.zMin) : 0;
+  }
+
+  /** Surfaces et pièces, que le projet vienne de la visite 3D (totals, area) ou de l'éditeur. */
+  function summary(data) {
+    const rooms = (data.rooms || []).map(room => ({ ...room, area: roomArea(room), level: room.level || 0 }));
+    const habitable = Number.isFinite(data.totals?.habitable)
+      ? data.totals.habitable
+      : rooms.filter(r => r.habitable !== false).reduce((sum, r) => sum + r.area, 0);
+    const total = rooms.reduce((sum, r) => sum + r.area, 0);
+    return { rooms, habitable, total, habitableCount: rooms.filter(r => r.habitable !== false).length };
+  }
+
+  function bbox(data, level = 0) {
+    let xMin = Infinity, xMax = -Infinity, zMin = Infinity, zMax = -Infinity;
+    const add = (x, z) => { xMin = Math.min(xMin, x); xMax = Math.max(xMax, x); zMin = Math.min(zMin, z); zMax = Math.max(zMax, z); };
+    for (const wall of data.walls || []) {
+      if ((wall.level || 0) !== level) continue;
+      add(wall.from[0], wall.from[1]);
+      add(wall.to[0], wall.to[1]);
+    }
+    for (const room of data.rooms || []) {
+      const b = (room.level || 0) === level ? roomBounds(room) : null;
+      if (b) { add(b.xMin, b.zMin); add(b.xMax, b.zMax); }
+    }
+    if (!Number.isFinite(xMin)) return null;
+    return { xMin, xMax, zMin, zMax };
+  }
+
+  // =====================================================================
+  // UTILITAIRES DE DESSIN
+  // =====================================================================
+
+  /** Les polices standard de jsPDF (WinAnsi) n'ont ni espaces fines, ni ≈, ni emojis. */
+  function pdfSafe(value) {
+    return String(value ?? '')
+      .replace(/[   ]/g, ' ')
+      .replace(/≈/g, 'env.')
+      .replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}️]/gu, '')
+      .trim();
+  }
+
+  function hexToRgb(hex) {
+    return [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+  }
+
+  function withOpacity(doc, opacity, draw) {
+    const supported = typeof doc.setGState === 'function' && typeof doc.GState === 'function';
+    if (supported) doc.setGState(new doc.GState({ opacity }));
+    try { draw(); } finally { if (supported) doc.setGState(new doc.GState({ opacity: 1 })); }
+  }
+
   function drawGradient(doc, x, y, w, h, color1, color2, steps = 20) {
+    const [r1, g1, b1] = hexToRgb(color1);
+    const [r2, g2, b2] = hexToRgb(color2);
     const stepH = h / steps;
-    
     for (let i = 0; i < steps; i++) {
-      const ratio = i / steps;
-      
-      const r1 = parseInt(color1.slice(1, 3), 16);
-      const g1 = parseInt(color1.slice(3, 5), 16);
-      const b1 = parseInt(color1.slice(5, 7), 16);
-      
-      const r2 = parseInt(color2.slice(1, 3), 16);
-      const g2 = parseInt(color2.slice(3, 5), 16);
-      const b2 = parseInt(color2.slice(5, 7), 16);
-      
-      const r = Math.round(r1 + (r2 - r1) * ratio);
-      const g = Math.round(g1 + (g2 - g1) * ratio);
-      const b = Math.round(b1 + (b2 - b1) * ratio);
-      
-      const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-      
-      doc.setFillColor(hex);
+      const t = i / steps;
+      doc.setFillColor(Math.round(r1 + (r2 - r1) * t), Math.round(g1 + (g2 - g1) * t), Math.round(b1 + (b2 - b1) * t));
       doc.rect(x, y + i * stepH, w, stepH + 0.1, 'F');
     }
   }
 
-  /**
-   * Dessine une ombre portée
-   */
   function drawShadow(doc, x, y, w, h, blur = 3) {
     for (let i = 0; i < blur; i++) {
       const offset = i * 0.5;
-      const opacity = 0.15 * (1 - i / blur);
-      
-      if (doc.setGState) {
-        doc.setGState(new doc.GState({ opacity }));
-      }
-      doc.setFillColor('#000000');
-      doc.roundedRect(x + offset, y + offset, w, h, 1, 1, 'F');
-    }
-    
-    if (doc.setGState) {
-      doc.setGState(new doc.GState({ opacity: 1 }));
+      withOpacity(doc, 0.15 * (1 - i / blur), () => {
+        doc.setFillColor('#000000');
+        doc.roundedRect(x + offset, y + offset, w, h, 1, 1, 'F');
+      });
     }
   }
 
-  /**
-   * Texte avec style premium
-   */
   function premiumText(doc, value, x, y, size, options = {}) {
-    const { bold = false, color = COLORS.primary, maxWidth, align = 'left', font = 'helvetica' } = options;
-    let label = String(value).replace(/[\u202f\u00a0]/g, ' ');
-    
-    doc.setFont(font, bold ? 'bold' : 'normal')
-       .setFontSize(size)
-       .setTextColor(color);
-    
+    const { bold = false, color = COLORS.primary, maxWidth, align = 'left' } = options;
+    let label = pdfSafe(value);
+    doc.setFont('helvetica', bold ? 'bold' : 'normal').setFontSize(size).setTextColor(color);
     if (maxWidth && doc.getTextWidth(label) > maxWidth) {
-      while (label.length && doc.getTextWidth(`${label}…`) > maxWidth) {
-        label = label.slice(0, -1);
-      }
-      label += '…';
+      while (label.length && doc.getTextWidth(`${label}...`) > maxWidth) label = label.slice(0, -1);
+      label += '...';
     }
-    
     doc.text(label, x, y, { align });
   }
 
-  /**
-   * Séparateur décoratif
-   */
-  function drawDivider(doc, x, y, width, style = 'accent') {
-    if (style === 'accent') {
-      doc.setDrawColor(COLORS.accent);
-      doc.setLineWidth(2);
-      doc.line(x, y, x + 30, y);
-      
-      doc.setDrawColor(COLORS.light);
-      doc.setLineWidth(0.5);
-      doc.line(x + 35, y, x + width, y);
-    } else if (style === 'gold') {
-      doc.setDrawColor(COLORS.gold);
-      doc.setLineWidth(1.5);
-      doc.line(x, y, x + 40, y);
-    }
+  function drawDivider(doc, x, y, w) {
+    doc.setDrawColor(COLORS.accent).setLineWidth(2);
+    doc.line(x, y, x + 30, y);
+    doc.setDrawColor(COLORS.light).setLineWidth(0.5);
+    doc.line(x + 35, y, x + w, y);
   }
 
-  /**
-   * Stat card premium
-   */
   function drawStatCard(doc, x, y, w, h, label, value, unit) {
-    // Fond blanc avec ombre
     drawShadow(doc, x, y, w, h, 3);
     doc.setFillColor('#ffffff');
     doc.roundedRect(x, y, w, h, 2, 2, 'F');
-    
-    // Valeur grande
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(28);
-    doc.setTextColor(COLORS.primary);
-    doc.text(value, x + w / 2, y + h * 0.5, { align: 'center' });
-    
-    // Unité
-    doc.setFontSize(14);
-    doc.setTextColor(COLORS.medium);
-    doc.text(unit, x + w / 2, y + h * 0.65, { align: 'center' });
-    
-    // Label
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(COLORS.accent);
-    doc.text(label.toUpperCase(), x + w / 2, y + h - 8, { align: 'center' });
+    premiumText(doc, String(value), x + w / 2, y + h * 0.48, 26, { bold: true, align: 'center' });
+    if (unit) premiumText(doc, unit, x + w / 2, y + h * 0.66, 13, { color: COLORS.medium, align: 'center' });
+    premiumText(doc, label.toUpperCase(), x + w / 2, y + h - 7, 8, { color: COLORS.accent, align: 'center' });
   }
 
   // =====================================================================
-  // SÉLECTION DES VUES 3D
+  // VUES 3D (visite 3D uniquement)
   // =====================================================================
 
   function selectShots(data, hs) {
     const bb = HouseAuto.bbox(data);
     const { out } = HouseAuto.findEntry(data, bb);
     const span = Math.max(3, bb.max);
-    const top = Math.max(0, ...data.rooms.map(r => r.level), ...data.walls.map(w => w.level));
+    const top = Math.max(0, ...data.rooms.map(r => r.level || 0), ...data.walls.map(w => w.level || 0));
     const height = hs.levelOffset(top) + data.config.wallHeight;
     const distance = 1.6 * Math.max(span, height);
-    
-    // Vue façade premium (plus large, plus impactante)
     const facade = {
-      label: 'Façade principale', 
-      fov: 50, 
-      interior: false,
+      label: 'Façade principale', fov: 50, interior: false,
       pos: [bb.cx + out.x * distance - out.z * span * 0.34, Math.max(1.9, height * 0.6), bb.cz + out.z * distance + out.x * span * 0.34],
       look: [bb.cx, height * 0.44, bb.cz]
     };
-    
-    const existing = (data.renderShots || []).filter(s => s.room && !s.night);
-    const rooms = data.rooms.filter(r => r.habitable).slice().sort((a, b) =>
+    const existing = (data.renderShots || []).filter(s => s.room && !s.night && Array.isArray(s.pos));
+    const rooms = summary(data).rooms.filter(r => r.habitable !== false).sort((a, b) =>
       Number(existing.some(s => s.room === b.id)) - Number(existing.some(s => s.room === a.id)) || b.area - a.area);
-    
-    // Vues intérieures premium
     const interior = rooms.slice(0, 3).map(r => {
       const authored = existing.find(s => s.room === r.id);
       if (authored) return { ...authored, label: r.name, interior: true };
-      
       const { cam, look } = HouseAuto.roomPose(data, r);
       const y = hs.levelOffset(r.level);
-      return { 
-        label: r.name, 
-        room: r.id, 
-        interior: true, 
-        fov: 65,
-        pos: [cam.x, y + Math.min(1.45, data.config.wallHeight * 0.63), cam.z], 
-        look: [look.x, y + 1.08, look.z] 
+      return {
+        label: r.name, room: r.id, interior: true, fov: 65,
+        pos: [cam.x, y + Math.min(1.45, data.config.wallHeight * 0.63), cam.z],
+        look: [look.x, y + 1.08, look.z]
       };
     });
-    
     return { facade, interior };
   }
 
-  // =====================================================================
-  // PAGE DE COUVERTURE PREMIUM
-  // =====================================================================
-
-  function drawCoverPage(doc, data, studio, variant) {
-    // Fond avec dégradé sombre
-    drawGradient(doc, 0, 0, 210, 297, COLORS.primary, COLORS.secondary, 20);
-    
-    // Titre du projet en haut
-    premiumText(doc, variant ? `VARIANTE · ${variant.name}` : 'DOSSIER DE PRÉSENTATION', 
-                margin, 25, 10, { bold: true, color: COLORS.accent });
-    
-    // Nom du projet en grand
-    const title = data.meta?.name || 'Projet architectural';
-    premiumText(doc, title, margin, 45, 36, { bold: true, color: '#ffffff', maxWidth: 170 });
-    
-    // Sous-titre
-    if (data.meta?.subtitle) {
-      premiumText(doc, data.meta.subtitle, margin, 60, 14, { color: COLORS.light, maxWidth: 170 });
-    }
-    
-    // Ligne d'accent
-    doc.setDrawColor(COLORS.accent);
-    doc.setLineWidth(3);
-    doc.line(margin, 70, margin + 60, 70);
-    
-    // Image 3D plein cadre avec overlay
-    const shots = selectShots(data, studio.hs);
-    const imgY = 85;
-    const imgH = 120;
-    const imgData = studio.capture(shots.facade, 1600, 800, 1, { clean: true, solar: variant });
-    
-    // Ombre derrière l'image
-    drawShadow(doc, margin, imgY, width, imgH, 5);
-    
-    // Image
-    doc.addImage(imgData, 'JPEG', margin, imgY, width, imgH);
-    
-    // Overlay dégradé en bas de l'image pour lisibilité
-    doc.setFillColor('rgba(0,0,0,0.3)');
-    doc.rect(margin, imgY + imgH - 30, width, 30, 'F');
-    
-    // Stats en bas
-    const statsY = 220;
-    const statW = 50;
-    const statH = 55;
-    
-    const habitable = data.totals?.habitable || 0;
-    const total = data.rooms.reduce((sum, room) => sum + room.area, 0);
-    const roomCount = data.rooms.length;
-    
-    drawStatCard(doc, margin, statsY, statW, statH, 'Surface habitable', habitable.toFixed(0), 'm²');
-    drawStatCard(doc, margin + statW + 10, statsY, statW, statH, 'Surface totale', total.toFixed(0), 'm²');
-    drawStatCard(doc, margin + (statW + 10) * 2, statsY, statW, statH, 'Pièces', roomCount, '');
-    
-    // Mention IA si sublimé
-    if (variant?.aiEnhanced) {
-      premiumText(doc, '✨ Sublimé avec IA', margin + width - 40, 285, 8, { color: COLORS.goldLight, align: 'right' });
-    }
+  function hasStudio(studio) {
+    return !!(studio && studio.hs && typeof studio.capture === 'function' && typeof HouseAuto !== 'undefined');
   }
 
   // =====================================================================
-  // PAGE PLAN & ESPACES PREMIUM
+  // PLAN DU REZ-DE-CHAUSSÉE
   // =====================================================================
 
-  function drawPlanPage(doc, data, studio, variant) {
-    // Fond blanc
-    doc.setFillColor(COLORS.paper);
-    doc.rect(0, 0, 210, 297, 'F');
-    
-    // Titre de section
-    premiumText(doc, 'PLAN & ESPACES', margin, 25, 12, { bold: true, color: COLORS.medium });
-    drawDivider(doc, margin, 30, width, 'accent');
-    
-    // Titre principal
-    premiumText(doc, 'Plan de masse', margin, 45, 28, { bold: true });
-    premiumText(doc, 'RDC et abords modélisés · cotes indicatives', margin, 55, 10, { color: COLORS.medium });
-    
-    // Plan de masse avec ombre
-    const planY = 65;
-    const planH = 100;
-    drawShadow(doc, margin, planY, width, planH, 4);
-    doc.setFillColor('#ffffff');
-    doc.roundedRect(margin, planY, width, planH, 2, 2, 'F');
-    
-    // Dessiner le plan (réutiliser la logique existante)
-    sitePlan(doc, data, margin + 5, planY + 5, width - 10, planH - 10, variant?.solar?.north);
-    
-    // Vues intérieures
-    premiumText(doc, 'Vues intérieures', margin, 185, 22, { bold: true });
-    
-    const photoW = (width - 10) / 2;
-    const photoH = 65;
-    const shots = selectShots(data, studio.hs);
-    
-    for (let i = 0; i < 2; i++) {
-      const shot = shots.interior[i];
-      const x = margin + i * (photoW + 10);
-      const y = 195;
-      
-      if (shot) {
-        // Ombre
-        drawShadow(doc, x, y, photoW, photoH, 4);
-        
-        // Image
-        const imgData = studio.capture(shot, 1200, 750, 1, { clean: true, solar: variant });
-        doc.addImage(imgData, 'JPEG', x, y, photoW, photoH);
-        
-        // Label avec fond
-        doc.setFillColor('rgba(0,0,0,0.7)');
-        doc.rect(x, y + photoH - 12, photoW, 12, 'F');
-        
-        premiumText(doc, shot.label, x + 3, y + photoH - 4, 10, { bold: true, color: '#ffffff' });
-      } else {
-        // Placeholder
-        doc.setFillColor(COLORS.paper);
-        drawShadow(doc, x, y, photoW, photoH, 3);
-        doc.roundedRect(x, y, photoW, photoH, 2, 2, 'F');
-        
-        premiumText(doc, 'Pas de vue intérieure', x + photoW / 2, y + photoH / 2, 9, { 
-          color: COLORS.light, 
-          align: 'center' 
-        });
-      }
-    }
-    
-    // Pied de page
-    const title = data.meta?.name || 'Projet';
-    premiumText(doc, title, margin, 285, 8, { color: COLORS.medium, maxWidth: 140 });
-    premiumText(doc, '02 / 02', margin + width, 285, 8, { bold: true, color: COLORS.medium, align: 'right' });
-  }
-
-  // =====================================================================
-  // PLAN DE MASSE (réutilisé de l'original)
-  // =====================================================================
-
-  function sitePlan(doc, data, x, y, w, h, northDegrees) {
-    // Logique simplifiée - réutiliser le code original si nécessaire
-    const bb = HouseAuto.bbox(data);
-    
-    // Fond
+  function sitePlan(doc, data, x, y, w, h, options = {}) {
+    const { labels = false } = options;
     doc.setFillColor('#ffffff');
     doc.rect(x, y, w, h, 'F');
-    
-    // Dessiner les pièces
-    const rooms = data.rooms.filter(r => !r.level);
-    const dx = Math.max(1, bb.xMax - bb.xMin);
-    const dz = Math.max(1, bb.zMax - bb.zMin);
-    const scale = Math.min((w - 20) / dx, (h - 10) / dz);
-    
+    const bb = bbox(data, 0);
+    if (!bb) {
+      premiumText(doc, 'Plan non disponible', x + w / 2, y + h / 2, 9, { color: COLORS.light, align: 'center' });
+      return;
+    }
+    const dx = Math.max(1, bb.xMax - bb.xMin), dz = Math.max(1, bb.zMax - bb.zMin);
+    const scale = Math.min((w - 20) / dx, (h - 14) / dz);
     const X = a => x + (w - dx * scale) / 2 + (a - bb.xMin) * scale;
     const Z = b => y + (h - dz * scale) / 2 + (b - bb.zMin) * scale;
-    
-    rooms.forEach(room => {
-      const b = room.bounds;
-      doc.setFillColor(room.habitable ? '#e8f5e9' : '#fff3e0');
-      doc.rect(X(b.xMin), Z(b.zMin), (b.xMax - b.xMin) * scale, (b.zMax - b.zMin) * scale, 'F');
-    });
-    
-    // Boussole
-    const cx = x + w - 15, cy = y + 15;
-    doc.setDrawColor(COLORS.primary);
-    doc.setLineWidth(0.5);
-    doc.circle(cx, cy, 6);
-    premiumText(doc, 'N', cx, cy + 2, 8, { bold: true, align: 'center', color: COLORS.primary });
+    const [ar, ag, ab] = hexToRgb(COLORS.accent);
+
+    const rooms = summary(data).rooms.filter(r => !r.level);
+    for (const room of rooms) {
+      const b = roomBounds(room);
+      if (!b) continue;
+      // Teinte du style : pièces habitables légèrement colorées, annexes neutres.
+      const tint = room.habitable !== false ? 0.16 : 0.06;
+      doc.setFillColor(Math.round(255 - (255 - ar) * tint), Math.round(255 - (255 - ag) * tint), Math.round(255 - (255 - ab) * tint));
+      if (Array.isArray(room.poly) && room.poly.length >= 3) {
+        const pts = room.poly.map(([px, pz]) => [X(px), Z(pz)]);
+        doc.lines(pts.slice(1).map((p, i) => [p[0] - pts[i][0], p[1] - pts[i][1]]), pts[0][0], pts[0][1], [1, 1], 'F', true);
+      } else {
+        doc.rect(X(b.xMin), Z(b.zMin), (b.xMax - b.xMin) * scale, (b.zMax - b.zMin) * scale, 'F');
+      }
+      if (labels && (b.xMax - b.xMin) * scale > 16 && (b.zMax - b.zMin) * scale > 8) {
+        premiumText(doc, room.name || '', X((b.xMin + b.xMax) / 2), Z((b.zMin + b.zMax) / 2), 6, { bold: true, color: COLORS.medium, align: 'center', maxWidth: (b.xMax - b.xMin) * scale - 2 });
+      }
+    }
+    doc.setDrawColor(COLORS.primary).setLineWidth(0.6);
+    for (const wall of (data.walls || []).filter(wl => !wl.level)) {
+      doc.setLineWidth(wall.type === 'ext' ? 0.9 : 0.4);
+      doc.line(X(wall.from[0]), Z(wall.from[1]), X(wall.to[0]), Z(wall.to[1]));
+    }
+    const cx = x + w - 10, cy = y + 10;
+    doc.setDrawColor(COLORS.primary).setLineWidth(0.4);
+    doc.circle(cx, cy, 5);
+    premiumText(doc, 'N', cx, cy + 1.8, 7, { bold: true, align: 'center' });
   }
 
   // =====================================================================
-  // EXPORT PDF PREMIUM
+  // PAGES
   // =====================================================================
 
-  async function exportPDF(data, studio, variant = null, prepare = () => {}) {
-    const JsPDF = await loadJsPDF();
-    const restore = prepare();
-    
-    try {
-      const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: true });
-      
-      const title = data.meta?.name || 'Projet architectural';
-      doc.setProperties({ 
-        title, 
-        subject: 'Brochure architecturale premium',
-        author: 'Plan to 3D House'
+  function drawCoverPage(doc, data, studio, variant, options) {
+    const info = summary(data);
+    drawGradient(doc, 0, 0, 210, 297, COLORS.primary, COLORS.secondary, 20);
+    premiumText(doc, variant?.name ? `VARIANTE · ${variant.name}` : 'DOSSIER DE PRÉSENTATION', margin, 25, 10, { bold: true, color: COLORS.accent });
+    premiumText(doc, data.meta?.name || 'Projet architectural', margin, 45, 34, { bold: true, color: '#ffffff', maxWidth: width });
+    if (data.meta?.subtitle) premiumText(doc, data.meta.subtitle, margin, 58, 12, { color: COLORS.light, maxWidth: width });
+    doc.setDrawColor(COLORS.accent).setLineWidth(3);
+    doc.line(margin, 68, margin + 60, 68);
+
+    const imgY = 82, imgH = 120;
+    drawShadow(doc, margin, imgY, width, imgH, 5);
+    if (hasStudio(studio)) {
+      const shots = selectShots(data, studio.hs);
+      doc.addImage(studio.capture(shots.facade, 1600, 800, 1, { clean: true, solar: variant }), 'JPEG', margin, imgY, width, imgH);
+      withOpacity(doc, 0.3, () => {
+        doc.setFillColor('#000000');
+        doc.rect(margin, imgY + imgH - 30, width, 30, 'F');
       });
-      
-      // Page 1 : Couverture premium
-      drawCoverPage(doc, data, studio, variant);
-      
-      // Page 2 : Plan & espaces premium
+    } else {
+      doc.setFillColor('#ffffff');
+      doc.roundedRect(margin, imgY, width, imgH, 2, 2, 'F');
+      sitePlan(doc, data, margin + 4, imgY + 4, width - 8, imgH - 14, { labels: true });
+      premiumText(doc, 'Plan du rez-de-chaussée', margin + 6, imgY + imgH - 4, 8, { color: COLORS.medium });
+    }
+
+    if (options.includeStats !== false) {
+      const statsY = 218, statW = 50, statH = 52;
+      drawStatCard(doc, margin, statsY, statW, statH, 'Surface habitable', Math.round(info.habitable), 'm²');
+      drawStatCard(doc, margin + statW + 10, statsY, statW, statH, 'Surface totale', Math.round(info.total), 'm²');
+      drawStatCard(doc, margin + (statW + 10) * 2, statsY, statW, statH, 'Pièces', info.habitableCount, '');
+    }
+    premiumText(doc, `Style ${STYLES[currentStyle].label}`, margin, 287, 7, { color: COLORS.light });
+    if (variant?.aiEnhanced) premiumText(doc, 'Rendus sublimés par IA', margin + width, 287, 8, { color: COLORS.accent, align: 'right' });
+  }
+
+  function drawProgram(doc, data, top) {
+    const rooms = summary(data).rooms.slice().sort((a, b) => a.level - b.level || Number(b.habitable !== false) - Number(a.habitable !== false) || b.area - a.area);
+    premiumText(doc, 'Programme des espaces', margin, top, 20, { bold: true });
+    let y = top + 8;
+    const rowH = 6.2, bottom = 276;
+    const maxRows = Math.floor((bottom - y) / rowH);
+    const shown = rooms.length > maxRows ? rooms.slice(0, maxRows - 1) : rooms;
+    shown.forEach((room, i) => {
+      if (i % 2 === 0) {
+        doc.setFillColor('#ffffff');
+        doc.rect(margin, y, width, rowH, 'F');
+      }
+      const level = room.level ? ` · R+${room.level}` : '';
+      premiumText(doc, `${room.name || room.id}${level}`, margin + 3, y + 4.3, 9, { bold: room.habitable !== false, color: room.habitable !== false ? COLORS.primary : COLORS.medium, maxWidth: 110 });
+      premiumText(doc, `${(Math.round(room.area * 10) / 10).toLocaleString('fr-FR')} m²`, margin + width - 3, y + 4.3, 9, { color: COLORS.medium, align: 'right' });
+      y += rowH;
+    });
+    if (shown.length < rooms.length) {
+      premiumText(doc, `… et ${rooms.length - shown.length} autres espaces`, margin + 3, y + 4.3, 8, { color: COLORS.medium });
+    }
+  }
+
+  function drawPlanPage(doc, data, studio, variant, options) {
+    doc.setFillColor(COLORS.paper);
+    doc.rect(0, 0, 210, 297, 'F');
+    premiumText(doc, 'PLAN & ESPACES', margin, 25, 12, { bold: true, color: COLORS.medium });
+    drawDivider(doc, margin, 30, width);
+
+    let next = 45;
+    if (options.includePlan !== false) {
+      premiumText(doc, 'Plan de masse', margin, 45, 26, { bold: true });
+      premiumText(doc, 'Rez-de-chaussée · cotes indicatives', margin, 54, 10, { color: COLORS.medium });
+      const planY = 62, planH = 100;
+      drawShadow(doc, margin, planY, width, planH, 4);
+      doc.setFillColor('#ffffff');
+      doc.roundedRect(margin, planY, width, planH, 2, 2, 'F');
+      sitePlan(doc, data, margin + 5, planY + 5, width - 10, planH - 10, { labels: true });
+      next = 180;
+    }
+
+    const shots = hasStudio(studio) && options.includeInterior !== false ? selectShots(data, studio.hs).interior.slice(0, 2) : [];
+    if (shots.length) {
+      premiumText(doc, 'Vues intérieures', margin, next, 22, { bold: true });
+      const photoW = (width - 10) / 2, photoH = 65, y = next + 10;
+      shots.forEach((shot, i) => {
+        const x = margin + i * (photoW + 10);
+        drawShadow(doc, x, y, photoW, photoH, 4);
+        doc.addImage(studio.capture(shot, 1200, 750, 1, { clean: true, solar: variant }), 'JPEG', x, y, photoW, photoH);
+        withOpacity(doc, 0.7, () => {
+          doc.setFillColor('#000000');
+          doc.rect(x, y + photoH - 12, photoW, 12, 'F');
+        });
+        premiumText(doc, shot.label, x + 3, y + photoH - 4, 10, { bold: true, color: '#ffffff', maxWidth: photoW - 6 });
+      });
+    } else {
+      drawProgram(doc, data, next);
+    }
+
+    premiumText(doc, data.meta?.name || 'Projet', margin, 287, 8, { color: COLORS.medium, maxWidth: 140 });
+    premiumText(doc, '02 / 02', margin + width, 287, 8, { bold: true, color: COLORS.medium, align: 'right' });
+  }
+
+  // =====================================================================
+  // EXPORT
+  // =====================================================================
+
+  /**
+   * Génère le catalogue premium.
+   * @param {object} data — projet (visite 3D ou éditeur)
+   * @param {object|null} studio — studio 3D ; sans studio, le plan remplace les vues 3D
+   * @param {object|null} variant
+   * @param {Function} prepare — préparation de la scène, renvoie une fonction de restauration
+   * @param {object} options — { style, includeStats, includePlan, includeInterior, JsPDF, save }
+   * @returns {Promise<object>} — le document jsPDF
+   */
+  async function exportPDF(data, studio = null, variant = null, prepare = () => {}, options = {}) {
+    if (!data || !Array.isArray(data.rooms) || !data.rooms.length) throw new Error('Projet sans pièces : impossible de composer le catalogue');
+    if (options.style) setStyle(options.style);
+    const JsPDF = options.JsPDF || await loadJsPDF();
+    const restore = prepare();
+    try {
+      const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: options.compress !== false });
+      doc.setProperties({ title: pdfSafe(data.meta?.name || 'Projet architectural'), subject: `Brochure premium — style ${STYLES[currentStyle].label}`, creator: 'Plan to 3D House' });
+      drawCoverPage(doc, data, studio, variant, options);
       doc.addPage();
-      drawPlanPage(doc, data, studio, variant);
-      
-      // Sauvegarder
-      const slug = (window.ACTIVE_PROJECT_SLUG || data.meta?.slug || 'projet').replace(/[^a-z0-9-]/gi, '-');
-      const suffix = variant?.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-      doc.save(`${slug}${suffix ? '-' + suffix : ''}-premium.pdf`);
+      drawPlanPage(doc, data, studio, variant, options);
+      if (options.save !== false) {
+        const active = typeof window !== 'undefined' ? window.ACTIVE_PROJECT_SLUG : null;
+        const slug = (active || data.meta?.slug || 'projet').replace(/[^a-z0-9-]/gi, '-');
+        const suffix = (variant?.name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        doc.save(`${slug}${suffix ? '-' + suffix : ''}-premium-${currentStyle}.pdf`);
+      }
+      return doc;
     } finally {
       restore?.();
     }
   }
 
-  return { exportPDF };
+  return { exportPDF, setStyle, getStyle, selectShots, summary, STYLES };
 })();
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = ClientBrochurePremium;
+}

@@ -113,10 +113,16 @@
     }
 
     const data = getProjectData();
-    const studio = getStudio();
+    if (!data || !data.rooms?.length) {
+      showToast('Dessinez au moins une pièce avant de sublimer les rendus', 'error');
+      return;
+    }
 
-    if (!data || !studio) {
-      showToast('Projet ou studio non disponible', 'error');
+    // La sublimation retravaille des vues 3D : sans studio 3D (cas de l'éditeur), il n'y a rien
+    // à sublimer. On le dit clairement plutôt que de marquer des images inexistantes comme « améliorées ».
+    const studio = getStudio();
+    if (!studio) {
+      showToast('La sublimation IA a besoin des vues 3D de la visite, que l\'éditeur ne calcule pas. Le catalogue premium utilise le plan à la place.', 'info');
       return;
     }
 
@@ -177,39 +183,27 @@
     }
 
     const data = getProjectData();
-    const studio = getStudio();
-
-    if (!data || !studio) {
-      showToast('Projet ou studio non disponible', 'error');
+    if (!data || !data.rooms?.length) {
+      showToast('Dessinez au moins une pièce avant de générer le catalogue', 'error');
       return;
     }
 
+    // Studio 3D facultatif : sans lui, le plan du rez-de-chaussée remplace les vues 3D.
+    const studio = getStudio();
+
     try {
-      // Définir le style
-      if (ClientBrochurePremium.setStyle) {
-        ClientBrochurePremium.setStyle(currentStyle);
-      }
-
-      // Préparer la variante avec les options IA
-      const variant = window.currentVariant || {};
-      
-      // Vérifier si les images ont été sublimées
-      if (typeof AIEnhance !== 'undefined' && AIEnhance.isEnhanced()) {
+      const variant = window.currentVariant ? { ...window.currentVariant } : null;
+      // Le badge « sublimé » n'a de sens que si des vues 3D ont réellement été traitées.
+      if (variant && studio && typeof AIEnhance !== 'undefined' && AIEnhance.isEnhanced()) {
         variant.aiEnhanced = true;
-        
-        // Charger les images améliorées
-        const enhancedData = AIEnhance.loadEnhancedImages();
-        if (enhancedData && enhancedData.images) {
-          // Remplacer les images dans data
-          data.renderShots = enhancedData.images.map(img => ({
-            ...img,
-            aiEnhanced: true
-          }));
-        }
       }
 
-      // Exporter
-      await ClientBrochurePremium.exportPDF(data, studio, variant);
+      await ClientBrochurePremium.exportPDF(data, studio, variant, () => {}, {
+        style: currentStyle,
+        includeStats: pdfOptions.includeStats,
+        includePlan: pdfOptions.includePlan,
+        includeInterior: pdfOptions.includeInterior
+      });
 
       // Sauvegarder le style
       localStorage.setItem('pdf-style', currentStyle);
@@ -314,8 +308,7 @@
     if (window.studio) return window.studio;
     if (window.RENDER_STUDIO) return window.RENDER_STUDIO;
     
-    console.warn('[EditorPremium] Studio 3D non trouvé');
-    return null;
+    return null; // pas de studio 3D dans l'éditeur : cas normal
   }
 
   /**

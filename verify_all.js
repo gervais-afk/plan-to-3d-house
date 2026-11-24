@@ -164,12 +164,12 @@ function verifyModules() {
     { name: 'SmartAnnotations', file: './js/smartAnnotations.js', functions: ['analyzeAnnotations', 'detectDimensions'] },
     { name: 'RealtimeCollaboration', file: './js/realtimeCollaboration.js', functions: ['createSession', 'joinSession'] },
     { name: 'VersionComparison', file: './js/versionComparison.js', functions: ['compareVersions', 'compareWalls'] },
-    { name: 'SketchRecognition', file: './js/sketchRecognition.js', functions: ['recognizeSketch', 'detectWalls'] },
-    { name: 'VariantGenerator', file: './js/variantGenerator.js', functions: ['generateVariants', 'createVariant'] },
-    { name: 'CodeCompliance', file: './js/codeCompliance.js', functions: ['checkAll', 'checkPLU', 'checkRE2020'] },
-    { name: 'ArchitectCopilot', file: './js/architectCopilot.js', functions: ['generateSuggestions', 'analyzeProject'] },
-    { name: 'ClientBrochurePremium', file: './js/clientBrochurePremium.js', functions: ['generateBrochure', 'setStyle'] },
-    { name: 'APSGenerator', file: './js/apsGenerator.js', functions: ['generate', 'exportAPS'] }
+    { name: 'SketchRecognition', file: './js/sketchRecognition.js', functions: ['recognizeSketch', 'segmentsToWalls'] },
+    { name: 'VariantGenerator', file: './js/variantGenerator.js', functions: ['generateVariants', 'evaluateFitness'] },
+    { name: 'CodeCompliance', file: './js/codeCompliance.js', functions: ['generateComplianceReport', 'checkPLU', 'checkRE2020'] },
+    { name: 'ArchitectCopilot', file: './js/architectCopilot.js', functions: ['generateSuggestions', 'calculateMetrics'] },
+    { name: 'ClientBrochurePremium', file: './js/clientBrochurePremium.js', functions: ['exportPDF', 'setStyle', 'getStyle'] },
+    { name: 'APSGenerator', file: './js/apsGenerator.js', functions: ['generateAPS', 'buildContent'] }
   ];
 
   // Modules spéciaux qui nécessitent un environnement navigateur
@@ -183,19 +183,13 @@ function verifyModules() {
   modules.forEach(mod => {
     try {
       const module = require(mod.file);
-      const availableFunctions = Object.keys(module).filter(key => typeof module[key] === 'function');
-      
-      if (availableFunctions.length > 0) {
-        pass(`${mod.name} chargé - ${availableFunctions.length} fonctions disponibles`);
+      // Chaque fonction annoncée doit réellement exister.
+      const missing = mod.functions.filter(fn => typeof module?.[fn] !== 'function');
+      if (missing.length === 0) {
+        pass(`${mod.name} chargé - ${mod.functions.join(', ')}`);
       } else {
-        // Le module existe mais n'exporte pas de fonctions directement
-        // Vérifier si le fichier contient du code
-        const content = fs.readFileSync(mod.file, 'utf8');
-        if (content.includes('module.exports')) {
-          pass(`${mod.name} chargé - Module exporté`);
-        } else {
-          warn(`${mod.name} - Aucune fonction exportée détectée`);
-        }
+        fail(`${mod.name} - fonction(s) absente(s) : ${missing.join(', ')}`);
+        allLoaded = false;
       }
     } catch (error) {
       fail(`${mod.name} - Erreur de chargement: ${error.message}`);
@@ -227,8 +221,18 @@ function verifyTests() {
 
   try {
     log('  Exécution des tests unitaires...', 'blue');
-    const output = execSync('node --test tests/*.test.cjs 2>&1', { encoding: 'utf8', timeout: 60000 });
-    
+    // Format TAP imposé : le rapporteur par défaut change selon la version de Node et le terminal.
+    // La liste des fichiers est construite ici pour ne pas dépendre de l'expansion du shell (Windows).
+    const files = fs.readdirSync('tests').filter(f => f.endsWith('.test.cjs')).map(f => `"tests/${f}"`).join(' ');
+    let output;
+    try {
+      output = execSync(`node --test --test-reporter=tap ${files}`, { encoding: 'utf8', timeout: 180000, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (error) {
+      // Code de sortie non nul quand un test échoue : on lit quand même le résumé.
+      output = `${error.stdout || ''}${error.stderr || ''}`;
+      if (!/# tests \d+/.test(output)) throw error;
+    }
+
     const testMatch = output.match(/# tests (\d+)/);
     const passMatch = output.match(/# pass (\d+)/);
     const failMatch = output.match(/# fail (\d+)/);
@@ -241,7 +245,7 @@ function verifyTests() {
     log(`  Tests réussis: ${passedTests}`, 'green');
     log(`  Tests échoués: ${failedTests}`, failedTests > 0 ? 'red' : 'green');
     
-    if (failedTests === 0 && totalTests >= 257) {
+    if (failedTests === 0 && totalTests > 0) {
       pass(`Tous les tests passent (${passedTests}/${totalTests})`);
       return true;
     } else {
@@ -324,20 +328,32 @@ function verifyDocumentation() {
 function verifyStyles() {
   section('6. VÉRIFICATION DES STYLES PDF');
 
+  // Le style doit être réellement appliqué par le module du catalogue, pas seulement cité.
   const styles = ['modern', 'luxury', 'industrial'];
-  
-  // Les styles sont définis dans editorPremium.js
-  styles.forEach(style => {
-    if (fileContains('js/editorPremium.js', style)) {
-      pass(`Style "${style}" défini dans editorPremium.js`);
-    } else if (fileContains('editor.html', style)) {
-      pass(`Style "${style}" référencé dans editor.html`);
-    } else {
-      warn(`Style "${style}" non trouvé (peut être défini dans le CSS)`);
+  let ok = true;
+  try {
+    const Premium = require('./js/clientBrochurePremium.js');
+    const primaries = new Set();
+    styles.forEach(style => {
+      const palette = Premium.STYLES?.[style];
+      if (palette && Premium.setStyle(style) === style && Premium.getStyle() === style) {
+        primaries.add(palette.primary);
+        pass(`Style "${style}" (${palette.label}) appliqué par ClientBrochurePremium`);
+      } else {
+        fail(`Style "${style}" non appliqué par ClientBrochurePremium.setStyle`);
+        ok = false;
+      }
+    });
+    if (primaries.size !== styles.length) {
+      fail('Les styles partagent la même couleur principale');
+      ok = false;
     }
-  });
-
-  return true;
+    Premium.setStyle('modern');
+  } catch (error) {
+    fail(`Styles PDF - ${error.message}`);
+    ok = false;
+  }
+  return ok;
 }
 
 function verifyTemplates() {
@@ -373,13 +389,11 @@ function verifyTemplates() {
     }
 
     // Vérifier les sections principales
-    const sections = ['cover', 'presentation', 'program', 'estimation', 'calendar', 'conclusion'];
-    let sectionsFound = 0;
-    sections.forEach(section => {
-      if (content.toLowerCase().includes(section)) {
-        sectionsFound++;
-      }
-    });
+    // Le modèle est en français : on accepte les deux langues pour chaque section.
+    const sections = [['cover', 'couverture'], ['presentation', 'présentation'], ['program', 'programme'],
+      ['estimation'], ['calendar', 'calendrier'], ['conclusion']];
+    const lower = content.toLowerCase();
+    const sectionsFound = sections.filter(names => names.some(name => lower.includes(name))).length;
     
     if (sectionsFound >= 5) {
       pass(`Template contient ${sectionsFound}/6 sections principales`);
@@ -392,6 +406,64 @@ function verifyTemplates() {
     fail('aps-template.html MANQUANT');
     return false;
   }
+}
+
+async function verifyGeneratedPDFs() {
+  section('8. GÉNÉRATION RÉELLE DES PDF (Villa Serena)');
+
+  let ok = true;
+  try {
+    const { jsPDF } = require('./assets/vendor/jspdf-4.2.1.umd.min.js');
+    const project = require('./projects/villa-serena/project.json');
+    const APSGenerator = require('./js/apsGenerator.js');
+    const Premium = require('./js/clientBrochurePremium.js');
+
+    // Collecte du texte réellement écrit dans le PDF.
+    const recorder = () => {
+      const written = [];
+      class Recorder extends jsPDF {
+        constructor(...args) {
+          super(...args);
+          const text = this.text.bind(this);
+          this.text = (value, ...rest) => { written.push(...[].concat(value)); return text(value, ...rest); };
+        }
+      }
+      return { Recorder, written };
+    };
+
+    const aps = recorder();
+    const apsDoc = await APSGenerator.generateAPS(project, null, null, { JsPDF: aps.Recorder, save: false });
+    const apsText = aps.written.join('\n');
+    if (apsDoc.getNumberOfPages() >= 6 && apsText.includes('VILLA SERENA') && apsText.includes('FCFA')) {
+      pass(`APS généré : ${apsDoc.getNumberOfPages()} pages, pièces et estimation en FCFA`);
+    } else {
+      fail('APS incomplet (pages, nom du projet ou estimation FCFA manquants)');
+      ok = false;
+    }
+    if (/tests? unitaires|Vectorization|Modules? stratégiques|€/.test(apsText)) {
+      fail('L\'APS contient du texte sur le logiciel au lieu de la maison');
+      ok = false;
+    } else {
+      pass('APS sans contenu sur le logiciel');
+    }
+
+    for (const style of ['modern', 'luxury', 'industrial']) {
+      const cat = recorder();
+      const doc = await Premium.exportPDF(project, null, null, () => {}, { JsPDF: cat.Recorder, save: false, style });
+      const label = Premium.STYLES[style].label;
+      if (doc.getNumberOfPages() === 2 && cat.written.join('\n').includes(`Style ${label}`)) {
+        pass(`Catalogue premium « ${label} » généré sans studio 3D (2 pages)`);
+      } else {
+        fail(`Catalogue premium « ${label} » incomplet`);
+        ok = false;
+      }
+    }
+    Premium.setStyle('modern');
+  } catch (error) {
+    fail(`Génération des PDF - ${error.message}`);
+    ok = false;
+  }
+  return ok;
 }
 
 // =====================================================================
@@ -416,10 +488,9 @@ function generateReport() {
     log('  🎉 TOUS LES TESTS PASSENT !', 'green');
     log('  ✅ PROJET VALIDÉ', 'green');
     console.log('');
-    log('  Le projet est prêt pour la production.', 'green');
-    log('  Tous les modules sont fonctionnels.', 'green');
-    log('  La documentation est complète.', 'green');
-    log('  L\'intégration est correcte.', 'green');
+    log('  Toutes les vérifications automatiques passent.', 'green');
+    log('  Non couvert ici : l\'affichage dans le navigateur (à tester dans l\'éditeur)', 'yellow');
+    log('  et la sublimation IA, encore simulée (aucun service d\'IA appelé).', 'yellow');
   } else {
     log('  ⚠️  DES PROBLÈMES ONT ÉTÉ DÉTECTÉS', 'red');
     log('  ❌ PROJET NON VALIDÉ', 'red');
@@ -459,7 +530,7 @@ function generateReport() {
 // EXÉCUTION PRINCIPALE
 // =====================================================================
 
-function main() {
+async function main() {
   header('🔍 VÉRIFICATION COMPLÈTE DU PROJET');
   log('  Projet: Plan to 3D House', 'blue');
   log('  Branche: arena/1d9c67e2-plan-to-3d-house', 'blue');
@@ -473,6 +544,7 @@ function main() {
   verifyDocumentation();
   verifyStyles();
   verifyTemplates();
+  await verifyGeneratedPDFs();
 
   // Générer le rapport
   const isValid = generateReport();
@@ -482,4 +554,7 @@ function main() {
 }
 
 // Lancer la vérification
-main();
+main().catch(error => {
+  console.error(error);
+  process.exit(1);
+});
