@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="css/motion.css">
   <link rel="stylesheet" href="css/editor.css">
   <link rel="stylesheet" href="css/editorAdvanced.css">
+  <link rel="stylesheet" href="css/editorPremium.css">
 </head>
 <body>
   <header class="ed-top">
@@ -30,6 +31,8 @@
       <button id="btn-save" class="ed-primary" title="Enregistrer dans projects/ (Ctrl+S)">Enregistrer</button>
       <button id="btn-export-json" type="button">Exporter le JSON</button>
       <button id="btn-estimate" type="button" title="Métré et estimation indicative en FCFA">Estimation FCFA</button>
+      <button id="btn-sublimate" type="button" title="Améliorer les rendus 3D avec l'IA">✨ Sublimer avec l'IA</button>
+      <button id="btn-export-premium" type="button" title="Exporter un catalogue PDF premium">🎨 Catalogue Premium</button>
       <button id="btn-advanced" type="button" title="Outils avancés : export BIM, analyse structurelle, bioclimatique…"><svg class="i" aria-hidden="true"><use href="#i-sparkle"></use></svg> Outils avancés</button>
       <button id="btn-preview" title="Enregistrer puis ouvrir la visite 3D de ce projet"><svg class="i" aria-hidden="true"><use href="#i-eye"></use></svg> Lancer la visite 3D</button>
     </div>
@@ -230,6 +233,96 @@
     </div>
   </dialog>
 
+  <dialog id="dlg-premium" class="ed-dialog ed-dialog-wide" aria-labelledby="dlg-premium-title">
+    <h3 id="dlg-premium-title">🎨 Catalogue PDF Premium</h3>
+    <p class="ed-note">Générer un catalogue digne des grands magazines immobiliers avec effets visuels premium.</p>
+    
+    <div class="ed-premium-options">
+      <!-- Sélecteur de style -->
+      <div class="ed-premium-section">
+        <h4>Style du catalogue</h4>
+        <div class="ed-style-selector">
+          <label class="ed-style-option modern">
+            <input type="radio" name="pdf-style" value="modern" checked>
+            <span class="ed-style-preview modern"></span>
+            <span class="ed-style-name">Moderne</span>
+            <span class="ed-style-desc">Bleu nuit & corail</span>
+          </label>
+          
+          <label class="ed-style-option luxury">
+            <input type="radio" name="pdf-style" value="luxury">
+            <span class="ed-style-preview luxury"></span>
+            <span class="ed-style-name">Luxe</span>
+            <span class="ed-style-desc">Émeraude & or</span>
+          </label>
+          
+          <label class="ed-style-option industrial">
+            <input type="radio" name="pdf-style" value="industrial">
+            <span class="ed-style-preview industrial"></span>
+            <span class="ed-style-name">Industriel</span>
+            <span class="ed-style-desc">Ardoise & cuivre</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Options -->
+      <div class="ed-premium-section">
+        <h4>Options</h4>
+        <div class="ed-field">
+          <label>
+            <input type="checkbox" id="premium-include-cover" checked>
+            Page de couverture avec image 3D
+          </label>
+        </div>
+        <div class="ed-field">
+          <label>
+            <input type="checkbox" id="premium-include-stats" checked>
+            Statistiques visuelles (surfaces, pièces)
+          </label>
+        </div>
+        <div class="ed-field">
+          <label>
+            <input type="checkbox" id="premium-include-plan" checked>
+            Plan de masse avec cotes
+          </label>
+        </div>
+        <div class="ed-field">
+          <label>
+            <input type="checkbox" id="premium-include-interior" checked>
+            Vues intérieures 3D
+          </label>
+        </div>
+      </div>
+
+      <!-- Statut IA -->
+      <div class="ed-premium-section" id="premium-ai-status">
+        <h4>✨ Amélioration IA</h4>
+        <div id="premium-ai-info" class="ed-ai-info">
+          <p class="ed-ai-badge">✨ Rendus sublimés avec l'IA</p>
+          <p class="ed-note">Les images ont été améliorées par l'IA. Un badge sera ajouté au catalogue.</p>
+        </div>
+        <div id="premium-ai-none" class="ed-ai-none">
+          <p class="ed-note">Les rendus n'ont pas été sublimés. Cliquez sur "✨ Sublimer avec l'IA" dans la barre d'outils pour améliorer les images avant l'export.</p>
+        </div>
+      </div>
+
+      <!-- Aperçu -->
+      <div class="ed-premium-section">
+        <h4>Aperçu</h4>
+        <div class="ed-premium-preview">
+          <div class="ed-preview-cover modern" id="premium-preview">
+            <div class="ed-preview-label">Couverture</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ed-dialog-actions">
+      <button id="premium-cancel" type="button">Annuler</button>
+      <button id="premium-export" type="button" class="ed-primary">🎨 Générer le catalogue</button>
+    </div>
+  </dialog>
+
   <div id="ed-toast" class="ed-toast" role="status"></div>
 
   <script src="js/icons.js"></script>
@@ -252,9 +345,13 @@
   <script src="js/variantGenerator.js"></script>
   <script src="js/codeCompliance.js"></script>
   <script src="js/architectCopilot.js"></script>
+  <!-- Modules PDF Premium -->
+  <script src="js/clientBrochurePremium.js"></script>
+  <script src="js/aiEnhance.js"></script>
   <script src="js/editor.js"></script>
   <script src="js/editorAI.js"></script>
   <script src="js/editorEstimate.js"></script>
   <script src="js/editorAdvanced.js"></script>
+  <script src="js/editorPremium.js"></script>
 </body>
 </html>
