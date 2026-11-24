@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Démo PDF Premium — Plan to 3D House</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    :root {
+      --primary: #1a1a2e;
+      --accent: #e94560;
+      --accent-light: #ff6b9d;
+      --paper: #f8f9fa;
+      --text: #1a1a2e;
+      --text-muted: #555;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--paper);
+      color: var(--text);
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+    
+    h1 {
+      font-size: 2.5rem;
+      color: var(--primary);
+      margin-bottom: 0.5rem;
+    }
+    
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+    }
+    
+    .styles-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+      margin: 3rem 0;
+    }
+    
+    .style-card {
+      background: white;
+      border-radius: 1rem;
+      padding: 2rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .style-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    }
+    
+    .style-preview {
+      width: 100%;
+      height: 200px;
+      border-radius: 0.5rem;
+      margin-bottom: 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .style-modern .style-preview {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    }
+    
+    .style-luxury .style-preview {
+      background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+    }
+    
+    .style-industrial .style-preview {
+      background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    }
+    
+    .style-preview::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--accent);
+    }
+    
+    .style-luxury .style-preview::after {
+      background: #d4af37;
+    }
+    
+    .style-industrial .style-preview::after {
+      background: #b87333;
+    }
+    
+    .style-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    
+    .style-description {
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+      font-size: 0.95rem;
+    }
+    
+    .style-features {
+      list-style: none;
+      margin-bottom: 1.5rem;
+    }
+    
+    .style-features li {
+      padding: 0.25rem 0;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+    
+    .style-features li::before {
+      content: "✓ ";
+      color: var(--accent);
+      font-weight: bold;
+    }
+    
+    .btn {
+      display: inline-block;
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 0.5rem;
+      background: var(--accent);
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      text-decoration: none;
+    }
+    
+    .btn:hover {
+      background: var(--accent-light);
+      transform: translateY(-2px);
+    }
+    
+    .btn:active {
+      transform: translateY(0);
+    }
+    
+    .demo-section {
+      background: white;
+      border-radius: 1rem;
+      padding: 3rem;
+      margin: 3rem 0;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+    
+    .demo-section h2 {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+      color: var(--primary);
+    }
+    
+    .demo-controls {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin: 2rem 0;
+    }
+    
+    .demo-output {
+      background: var(--paper);
+      border-radius: 0.5rem;
+      padding: 2rem;
+      margin-top: 2rem;
+      min-height: 300px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px dashed #ddd;
+    }
+    
+    .pdf-preview {
+      width: 210px;
+      height: 297px;
+      background: white;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .pdf-preview-cover {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: white;
+      padding: 2rem;
+    }
+    
+    .pdf-preview-cover h3 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    
+    .pdf-preview-cover p {
+      font-size: 0.8rem;
+      opacity: 0.8;
+    }
+    
+    .pdf-preview-cover .accent-line {
+      width: 40px;
+      height: 3px;
+      background: var(--accent);
+      margin: 1rem 0;
+    }
+    
+    .effects-showcase {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+      margin: 2rem 0;
+    }
+    
+    .effect-card {
+      background: white;
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    
+    .effect-card h4 {
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+      color: var(--primary);
+    }
+    
+    .effect-card p {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+    
+    .effect-demo {
+      height: 100px;
+      border-radius: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: white;
+    }
+    
+    .effect-gradient {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .effect-shadow {
+      background: white;
+      color: var(--primary);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+    
+    .effect-card-elem {
+      background: white;
+      color: var(--primary);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    
+    .effect-typo {
+      background: var(--paper);
+      color: var(--primary);
+      font-size: 1.5rem;
+    }
+    
+    footer {
+      text-align: center;
+      margin-top: 4rem;
+      padding: 2rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎨 PDF Premium — Démo Interactive</h1>
+      <p class="subtitle">Créez des brochures architecturales avec des effets visuels "waouh"</p>
+    </header>
+    
+    <!-- Styles disponibles -->
+    <section>
+      <h2 style="font-size: 2rem; margin-bottom: 1rem; text-align: center;">Choisissez votre style</h2>
+      
+      <div class="styles-grid">
+        <!-- Style Moderne -->
+        <div class="style-card style-modern">
+          <div class="style-preview"></div>
+          <h3 class="style-title">Moderne</h3>
+          <p class="style-description">Bleu nuit & corail — Design épuré et contemporain</p>
+          <ul class="style-features">
+            <li>Dégradés subtils</li>
+            <li>Typographie hiérarchisée</li>
+            <li>Cards avec ombres</li>
+            <li>Graphiques colorés</li>
+          </ul>
+          <button class="btn" onclick="generatePDF('modern')">Générer PDF</button>
+        </div>
+        
+        <!-- Style Luxe -->
+        <div class="style-card style-luxury">
+          <div class="style-preview"></div>
+          <h3 class="style-title">Luxe</h3>
+          <p class="style-description">Émeraude & or — Élégance et raffinement</p>
+          <ul class="style-features">
+            <li>Cadre ornemental</li>
+            <li>Palette dorée</li>
+            <li>Typographie serif</li>
+            <li>Effets premium</li>
+          </ul>
+          <button class="btn" onclick="generatePDF('luxury')">Générer PDF</button>
+        </div>
+        
+        <!-- Style Industriel -->
+        <div class="style-card style-industrial">
+          <div class="style-preview"></div>
+          <h3 class="style-title">Industriel</h3>
+          <p class="style-description">Ardoise & cuivre — Caractère et authenticité</p>
+          <ul class="style-features">
+            <li>Textures brutes</li>
+            <li>Couleurs chaudes</li>
+            <li>Layout asymétrique</li>
+            <li>Éléments graphiques</li>
+          </ul>
+          <button class="btn" onclick="generatePDF('industrial')">Générer PDF</button>
+        </div>
+      </div>
+    </section>
+    
+    <!-- Effets visuels -->
+    <section class="demo-section">
+      <h2>✨ Effets visuels disponibles</h2>
+      <p style="color: var(--text-muted); margin-bottom: 2rem;">
+        Découvrez les techniques utilisées pour créer des PDF premium
+      </p>
+      
+      <div class="effects-showcase">
+        <div class="effect-card">
+          <h4>Dégradés</h4>
+          <p>Fonds avec transitions de couleurs fluides</p>
+          <div class="effect-demo effect-gradient">
+            Dégradé
+          </div>
+        </div>
+        
+        <div class="effect-card">
+          <h4>Ombres portées</h4>
+          <p>Profondeur et élévation des éléments</p>
+          <div class="effect-demo effect-shadow">
+            Ombre
+          </div>
+        </div>
+        
+        <div class="effect-card">
+          <h4>Cards</h4>
+          <p>Blocs avec coins arrondis et relief</p>
+          <div class="effect-demo effect-card-elem">
+            Card
+          </div>
+        </div>
+        
+        <div class="effect-card">
+          <h4>Typographie</h4>
+          <p>Hiérarchie visuelle par les tailles</p>
+          <div class="effect-demo effect-typo">
+            Aa
+          </div>
+        </div>
+      </div>
+    </section>
+    
+    <!-- Démo interactive -->
+    <section class="demo-section">
+      <h2>🎯 Aperçu du résultat</h2>
+      <p style="color: var(--text-muted); margin-bottom: 1rem;">
+        Voici un aperçu de la page de couverture générée
+      </p>
+      
+      <div class="demo-output" id="demo-output">
+        <div class="pdf-preview">
+          <div class="pdf-preview-cover">
+            <h3>Villa Moderne</h3>
+            <p>Projet architectural</p>
+            <div class="accent-line"></div>
+            <p style="font-size: 2rem; font-weight: 700; margin-top: 2rem;">150</p>
+            <p>m² habitables</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="demo-controls">
+        <button class="btn" onclick="previewStyle('modern')">Style Moderne</button>
+        <button class="btn" onclick="previewStyle('luxury')">Style Luxe</button>
+        <button class="btn" onclick="previewStyle('industrial')">Style Industriel</button>
+      </div>
+    </section>
+    
+    <!-- Documentation -->
+    <section class="demo-section">
+      <h2>📚 Documentation complète</h2>
+      <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+        Consultez le guide détaillé pour implémenter ces effets dans vos propres PDF
+      </p>
+      <a href="GUIDE_DESIGN_PDF.md" class="btn">Lire le guide de design</a>
+    </section>
+    
+    <footer>
+      <p>Plan to 3D House — Module PDF Premium</p>
+      <p>Créez des brochures architecturales professionnelles</p>
+    </footer>
+  </div>
+  
+  <script src="assets/vendor/jspdf-4.2.1.umd.min.js"></script>
+  <script>
+    // Palette de couleurs par style
+    const STYLES = {
+      modern: {
+        primary: '#1a1a2e',
+        secondary: '#16213e',
+        accent: '#e94560',
+        accentLight: '#ff6b9d',
+        paper: '#f8f9fa'
+      },
+      luxury: {
+        primary: '#064e3b',
+        secondary: '#065f46',
+        accent: '#d4af37',
+        accentLight: '#f4d03f',
+        paper: '#fefdf8'
+      },
+      industrial: {
+        primary: '#1e293b',
+        secondary: '#334155',
+        accent: '#b87333',
+        accentLight: '#da8a4a',
+        paper: '#f8fafc'
+      }
+    };
+    
+    // Fonctions utilitaires
+    function drawGradient(doc, x, y, w, h, color1, color2, steps = 20) {
+      const stepH = h / steps;
+      
+      for (let i = 0; i < steps; i++) {
+        const ratio = i / steps;
+        
+        const r1 = parseInt(color1.slice(1, 3), 16);
+        const g1 = parseInt(color1.slice(3, 5), 16);
+        const b1 = parseInt(color1.slice(5, 7), 16);
+        
+        const r2 = parseInt(color2.slice(1, 3), 16);
+        const g2 = parseInt(color2.slice(3, 5), 16);
+        const b2 = parseInt(color2.slice(5, 7), 16);
+        
+        const r = Math.round(r1 + (r2 - r1) * ratio);
+        const g = Math.round(g1 + (g2 - g1) * ratio);
+        const b = Math.round(b1 + (b2 - b1) * ratio);
+        
+        const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+        
+        doc.setFillColor(hex);
+        doc.rect(x, y + i * stepH, w, stepH + 0.1, 'F');
+      }
+    }
+    
+    function drawShadow(doc, x, y, w, h, blur = 3) {
+      for (let i = 0; i < blur; i++) {
+        const offset = i * 0.5;
+        const opacity = 0.15 * (1 - i / blur);
+        
+        doc.setGState(new doc.GState({ opacity }));
+        doc.setFillColor('#000000');
+        doc.roundedRect(x + offset, y + offset, w, h, 1, 1, 'F');
+      }
+      
+      doc.setGState(new doc.GState({ opacity: 1 }));
+    }
+    
+    function drawCard(doc, x, y, w, h, fill = '#ffffff') {
+      drawShadow(doc, x, y, w, h, 3);
+      doc.setFillColor(fill);
+      doc.roundedRect(x, y, w, h, 2, 2, 'F');
+    }
+    
+    function drawStatCard(doc, x, y, w, h, label, value, unit, colors) {
+      drawCard(doc, x, y, w, h);
+      
+      // Valeur
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(28);
+      doc.setTextColor(colors.primary);
+      doc.text(value, x + w / 2, y + h * 0.5, { align: 'center' });
+      
+      // Unité
+      doc.setFontSize(14);
+      doc.setTextColor(colors.medium || colors.primary);
+      doc.text(unit, x + w / 2, y + h * 0.65, { align: 'center' });
+      
+      // Label
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(colors.accent);
+      doc.text(label.toUpperCase(), x + w / 2, y + h - 10, { align: 'center' });
+    }
+    
+    // Génération de PDF
+    async function generatePDF(style) {
+      const colors = STYLES[style];
+      const { jsPDF } = window.jspdf;
+      
+      const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+      
+      // Page 1 : Couverture
+      drawGradient(doc, 0, 0, 210, 297, colors.primary, colors.secondary, 20);
+      
+      // Titre
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(42);
+      doc.setTextColor('#ffffff');
+      doc.text('Villa Moderne', 20, 80);
+      
+      // Sous-titre
+      doc.setFontSize(18);
+      doc.setTextColor(colors.accentLight);
+      doc.text('Projet architectural premium', 20, 95);
+      
+      // Ligne d'accent
+      doc.setDrawColor(colors.accent);
+      doc.setLineWidth(3);
+      doc.line(20, 105, 80, 105);
+      
+      // Stats
+      const stats = [
+        { label: 'Surface', value: '150', unit: 'm²' },
+        { label: 'Pièces', value: '8', unit: '' },
+        { label: 'Niveaux', value: '2', unit: '' }
+      ];
+      
+      stats.forEach((stat, i) => {
+        const x = 20 + i * 60;
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(36);
+        doc.setTextColor('#ffffff');
+        doc.text(stat.value, x, 230);
+        
+        if (stat.unit) {
+          doc.setFontSize(18);
+          doc.text(stat.unit, x + doc.getTextWidth(stat.value) + 2, 230);
+        }
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(colors.accentLight);
+        doc.text(stat.label.toUpperCase(), x, 245);
+      });
+      
+      // Page 2 : Statistiques
+      doc.addPage();
+      doc.setFillColor(colors.paper);
+      doc.rect(0, 0, 210, 297, 'F');
+      
+      // Titre
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(32);
+      doc.setTextColor(colors.primary);
+      doc.text('ANALYSE DU PROJET', 20, 30);
+      
+      // Séparateur
+      doc.setDrawColor(colors.accent);
+      doc.setLineWidth(2);
+      doc.line(20, 35, 60, 35);
+      
+      // Stat cards
+      const cardStats = [
+        { label: 'Surface totale', value: '180', unit: 'm²' },
+        { label: 'Habitable', value: '150', unit: 'm²' },
+        { label: 'Pièces', value: '8', unit: '' },
+        { label: 'Ratio', value: '83', unit: '%' }
+      ];
+      
+      cardStats.forEach((stat, i) => {
+        const x = 20 + (i % 4) * 44;
+        const y = 50;
+        drawStatCard(doc, x, y, 38, 55, stat.label, stat.value, stat.unit, colors);
+      });
+      
+      // Graphique en barres
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(20);
+      doc.setTextColor(colors.primary);
+      doc.text('RÉPARTITION PAR PIÈCE', 20, 130);
+      
+      const roomData = [
+        { label: 'SÉJOUR', value: 35 },
+        { label: 'CHAMBRES', value: 48 },
+        { label: 'CUISINE', value: 12 },
+        { label: 'SDB', value: 8 }
+      ];
+      
+      const max = Math.max(...roomData.map(d => d.value));
+      
+      roomData.forEach((item, i) => {
+        const barY = 140 + i * 12;
+        const barW = (item.value / max) * 120;
+        
+        // Label
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(colors.primary);
+        doc.text(item.label, 20, barY + 5);
+        
+        // Barre
+        drawGradient(doc, 70, barY, barW, 8, colors.accent, colors.accentLight);
+        
+        // Valeur
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${item.value} m²`, 75 + barW, barY + 5);
+      });
+      
+      // Sauvegarder
+      doc.save(`brochure-${style}.pdf`);
+      
+      alert(`PDF ${style} généré avec succès !`);
+    }
+    
+    // Prévisualisation
+    function previewStyle(style) {
+      const colors = STYLES[style];
+      const output = document.getElementById('demo-output');
+      
+      output.innerHTML = `
+        <div class="pdf-preview">
+          <div class="pdf-preview-cover" style="background: linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 100%);">
+            <h3>Villa ${style.charAt(0).toUpperCase() + style.slice(1)}</h3>
+            <p>Projet architectural</p>
+            <div class="accent-line" style="background: ${colors.accent};"></div>
+            <p style="font-size: 2rem; font-weight: 700; margin-top: 2rem;">150</p>
+            <p>m² habitables</p>
+          </div>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>
