@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Architect Copilot — Démonstration</title>
+  <link rel="stylesheet" href="css/copilot.css">
+  <style>
+    /* Styles de démonstration */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+      color: white;
+    }
+    
+    .demo-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .demo-header {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+    
+    .demo-header h1 {
+      font-size: 48px;
+      margin-bottom: 16px;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+    
+    .demo-header p {
+      font-size: 20px;
+      opacity: 0.9;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    
+    .demo-content {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 40px;
+      margin-bottom: 40px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .demo-content h2 {
+      font-size: 28px;
+      margin-bottom: 24px;
+    }
+    
+    .demo-features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 24px;
+      margin-top: 32px;
+    }
+    
+    .demo-feature {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 24px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .demo-feature h3 {
+      font-size: 18px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .demo-feature p {
+      font-size: 14px;
+      line-height: 1.6;
+      opacity: 0.9;
+    }
+    
+    .demo-instructions {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 40px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .demo-instructions h2 {
+      font-size: 28px;
+      margin-bottom: 24px;
+    }
+    
+    .demo-instructions ol {
+      margin-left: 20px;
+      line-height: 2;
+    }
+    
+    .demo-instructions li {
+      margin-bottom: 8px;
+    }
+    
+    .demo-instructions code {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+    }
+    
+    /* Simulateur d'éditeur */
+    .demo-editor {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 40px 0;
+      color: #1a1a1a;
+    }
+    
+    .demo-editor-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    
+    .demo-editor-tools {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .demo-editor-tool {
+      padding: 8px 16px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    
+    .demo-editor-tool:hover {
+      background: #b78a3c;
+      color: white;
+      border-color: #b78a3c;
+    }
+    
+    .demo-editor-canvas {
+      background: white;
+      border: 2px dashed #e5e7eb;
+      border-radius: 8px;
+      height: 300px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #6b7280;
+      font-size: 16px;
+    }
+    
+    .demo-context-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      background: #b78a3c;
+      color: white;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-container">
+    <header class="demo-header">
+      <h1>🤖 Architect Copilot</h1>
+      <p>Votre assistant IA intelligent pour la conception architecturale</p>
+    </header>
+    
+    <div class="demo-content">
+      <h2>Fonctionnalités principales</h2>
+      <div class="demo-features">
+        <div class="demo-feature">
+          <h3>💬 Conversation intelligente</h3>
+          <p>Posez vos questions en langage naturel. Le copilot comprend le contexte architectural et fournit des réponses précises.</p>
+        </div>
+        
+        <div class="demo-feature">
+          <h3>💡 Suggestions contextuelles</h3>
+          <p>Recevez des suggestions automatiques basées sur votre action en cours (dessin, sélection, etc.).</p>
+        </div>
+        
+        <div class="demo-feature">
+          <h3>🔍 Vérification conformité</h3>
+          <p>Contrôlez automatiquement la conformité PLU, RE2020 et accessibilité PMR de votre projet.</p>
+        </div>
+        
+        <div class="demo-feature">
+          <h3>✨ Génération de variantes</h3>
+          <p>Générez plusieurs propositions d'agencement optimisées pour une pièce ou un espace.</p>
+        </div>
+        
+        <div class="demo-feature">
+          <h3>📐 Calculs instantanés</h3>
+          <p>Métrés, surfaces, longueurs de murs : tous les calculs sont faits automatiquement en temps réel.</p>
+        </div>
+        
+        <div class="demo-feature">
+          <h3>🎤 Commandes vocales</h3>
+          <p>Parlez au copilot pour une interaction mains libres. Idéal pendant le dessin.</p>
+        </div>
+      </div>
+    </div>
+    
+    <div class="demo-editor">
+      <div class="demo-editor-header">
+        <div>
+          <strong>Éditeur de plan</strong>
+          <span class="demo-context-badge">Projet : Villa Serena</span>
+        </div>
+        <div class="demo-editor-tools">
+          <button class="demo-editor-tool" onclick="simulateContext('wall-ext')">🧱 Mur extérieur</button>
+          <button class="demo-editor-tool" onclick="simulateContext('wall-int')">🏠 Cloison</button>
+          <button class="demo-editor-tool" onclick="simulateContext('room')">📐 Pièce</button>
+          <button class="demo-editor-tool" onclick="simulateContext('calibrate')">📏 Calibration</button>
+          <button class="demo-editor-tool" onclick="simulateContext('compliance')">✅ Conformité</button>
+        </div>
+      </div>
+      <div class="demo-editor-canvas" id="editor-canvas">
+        <div>
+          <p>🖱️ Zone de dessin (démo)</p>
+          <p style="font-size: 14px; margin-top: 8px;">Cliquez sur les boutons ci-dessus pour simuler différents contextes</p>
+        </div>
+      </div>
+    </div>
+    
+    <div class="demo-instructions">
+      <h2>Comment utiliser le copilot</h2>
+      <ol>
+        <li>Cliquez sur le bouton flottant <strong>en bas à droite</strong> de l'écran pour ouvrir le copilot</li>
+        <li>Posez une question ou utilisez les suggestions contextuelles</li>
+        <li>Essayez les raccourcis clavier : <code>Ctrl+K</code> (ouvrir/fermer), <code>Ctrl+M</code> (micro), <code>Ctrl+L</code> (effacer)</li>
+        <li>Testez la reconnaissance vocale en cliquant sur l'icône microphone</li>
+        <li>Explorez les actions rapides : conformité, variantes, améliorations</li>
+      </ol>
+      
+      <h3 style="margin-top: 32px; margin-bottom: 16px;">Exemples de questions à poser :</h3>
+      <ul style="margin-left: 20px; line-height: 2;">
+        <li>"Quelle est la surface habitable totale ?"</li>
+        <li>"Vérifie la conformité PMR de ce plan"</li>
+        <li>"Propose 3 variantes pour optimiser le séjour"</li>
+        <li>"Comment améliorer l'éclairage naturel ?"</li>
+        <li>"Calcule la longueur totale des murs"</li>
+        <li>"Quelles sont les non-conformités RE2020 ?"</li>
+      </ul>
+    </div>
+  </div>
+  
+  <!-- =========================================================================
+       COMPOSANT COPILOT
+       ========================================================================= -->
+  
+  <!-- Bouton flottant -->
+  <button class="copilot-fab" id="copilot-fab" aria-label="Ouvrir l'assistant IA">
+    <span class="copilot-fab-icon">🤖</span>
+    <span class="copilot-fab-badge" id="copilot-badge"></span>
+  </button>
+  
+  <!-- Panneau principal -->
+  <div class="copilot-panel" id="copilot-panel">
+    <!-- En-tête -->
+    <div class="copilot-header">
+      <div class="copilot-header-icon">🤖</div>
+      <h2 class="copilot-header-title">Architect Copilot</h2>
+      <div class="copilot-header-actions">
+        <button class="copilot-header-btn" id="copilot-theme-toggle" aria-label="Changer le thème">
+          🌓
+        </button>
+        <button class="copilot-header-btn" id="copilot-clear" aria-label="Effacer la conversation">
+          🗑️
+        </button>
+        <button class="copilot-header-btn" id="copilot-close" aria-label="Fermer">
+          ✕
+        </button>
+      </div>
+    </div>
+    
+    <!-- Zone de messages -->
+    <div class="copilot-messages" id="copilot-messages">
+      <div class="copilot-welcome">
+        <div class="copilot-welcome-icon">🏗️</div>
+        <h3 class="copilot-welcome-title">Bonjour ! Je suis votre assistant architectural</h3>
+        <p class="copilot-welcome-text">
+          Je peux vous aider à concevoir, vérifier la conformité, calculer les métrés, et optimiser vos plans.
+          <br><br>
+          Comment puis-je vous aider aujourd'hui ?
+        </p>
+      </div>
+    </div>
+    
+    <!-- Suggestions contextuelles -->
+    <div class="copilot-suggestions" id="copilot-suggestions"></div>
+    
+    <!-- Zone de saisie -->
+    <div class="copilot-input-container">
+      <div class="copilot-input-wrapper">
+        <textarea 
+          class="copilot-input" 
+          id="copilot-input" 
+          placeholder="Posez votre question..."
+          rows="1"
+          aria-label="Message"
+        ></textarea>
+        <div class="copilot-input-actions">
+          <button class="copilot-input-btn" id="copilot-voice" aria-label="Commande vocale">
+            🎤
+          </button>
+          <button class="copilot-input-btn copilot-input-btn-send" id="copilot-send" aria-label="Envoyer" disabled>
+            ➤
+          </button>
+        </div>
+      </div>
+      <div class="copilot-shortcuts">
+        <div class="copilot-shortcut">
+          <span class="copilot-shortcut-key">Ctrl+K</span>
+          <span>Ouvrir</span>
+        </div>
+        <div class="copilot-shortcut">
+          <span class="copilot-shortcut-key">Ctrl+M</span>
+          <span>Micro</span>
+        </div>
+        <div class="copilot-shortcut">
+          <span class="copilot-shortcut-key">Ctrl+L</span>
+          <span>Effacer</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- =========================================================================
+       SCRIPTS
+       ========================================================================= -->
+  
+  <script src="js/architectCopilot.js"></script>
+  <script>
+    // =========================================================================
+    // INITIALISATION DU COPILOT
+    // =========================================================================
+    
+    // Données de démo (simulation d'un projet architectural)
+    const demoProject = {
+      name: 'Villa Serena',
+      rooms: [
+        { name: 'Séjour', area: 35, type: 'sejour', width: 7, depth: 5, habitable: true },
+        { name: 'Cuisine', area: 12, type: 'cuisine', width: 4, depth: 3, habitable: true },
+        { name: 'Chambre 1', area: 14, type: 'chambre', width: 4, depth: 3.5, habitable: true },
+        { name: 'Chambre 2', area: 11, type: 'chambre', width: 3.5, depth: 3.14, habitable: true },
+        { name: 'Salle de bain', area: 6, type: 'sdb', width: 3, depth: 2, habitable: true },
+        { name: 'WC', area: 2, type: 'wc', width: 1.5, depth: 1.33, habitable: false }
+      ],
+      walls: [
+        { from: [0, 0], to: [10, 0], openings: [] },
+        { from: [10, 0], to: [10, 8], openings: [] },
+        { from: [10, 8], to: [0, 8], openings: [] },
+        { from: [0, 8], to: [0, 0], openings: [] },
+        { from: [4, 0], to: [4, 4], openings: [] },
+        { from: [4, 4], to: [10, 4], openings: [] }
+      ],
+      totalArea: 80
+    };
+    
+    // État actuel simulé
+    let currentContext = {
+      project: demoProject,
+      currentTool: null,
+      selectedElement: null,
+      wallCount: 6,
+      showEstimate: true,
+      habitableArea: 78
+    };
+    
+    // =========================================================================
+    // GESTIONNAIRES D'ÉVÉNEMENTS
+    // =========================================================================
+    
+    // Bouton flottant (ouvrir/fermer)
+    document.getElementById('copilot-fab').addEventListener('click', () => {
+      ArchitectCopilot.toggle();
+      updateUI();
+    });
+    
+    // Bouton fermer
+    document.getElementById('copilot-close').addEventListener('click', () => {
+      ArchitectCopilot.toggle();
+      updateUI();
+    });
+    
+    // Bouton effacer
+    document.getElementById('copilot-clear').addEventListener('click', () => {
+      if (confirm('Effacer toute la conversation ?')) {
+        ArchitectCopilot.clearConversation();
+        updateUI();
+      }
+    });
+    
+    // Bouton thème
+    document.getElementById('copilot-theme-toggle').addEventListener('click', () => {
+      const currentTheme = document.documentElement.getAttribute('data-copilot-theme');
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-copilot-theme', newTheme);
+      ArchitectCopilot.setTheme(newTheme);
+    });
+    
+    // Bouton micro
+    document.getElementById('copilot-voice').addEventListener('click', () => {
+      const result = ArchitectCopilot.toggleVoiceInput();
+      const btn = document.getElementById('copilot-voice');
+      
+      if (result.listening) {
+        btn.classList.add('is-active');
+        btn.textContent = '🎤';
+      } else {
+        btn.classList.remove('is-active');
+      }
+    });
+    
+    // Bouton envoyer
+    document.getElementById('copilot-send').addEventListener('click', sendMessage);
+    
+    // Saisie texte
+    const input = document.getElementById('copilot-input');
+    const sendBtn = document.getElementById('copilot-send');
+    
+    input.addEventListener('input', () => {
+      sendBtn.disabled = input.value.trim().length === 0;
+      
+      // Auto-resize
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    });
+    
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+    
+    // Raccourcis clavier
+    document.addEventListener('keydown', (e) => {
+      ArchitectCopilot.handleKeyboard(e);
+      updateUI();
+    });
+    
+    // =========================================================================
+    // FONCTIONS D'INTERFACE
+    // =========================================================================
+    
+    async function sendMessage() {
+      const input = document.getElementById('copilot-input');
+      const message = input.value.trim();
+      
+      if (!message) return;
+      
+      // Ajouter message utilisateur
+      addMessageToUI('user', message);
+      
+      // Effacer l'input
+      input.value = '';
+      input.style.height = 'auto';
+      sendBtn.disabled = true;
+      
+      // Afficher indicateur de chargement
+      showLoading();
+      
+      try {
+        // Envoyer à l'IA
+        const response = await ArchitectCopilot.sendMessage(message, currentContext);
+        
+        // Masquer le chargement
+        hideLoading();
+        
+        // Ajouter la réponse
+        addMessageToUI('assistant', response);
+        
+      } catch (error) {
+        hideLoading();
+        addMessageToUI('assistant', `Erreur : ${error.message}`, { error: true });
+      }
+    }
+    
+    function addMessageToUI(role, content, metadata = {}) {
+      const messagesDiv = document.getElementById('copilot-messages');
+      
+      // Supprimer le message de bienvenue si présent
+      const welcome = messagesDiv.querySelector('.copilot-welcome');
+      if (welcome && messagesDiv.children.length === 1) {
+        welcome.remove();
+      }
+      
+      // Créer le message
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `copilot-message is-${role}`;
+      
+      const avatar = role === 'user' ? '👤' : '🤖';
+      const time = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      
+      messageDiv.innerHTML = `
+        <div class="copilot-message-avatar">${avatar}</div>
+        <div class="copilot-message-content">
+          <div class="copilot-message-bubble">${formatMessage(content)}</div>
+          <div class="copilot-message-time">${time}</div>
+        </div>
+      `;
+      
+      messagesDiv.appendChild(messageDiv);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+    
+    function formatMessage(content) {
+      // Conversion basique markdown → HTML
+      return content
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/\n/g, '<br>');
+    }
+    
+    function showLoading() {
+      const messagesDiv = document.getElementById('copilot-messages');
+      const loadingDiv = document.createElement('div');
+      loadingDiv.className = 'copilot-message is-assistant';
+      loadingDiv.id = 'copilot-loading';
+      loadingDiv.innerHTML = `
+        <div class="copilot-message-avatar">🤖</div>
+        <div class="copilot-message-content">
+          <div class="copilot-loading">
+            <div class="copilot-loading-dot"></div>
+            <div class="copilot-loading-dot"></div>
+            <div class="copilot-loading-dot"></div>
+          </div>
+        </div>
+      `;
+      messagesDiv.appendChild(loadingDiv);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+    
+    function hideLoading() {
+      const loading = document.getElementById('copilot-loading');
+      if (loading) loading.remove();
+    }
+    
+    function updateUI() {
+      const state = ArchitectCopilot.getState();
+      const panel = document.getElementById('copilot-panel');
+      const fab = document.getElementById('copilot-fab');
+      
+      if (state.isOpen) {
+        panel.classList.add('is-open');
+        fab.classList.add('is-open');
+      } else {
+        panel.classList.remove('is-open');
+        fab.classList.remove('is-open');
+      }
+      
+      // Mettre à jour les suggestions
+      updateSuggestions(state.suggestions);
+    }
+    
+    function updateSuggestions(suggestions) {
+      const suggestionsDiv = document.getElementById('copilot-suggestions');
+      suggestionsDiv.innerHTML = '';
+      
+      suggestions.forEach(suggestion => {
+        const suggestionDiv = document.createElement('div');
+        suggestionDiv.className = 'copilot-suggestion';
+        suggestionDiv.innerHTML = `
+          <div class="copilot-suggestion-icon">${suggestion.icon}</div>
+          <div class="copilot-suggestion-content">
+            <h4 class="copilot-suggestion-title">${suggestion.title}</h4>
+            <p class="copilot-suggestion-text">${suggestion.content}</p>
+          </div>
+        `;
+        
+        if (suggestion.action) {
+          suggestionDiv.addEventListener('click', () => handleSuggestionAction(suggestion.action));
+        }
+        
+        suggestionsDiv.appendChild(suggestionDiv);
+      });
+    }
+    
+    async function handleSuggestionAction(action) {
+      const input = document.getElementById('copilot-input');
+      
+      switch (action) {
+        case 'check-closure':
+          input.value = 'Vérifie si le contour des murs est fermé';
+          break;
+        case 'check-compliance':
+          input.value = 'Vérifie la conformité complète du projet (PLU, RE2020, PMR)';
+          break;
+        case 'generate-variants':
+          input.value = 'Génère 3 variantes d\'agencement optimisées';
+          break;
+        case 'suggest-enlarge':
+          input.value = 'Comment agrandir cette pièce pour respecter les normes ?';
+          break;
+        case 'add-bedroom':
+          input.value = 'Suggère où ajouter une chambre dans ce plan';
+          break;
+        case 'show-full-estimate':
+          input.value = 'Affiche l\'estimation complète des coûts';
+          break;
+        default:
+          return;
+      }
+      
+      sendMessage();
+    }
+    
+    // =========================================================================
+    // SIMULATION DE CONTEXTE (DÉMO)
+    // =========================================================================
+    
+    function simulateContext(tool) {
+      switch (tool) {
+        case 'wall-ext':
+          currentContext.currentTool = 'wall-ext';
+          currentContext.selectedElement = null;
+          break;
+        case 'wall-int':
+          currentContext.currentTool = 'wall-int';
+          currentContext.selectedElement = null;
+          break;
+        case 'room':
+          currentContext.currentTool = null;
+          currentContext.selectedElement = {
+            type: 'room',
+            name: 'Séjour',
+            area: 35,
+            width: 7,
+            depth: 5,
+            type: 'sejour'
+          };
+          break;
+        case 'calibrate':
+          currentContext.currentTool = 'calibrate';
+          currentContext.selectedElement = null;
+          break;
+        case 'compliance':
+          currentContext.currentTool = null;
+          currentContext.selectedElement = null;
+          currentContext.hasCheckedCompliance = false;
+          break;
+      }
+      
+      // Mettre à jour les suggestions
+      ArchitectCopilot.updateSuggestions(currentContext);
+      
+      // Feedback visuel
+      const canvas = document.getElementById('editor-canvas');
+      canvas.innerHTML = `<div><p>🖱️ Contexte : <strong>${tool}</strong></p><p style="font-size: 14px; margin-top: 8px;">Les suggestions du copilot ont été mises à jour</p></div>`;
+      
+      // Badge de notification
+      const badge = document.getElementById('copilot-badge');
+      const suggestions = ArchitectCopilot.state.suggestions;
+      if (suggestions.length > 0) {
+        badge.textContent = suggestions.length;
+      } else {
+        badge.textContent = '';
+      }
+      
+      setTimeout(() => {
+        badge.textContent = '';
+      }, 3000);
+    }
+    
+    // =========================================================================
+    // ÉCOUTE DES ÉVÉNEMENTS COPILOT
+    // =========================================================================
+    
+    window.addEventListener('copilot-suggestions-updated', (e) => {
+      updateSuggestions(e.detail.suggestions);
+    });
+    
+    window.addEventListener('copilot-toggled', (e) => {
+      updateUI();
+    });
+    
+    window.addEventListener('copilot-voice-result', (e) => {
+      const transcript = e.detail.transcript;
+      const input = document.getElementById('copilot-input');
+      input.value = transcript;
+      sendBtn.disabled = false;
+    });
+    
+    // =========================================================================
+    // INITIALISATION
+    // =========================================================================
+    
+    // Générer les suggestions initiales
+    ArchitectCopilot.updateSuggestions(currentContext);
+    
+    console.log('🤖 Architect Copilot initialisé');
+    console.log('Raccourcis : Ctrl+K (ouvrir), Ctrl+M (micro), Ctrl+L (effacer)');
+  </script>
+</body>
+</html>

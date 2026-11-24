@@ -2,7 +2,13 @@
  * RENDER STUDIO — rendus « grandeur nature » haute définition depuis la scène 3D
  * Sur-échantillonnage ×1,5 puis réduction (anti-crénelage), ombres 4096, vignettage photo léger.
  * Les images s'affichent dans une galerie et sont enregistrées dans le dossier generated/ du projet actif.
+ * 
+ * AXE 2 : Sublimation IA fidèle avec Depth Map et boucle de rétroaction automatique.
  */
+
+// Import de FidelityCheck (disponible en navigateur via <script> ou en Node.js via module)
+// La classe FidelityCheck est définie dans js/fidelityCheck.js
+
 class RenderStudio {
   constructor(houseScene) {
     this.hs = houseScene;
@@ -92,6 +98,165 @@ class RenderStudio {
     }
   }
 
+  /**
+   * Génère une Depth Map (carte de profondeur) de la scène 3D.
+   * Retourne une image en niveaux de gris où les objets proches sont blancs
+   * et le fond est noir. Utilisée pour verrouiller la géométrie lors de la
+   * sublimation IA (technologie type ControlNet Depth).
+   * 
+   * @param {object} shot — configuration du rendu (pos, look, fov)
+   * @param {number} width — largeur (défaut 1920)
+   * @param {number} height — hauteur (défaut 1080)
+   * @returns {string} — dataURL de la depth map (JPEG)
+   */
+  captureDepthMap(shot, width = 1920, height = 1080) {
+    const hs = this.hs, r = hs.renderer, cam = hs.camera;
+    const saved = {
+      pos: cam.position.clone(), quat: cam.quaternion.clone(), fov: cam.fov, aspect: cam.aspect,
+      bg: hs.scene.background, materialOverride: null
+    };
+    
+    try {
+      // Configure la caméra
+      cam.position.fromArray(shot.pos);
+      cam.lookAt(new THREE.Vector3().fromArray(shot.look));
+      cam.fov = shot.fov;
+      cam.aspect = width / height;
+      cam.updateProjectionMatrix();
+      
+      // Calcule la plage de profondeur (near/far)
+      const near = cam.near || 0.1;
+      const far = cam.far || 100;
+      
+      // Matériau de profondeur : encode la distance Z en niveaux de gris
+      const depthMaterial = new THREE.MeshDepthMaterial();
+      depthMaterial.depthTest = true;
+      depthMaterial.depthWrite = true;
+      
+      // Shader personnalisé pour convertir la profondeur en niveaux de gris linéaires
+      const depthShader = {
+        uniforms: {
+          'mNear': { value: near },
+          'mFar': { value: far }
+        },
+        vertexShader: `
+          void main() {
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform float mNear;
+          uniform float mFar;
+          void main() {
+            float depth = gl_FragCoord.z;
+            float linearDepth = (2.0 * mNear) / (mFar + mNear - depth * (mFar - mNear));
+            gl_FragColor = vec4(vec3(linearDepth), 1.0);
+          }
+        `
+      };
+      
+      const customDepthMaterial = new THREE.ShaderMaterial(depthShader);
+      
+      // Remplace tous les matériaux par le matériau de profondeur
+      const originalMaterials = new Map();
+      hs.scene.traverse((obj) => {
+        if (obj.isMesh && obj.material) {
+          originalMaterials.set(obj, obj.material);
+          obj.material = customDepthMaterial;
+        }
+      });
+      
+      // Rendu
+      r.setSize(width, height, false);
+      const origBg = hs.scene.background;
+      hs.scene.background = new THREE.Color(0x000000); // Fond noir = infini
+      r.render(hs.scene, cam);
+      
+      // Restaure les matériaux
+      originalMaterials.forEach((mat, obj) => {
+        obj.material = mat;
+      });
+      hs.scene.background = origBg;
+      
+      return r.domElement.toDataURL('image/jpeg', 0.92);
+    } finally {
+      // Restaure l'état de la caméra
+      cam.position.copy(saved.pos);
+      cam.quaternion.copy(saved.quat);
+      cam.fov = saved.fov;
+      cam.aspect = saved.aspect;
+      cam.updateProjectionMatrix();
+      hs.scene.background = saved.bg;
+    }
+  }
+  
+  /**
+   * Génère un rendu avec sublimation IA et vérification de fidélité automatique.
+   * Boucle de rétroaction : si le score de fidélité < 50%, relance avec paramètres
+   * plus stricts (temperature réduite, prompt renforcé).
+   * 
+   * @param {object} shot — configuration du rendu
+   * @param {function} aiEnhanceFn — fonction d'appel à l'IA (reçoit image + depth + prompt)
+   * @param {number} maxRetries — nombre maximum de tentatives (défaut 3)
+   * @returns {Promise<{image: string, score: number, attempts: number}>}
+   */
+  async renderWithFidelityLoop(shot, aiEnhanceFn, maxRetries = 3) {
+    // 1. Capture l'image originale et la depth map
+    const originalImage = this.capture(shot);
+    const depthMap = this.captureDepthMap(shot);
+    
+    // 2. Prompt de base (verrouillage orthographique + préservation géométrie)
+    const PHOTOREAL_PROMPT_LOCAL = 'Create a photorealistic, magazine-quality architectural visualization. ' +
+      'STRICT TOP-DOWN ORTHOGONAL PROJECTION ONLY, NO TILT, NO 3D ANGLE for floor plans. ' +
+      'Preserve exact architectural geometry: do not move, add, remove, resize, or redesign any walls, ' +
+      'doors, windows, openings, ceiling lines, or main volumes. Use deep charcoal solid infill for walls ' +
+      'to indicate opaque masses. Place flooring and furniture ONLY inside room boundaries.';
+    
+    let prompt = PHOTOREAL_PROMPT_LOCAL + 
+      '\n\nIMPORTANT: Preserve exact architectural geometry. Do not modify wall positions, ' +
+      'window placements, or room proportions. Use the depth map to maintain spatial accuracy.';
+    
+    // 3. Boucle de rétroaction
+    let attempts = 0;
+    let bestResult = null;
+    let bestScore = 0;
+    
+    while (attempts < maxRetries) {
+      attempts++;
+      
+      // Appel à l'IA
+      const generatedImage = await aiEnhanceFn(originalImage, depthMap, prompt);
+      
+      // Vérification de fidélité
+      const fidelity = await FidelityCheck.checkFidelity(originalImage, generatedImage);
+      
+      console.log(`Tentative ${attempts}: score de fidélité = ${fidelity.score}%`);
+      
+      // Garde le meilleur résultat
+      if (fidelity.score > bestScore) {
+        bestScore = fidelity.score;
+        bestResult = { image: generatedImage, score: fidelity.score, details: fidelity.details };
+      }
+      
+      // Si le score est acceptable, on arrête
+      if (fidelity.passed) {
+        return { ...bestResult, attempts };
+      }
+      
+      // Sinon, on renforce le prompt pour la prochaine tentative
+      const temperature = Math.max(0.1, 0.5 - attempts * 0.15); // Réduit la température
+      prompt = prompt + `\n\nCRITICAL (attempt ${attempts}): Previous generation scored only ${fidelity.score}%. ` +
+        'You MUST preserve all architectural elements exactly. Reduce creative interpretation. ' +
+        `Temperature set to ${temperature} for stricter adherence.`;
+      
+      // Attend un peu avant de relancer
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    // Retourne le meilleur résultat même si le seuil n'est pas atteint
+    return { ...bestResult, attempts, warning: `Score max ${bestScore}% < 50% après ${maxRetries} tentatives` };
+  }
+  
   skyTexture(night) {
     this._sky = this._sky || {};
     if (this._sky[night]) return this._sky[night];

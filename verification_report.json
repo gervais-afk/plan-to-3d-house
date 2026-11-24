@@ -1,0 +1,362 @@
+{
+  "timestamp": "2026-11-24T09:26:49.608Z",
+  "branch": "arena/1d9c67e2-plan-to-3d-house",
+  "results": {
+    "passed": 87,
+    "failed": 0,
+    "warnings": 0,
+    "total": 87,
+    "successRate": 100
+  },
+  "details": [
+    {
+      "status": "PASS",
+      "message": "js/vectorization.js (361 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "js/structuralAnalysis.js (477 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "js/bimExport.js (324 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "js/bioclimaticAnalysis.js (433 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "js/smartAnnotations.js (374 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "js/realtimeCollaboration.js (457 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "js/versionComparison.js (492 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "js/sketchRecognition.js (1007 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "js/variantGenerator.js (756 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "js/codeCompliance.js (558 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "js/architectCopilot.js (691 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "js/clientBrochurePremium.js (471 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "js/aiEnhance.js (239 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "js/apsGenerator.js (598 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "js/editorPremium.js (388 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "tests/integration.test.cjs (311 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "API_DOCUMENTATION.md (465 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "GUIDE_DESIGN_PDF.md (651 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "PDF_MODULE_README.md (582 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "GUIDE_COUVERTURE_PREMIUM.md (491 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "INTEGRATION_PREMIUM.md (606 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "INTEGRATION_COMPLETE.md (373 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "RECAPITULATIF_PDF_WAOUH.md (631 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "APS_PLAN_TO_3D_HOUSE.md (667 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "GUIDE_DOCUMENTS_MANQUANTS.md (369 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "RECAPITULATIF_APS_COMPLET.md (436 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "PROMPT_ASSISTANT_LOCAL.md (739 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "PROMPT_GITHUB_CLONE.md (475 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "PROMPT_VERIFICATION_COMPLETE.md (804 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "editor.html (360 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "index.html (375 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "demo.html (563 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "aps-template.html (746 lignes)"
+    },
+    {
+      "status": "PASS",
+      "message": "Vectorization chargé - vectorize, exportToDXF, exportToSVG"
+    },
+    {
+      "status": "PASS",
+      "message": "StructuralAnalysis chargé - analyzeStructure, detectLoadBearingWalls"
+    },
+    {
+      "status": "PASS",
+      "message": "BIMExport chargé - exportToIFC, exportToGbXML"
+    },
+    {
+      "status": "PASS",
+      "message": "BioclimaticAnalysis chargé - analyzeBioclimatic, analyzeSolarExposure"
+    },
+    {
+      "status": "PASS",
+      "message": "SmartAnnotations chargé - analyzeAnnotations, detectDimensions"
+    },
+    {
+      "status": "PASS",
+      "message": "RealtimeCollaboration chargé - createSession, joinSession"
+    },
+    {
+      "status": "PASS",
+      "message": "VersionComparison chargé - compareVersions, compareWalls"
+    },
+    {
+      "status": "PASS",
+      "message": "SketchRecognition chargé - recognizeSketch, segmentsToWalls"
+    },
+    {
+      "status": "PASS",
+      "message": "VariantGenerator chargé - generateVariants, evaluateFitness"
+    },
+    {
+      "status": "PASS",
+      "message": "CodeCompliance chargé - generateComplianceReport, checkPLU, checkRE2020"
+    },
+    {
+      "status": "PASS",
+      "message": "ArchitectCopilot chargé - generateSuggestions, calculateMetrics"
+    },
+    {
+      "status": "PASS",
+      "message": "ClientBrochurePremium chargé - exportPDF, setStyle, getStyle"
+    },
+    {
+      "status": "PASS",
+      "message": "APSGenerator chargé - generateAPS, buildContent"
+    },
+    {
+      "status": "PASS",
+      "message": "AIEnhance - Sublimation via le relais OpenRouter (api/ai/images)"
+    },
+    {
+      "status": "PASS",
+      "message": "Tous les tests passent (427/431)"
+    },
+    {
+      "status": "PASS",
+      "message": "Bouton \"Sublimer avec l'IA\" présent"
+    },
+    {
+      "status": "PASS",
+      "message": "Bouton \"Catalogue Premium\" présent"
+    },
+    {
+      "status": "PASS",
+      "message": "Bouton \"APS Auto\" présent"
+    },
+    {
+      "status": "PASS",
+      "message": "Script clientBrochurePremium.js présent"
+    },
+    {
+      "status": "PASS",
+      "message": "Script aiEnhance.js présent"
+    },
+    {
+      "status": "PASS",
+      "message": "Script apsGenerator.js présent"
+    },
+    {
+      "status": "PASS",
+      "message": "Script editorPremium.js présent"
+    },
+    {
+      "status": "PASS",
+      "message": "CSS editorPremium.css présent"
+    },
+    {
+      "status": "PASS",
+      "message": "Dialogue premium présent"
+    },
+    {
+      "status": "PASS",
+      "message": "Sélecteur de style présent"
+    },
+    {
+      "status": "PASS",
+      "message": "Fonction handleGenerateAPS présent"
+    },
+    {
+      "status": "PASS",
+      "message": "Documentation API - 465 lignes (min: 400)"
+    },
+    {
+      "status": "PASS",
+      "message": "Guide design PDF - 651 lignes (min: 500)"
+    },
+    {
+      "status": "PASS",
+      "message": "Documentation PDF - 582 lignes (min: 400)"
+    },
+    {
+      "status": "PASS",
+      "message": "Guide couverture - 491 lignes (min: 400)"
+    },
+    {
+      "status": "PASS",
+      "message": "Guide intégration - 606 lignes (min: 400)"
+    },
+    {
+      "status": "PASS",
+      "message": "Récapitulatif intégration - 373 lignes (min: 300)"
+    },
+    {
+      "status": "PASS",
+      "message": "Récapitulatif PDF - 631 lignes (min: 400)"
+    },
+    {
+      "status": "PASS",
+      "message": "APS du projet - 667 lignes (min: 500)"
+    },
+    {
+      "status": "PASS",
+      "message": "Guide documents manquants - 369 lignes (min: 250)"
+    },
+    {
+      "status": "PASS",
+      "message": "Récapitulatif APS - 436 lignes (min: 400)"
+    },
+    {
+      "status": "PASS",
+      "message": "Prompt assistant local - 739 lignes (min: 600)"
+    },
+    {
+      "status": "PASS",
+      "message": "Prompt GitHub clone - 475 lignes (min: 400)"
+    },
+    {
+      "status": "PASS",
+      "message": "Prompt vérification - 804 lignes (min: 400)"
+    },
+    {
+      "status": "PASS",
+      "message": "Style \"modern\" (Moderne) appliqué par ClientBrochurePremium"
+    },
+    {
+      "status": "PASS",
+      "message": "Style \"luxury\" (Luxe) appliqué par ClientBrochurePremium"
+    },
+    {
+      "status": "PASS",
+      "message": "Style \"industrial\" (Industriel) appliqué par ClientBrochurePremium"
+    },
+    {
+      "status": "PASS",
+      "message": "Champ \"projectName\" présent dans le template"
+    },
+    {
+      "status": "PASS",
+      "message": "Champ \"clientName\" présent dans le template"
+    },
+    {
+      "status": "PASS",
+      "message": "Champ \"totalArea\" présent dans le template"
+    },
+    {
+      "status": "PASS",
+      "message": "Champ \"budget\" présent dans le template"
+    },
+    {
+      "status": "PASS",
+      "message": "Champ \"timeline\" présent dans le template"
+    },
+    {
+      "status": "PASS",
+      "message": "Template contient 6 pages (attendu: 6)"
+    },
+    {
+      "status": "PASS",
+      "message": "Template contient 6/6 sections principales"
+    },
+    {
+      "status": "PASS",
+      "message": "APS généré : 6 pages, pièces et estimation en FCFA"
+    },
+    {
+      "status": "PASS",
+      "message": "APS sans contenu sur le logiciel"
+    },
+    {
+      "status": "PASS",
+      "message": "Catalogue premium « Moderne » généré sans studio 3D (2 pages)"
+    },
+    {
+      "status": "PASS",
+      "message": "Catalogue premium « Luxe » généré sans studio 3D (2 pages)"
+    },
+    {
+      "status": "PASS",
+      "message": "Catalogue premium « Industriel » généré sans studio 3D (2 pages)"
+    }
+  ],
+  "status": "VALIDATED"
+}

@@ -65,3 +65,14 @@ test('Verdicts et libellés suivent les seuils calibrés', () => {
   assert.equal(FidelityCheck.verdictOf(review - 0.01), 'unfaithful');
   assert.equal(FidelityCheck.describe({ verdict: 'faithful', score: 0.734 }), 'Fidèle au plan · 73 %');
 });
+
+test('Adaptateur checkFidelity (fusion avec arena) : score en % et seul « fidèle » valide', () => {
+  const FC = require('../js/fidelityCheck.js');
+  assert.deepEqual(FC.toLoopResult(null), { score: 0, passed: false, details: null });
+  const faithful = { score: 0.62, verdict: 'faithful' };
+  assert.equal(FC.toLoopResult(faithful).score, 62);
+  assert.equal(FC.toLoopResult(faithful).passed, true);
+  assert.equal(FC.toLoopResult({ score: 0.35, verdict: 'review' }).passed, false);
+  assert.equal(FC.toLoopResult({ score: 0.1, verdict: 'unfaithful' }).passed, false);
+  assert.equal(typeof FC.checkFidelity, 'function');
+});

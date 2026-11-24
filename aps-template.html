@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Template APS Personnalisable — Avant-Projet Sommaire</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    :root {
+      --primary: #1a1a2e;
+      --secondary: #16213e;
+      --accent: #e94560;
+      --text: #333;
+      --light-gray: #f5f5f5;
+      --medium-gray: #999;
+    }
+    
+    body {
+      font-family: 'Helvetica', 'Arial', sans-serif;
+      background: #e0e0e0;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    
+    /* Contrôles de personnalisation */
+    .controls {
+      max-width: 800px;
+      margin: 0 auto 30px;
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    
+    .controls h2 {
+      color: var(--primary);
+      margin-bottom: 20px;
+    }
+    
+    .control-group {
+      margin-bottom: 20px;
+    }
+    
+    .control-group label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    
+    .control-group input,
+    .control-group select,
+    .control-group textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    
+    .control-group textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+    
+    .btn {
+      display: inline-block;
+      padding: 12px 24px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    .btn:hover {
+      background: #d63651;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(233, 69, 96, 0.3);
+    }
+    
+    .btn-secondary {
+      background: var(--primary);
+      margin-left: 10px;
+    }
+    
+    .btn-secondary:hover {
+      background: var(--secondary);
+    }
+    
+    /* Template APS */
+    .aps-template {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    }
+    
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      padding: 20mm;
+      background: white;
+      position: relative;
+      page-break-after: always;
+    }
+    
+    /* Page de couverture */
+    .cover {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+    }
+    
+    .cover h1 {
+      font-size: 48px;
+      margin-bottom: 10px;
+      color: var(--accent);
+    }
+    
+    .cover h2 {
+      font-size: 36px;
+      margin-bottom: 30px;
+      color: white;
+    }
+    
+    .cover .project-name {
+      font-size: 28px;
+      margin-bottom: 20px;
+      max-width: 600px;
+    }
+    
+    .cover .accent-line {
+      width: 100px;
+      height: 4px;
+      background: var(--accent);
+      margin: 30px 0;
+    }
+    
+    .cover .meta {
+      font-size: 14px;
+      color: #ccc;
+      margin-top: 50px;
+    }
+    
+    /* Pages de contenu */
+    .content-page h2 {
+      color: var(--primary);
+      font-size: 28px;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 3px solid var(--accent);
+    }
+    
+    .content-page h3 {
+      color: var(--secondary);
+      font-size: 20px;
+      margin: 25px 0 15px;
+    }
+    
+    .content-page p {
+      margin-bottom: 15px;
+      text-align: justify;
+    }
+    
+    .content-page ul {
+      margin: 15px 0 15px 30px;
+    }
+    
+    .content-page li {
+      margin-bottom: 8px;
+    }
+    
+    /* Tableaux */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    
+    table th {
+      background: var(--light-gray);
+      padding: 12px;
+      text-align: left;
+      font-weight: bold;
+      border: 1px solid #ddd;
+    }
+    
+    table td {
+      padding: 10px;
+      border: 1px solid #ddd;
+    }
+    
+    table tr:nth-child(even) {
+      background: #fafafa;
+    }
+    
+    /* Pied de page */
+    .footer {
+      position: absolute;
+      bottom: 20mm;
+      left: 20mm;
+      right: 20mm;
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--medium-gray);
+      border-top: 1px solid var(--medium-gray);
+      padding-top: 10px;
+    }
+    
+    /* Styles spécifiques */
+    .highlight-box {
+      background: var(--light-gray);
+      border-left: 4px solid var(--accent);
+      padding: 15px 20px;
+      margin: 20px 0;
+    }
+    
+    .success {
+      color: #2ecc71;
+    }
+    
+    .warning {
+      color: #f39c12;
+    }
+    
+    .error {
+      color: #e74c3c;
+    }
+    
+    /* Preview */
+    .preview-info {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    
+    @media print {
+      body {
+        background: white;
+        padding: 0;
+      }
+      
+      .controls, .preview-info {
+        display: none;
+      }
+      
+      .aps-template {
+        box-shadow: none;
+      }
+      
+      .page {
+        page-break-after: always;
+        margin: 0;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Contrôles de personnalisation -->
+  <div class="controls">
+    <h2>📋 Personnalisation de l'APS</h2>
+    
+    <div class="control-group">
+      <label>Nom du Projet</label>
+      <input type="text" id="projectName" value="Villa Moderna" placeholder="Entrez le nom du projet">
+    </div>
+    
+    <div class="control-group">
+      <label>Maître d'Ouvrage</label>
+      <input type="text" id="clientName" value="M. et Mme Dupont" placeholder="Nom du client">
+    </div>
+    
+    <div class="control-group">
+      <label>Description du Projet</label>
+      <textarea id="projectDescription" placeholder="Décrivez votre projet...">Construction d'une villa contemporaine de 150 m² avec 4 chambres, un grand séjour lumineux et un jardin paysager.</textarea>
+    </div>
+    
+    <div class="control-group">
+      <label>Surface Totale (m²)</label>
+      <input type="number" id="totalArea" value="150" placeholder="Surface en m²">
+    </div>
+    
+    <div class="control-group">
+      <label>Budget estimé (FCFA)</label>
+      <input type="text" id="budget" value="43 500 000" placeholder="Budget prévisionnel">
+    </div>
+    
+    <div class="control-group">
+      <label>Délai Prévisionnel</label>
+      <input type="text" id="timeline" value="12 mois" placeholder="Durée du projet">
+    </div>
+    
+    <button class="btn" onclick="updateTemplate()">🔄 Mettre à jour le template</button>
+    <button class="btn btn-secondary" onclick="window.print()">🖨️ Imprimer / Exporter PDF</button>
+  </div>
+  
+  <div class="preview-info">
+    💡 <strong>Astuce :</strong> Modifiez les champs ci-dessus puis cliquez sur "Imprimer / Exporter PDF" pour générer votre APS personnalisé.
+  </div>
+  
+  <!-- Template APS -->
+  <div class="aps-template" id="apsTemplate">
+    
+    <!-- Page 1 : Couverture -->
+    <div class="page cover">
+      <h1>AVANT-PROJET SOMMAIRE</h1>
+      <h2>(APS)</h2>
+      <div class="accent-line"></div>
+      <div class="project-name" id="coverProjectName">Villa Moderna</div>
+      <div class="meta">
+        <div>Date : <span id="coverDate">24 novembre 2026</span></div>
+        <div>Document généré automatiquement</div>
+      </div>
+    </div>
+    
+    <!-- Page 2 : Présentation -->
+    <div class="page content-page">
+      <h2>1. PRÉSENTATION DU PROJET</h2>
+      
+      <h3>1.1 Objet du Projet</h3>
+      <table>
+        <tr>
+          <th style="width: 30%;">Maître d'Ouvrage</th>
+          <td id="presClient">M. et Mme Dupont</td>
+        </tr>
+        <tr>
+          <th>Nature du Projet</th>
+          <td>Construction neuve</td>
+        </tr>
+        <tr>
+          <th>Surface programmée</th>
+          <td><span id="presArea">150</span> m²</td>
+        </tr>
+        <tr>
+          <th>Localisation</th>
+          <td>À définir</td>
+        </tr>
+      </table>
+      
+      <h3>1.2 Contexte et Justification</h3>
+      <p id="presDescription">
+        Construction d'une villa contemporaine de 150 m² avec 4 chambres, un grand séjour lumineux et un jardin paysager. Le projet répond aux besoins d'une famille de 4 personnes souhaitant un habitat moderne, énergétiquement performant et adapté à leur mode de vie.
+      </p>
+      
+      <h3>1.3 Objectifs du Projet</h3>
+      <ul>
+        <li>Créer un habitat contemporain et fonctionnel</li>
+        <li>Optimiser les apports solaires passifs</li>
+        <li>Assurer une bonne isolation thermique et phonique</li>
+        <li>Intégrer le bâtiment dans son environnement</li>
+        <li>Respecter les normes RT2012/RE2020</li>
+      </ul>
+      
+      <div class="footer">
+        <span id="footerProject">Villa Moderna</span>
+        <span>Page 2</span>
+      </div>
+    </div>
+    
+    <!-- Page 3 : Programme -->
+    <div class="page content-page">
+      <h2>2. PROGRAMME ARCHITECTURAL</h2>
+      
+      <h3>2.1 Programme Fonctionnel</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Pièce</th>
+            <th>Surface (m²)</th>
+            <th>Observations</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Séjour</td>
+            <td>45</td>
+            <td>Grand espace lumineux orienté sud</td>
+          </tr>
+          <tr>
+            <td>Cuisine</td>
+            <td>18</td>
+            <td>Ouverte sur le séjour</td>
+          </tr>
+          <tr>
+            <td>Chambre parentale</td>
+            <td>20</td>
+            <td>Avec dressing et salle d'eau</td>
+          </tr>
+          <tr>
+            <td>Chambre 2</td>
+            <td>12</td>
+            <td>-</td>
+          </tr>
+          <tr>
+            <td>Chambre 3</td>
+            <td>12</td>
+            <td>-</td>
+          </tr>
+          <tr>
+            <td>Chambre 4</td>
+            <td>12</td>
+            <td>-</td>
+          </tr>
+          <tr>
+            <td>Salle de bains</td>
+            <td>8</td>
+            <td>Commune aux chambres</td>
+          </tr>
+          <tr>
+            <td>WC</td>
+            <td>3</td>
+            <td>Séparés</td>
+          </tr>
+          <tr>
+            <td>Garage</td>
+            <td>20</td>
+            <td>2 véhicules</td>
+          </tr>
+          <tr>
+            <td><strong>TOTAL</strong></td>
+            <td><strong><span id="progTotal">150</span></strong></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+      
+      <h3>2.2 Programme Technique</h3>
+      <ul>
+        <li><strong>Structure :</strong> Béton armé traditionnel</li>
+        <li><strong>Toiture :</strong> Toiture terrasse accessible</li>
+        <li><strong>Façades :</strong> Enduit monocouche clair</li>
+        <li><strong>Menuiseries :</strong> Aluminium laqué gris anthracite</li>
+        <li><strong>Chauffage :</strong> Pompe à chaleur air-eau + plancher chauffant</li>
+        <li><strong>VMC :</strong> Double flux</li>
+      </ul>
+      
+      <div class="footer">
+        <span id="footerProject2">Villa Moderna</span>
+        <span>Page 3</span>
+      </div>
+    </div>
+    
+    <!-- Page 4 : Estimation -->
+    <div class="page content-page">
+      <h2>3. ESTIMATION FINANCIÈRE</h2>
+      
+      <h3>3.1 Estimation Globale</h3>
+      <div class="highlight-box">
+        <strong>Budget prévisionnel : <span id="estBudget">43 500 000 FCFA</span></strong><br>
+        <small>Soit environ <span id="estPerSqm">290 000</span> FCFA/m²</small>
+      </div>
+      
+      <h3>3.2 Répartition par Lots</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Lot</th>
+            <th>% du coût</th>
+            <th>Estimation (FCFA)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Terrassements - VRD</td>
+            <td>8%</td>
+            <td id="lot1">20 000</td>
+          </tr>
+          <tr>
+            <td>Gros œuvre</td>
+            <td>30%</td>
+            <td id="lot2">75 000</td>
+          </tr>
+          <tr>
+            <td>Couverture - Étanchéité</td>
+            <td>5%</td>
+            <td id="lot3">12 500</td>
+          </tr>
+          <tr>
+            <td>Menuiseries extérieures</td>
+            <td>8%</td>
+            <td id="lot4">20 000</td>
+          </tr>
+          <tr>
+            <td>Menuiseries intérieures</td>
+            <td>5%</td>
+            <td id="lot5">12 500</td>
+          </tr>
+          <tr>
+            <td>Revêtements sols et murs</td>
+            <td>7%</td>
+            <td id="lot6">17 500</td>
+          </tr>
+          <tr>
+            <td>CVC - Plomberie</td>
+            <td>12%</td>
+            <td id="lot7">30 000</td>
+          </tr>
+          <tr>
+            <td>Électricité</td>
+            <td>10%</td>
+            <td id="lot8">25 000</td>
+          </tr>
+          <tr>
+            <td>Aménagements extérieurs</td>
+            <td>5%</td>
+            <td id="lot9">12 500</td>
+          </tr>
+          <tr>
+            <td>Divers et imprévus</td>
+            <td>10%</td>
+            <td id="lot10">25 000</td>
+          </tr>
+          <tr style="background: var(--light-gray); font-weight: bold;">
+            <td>TOTAL</td>
+            <td>100%</td>
+            <td id="totalBudget">43 500 000</td>
+          </tr>
+        </tbody>
+      </table>
+      
+      <h3>3.3 Précision de l'Estimation</h3>
+      <div class="highlight-box">
+        <strong>Précision : ±15 à 20%</strong><br>
+        <small>Cette estimation est basée sur des ratios au m² et devra être affinée en phase APD avec un chiffrage détaillé lot par lot.</small>
+      </div>
+      
+      <div class="footer">
+        <span id="footerProject3">Villa Moderna</span>
+        <span>Page 4</span>
+      </div>
+    </div>
+    
+    <!-- Page 5 : Calendrier -->
+    <div class="page content-page">
+      <h2>4. CALENDRIER PRÉVISIONNEL</h2>
+      
+      <h3>4.1 Planning Général</h3>
+      <div class="highlight-box">
+        <strong>Délai prévisionnel : <span id="calTimeline">12 mois</span></strong>
+      </div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>Phase</th>
+            <th>Durée</th>
+            <th>Période</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Études préalables</td>
+            <td>1 mois</td>
+            <td>Mois 1</td>
+          </tr>
+          <tr>
+            <td>APS (Avant-Projet Sommaire)</td>
+            <td>1 mois</td>
+            <td>Mois 2</td>
+          </tr>
+          <tr>
+            <td>APD (Avant-Projet Définitif)</td>
+            <td>2 mois</td>
+            <td>Mois 3-4</td>
+          </tr>
+          <tr>
+            <td>Dépôt Permis de Construire</td>
+            <td>1 mois</td>
+            <td>Mois 5</td>
+          </tr>
+          <tr>
+            <td>Instruction PC</td>
+            <td>2 mois</td>
+            <td>Mois 6-7</td>
+          </tr>
+          <tr>
+            <td>Consultation entreprises</td>
+            <td>1 mois</td>
+            <td>Mois 8</td>
+          </tr>
+          <tr>
+            <td>Travaux</td>
+            <td>6 mois</td>
+            <td>Mois 9-14</td>
+          </tr>
+          <tr>
+            <td>Réception</td>
+            <td>-</td>
+            <td>Mois 15</td>
+          </tr>
+        </tbody>
+      </table>
+      
+      <h3>4.2 Jalons Importants</h3>
+      <ul>
+        <li><strong>Mois 2 :</strong> Validation de l'APS</li>
+        <li><strong>Mois 4 :</strong> Validation de l'APD et dépôt PC</li>
+        <li><strong>Mois 7 :</strong> Obtention du Permis de Construire</li>
+        <li><strong>Mois 8 :</strong> Sélection des entreprises</li>
+        <li><strong>Mois 9 :</strong> Ouverture de chantier</li>
+        <li><strong>Mois 15 :</strong> Réception des travaux</li>
+      </ul>
+      
+      <h3>4.3 Contraintes Identifiées</h3>
+      <ul>
+        <li>Délais d'instruction du Permis de Construire (variable selon commune)</li>
+        <li>Disponibilité des entreprises (période chargée)</li>
+        <li>Conditions météorologiques (travaux extérieurs)</li>
+        <li>Approvisionnement en matériaux (délais actuels)</li>
+      </ul>
+      
+      <div class="footer">
+        <span id="footerProject4">Villa Moderna</span>
+        <span>Page 5</span>
+      </div>
+    </div>
+    
+    <!-- Page 6 : Conclusion -->
+    <div class="page content-page">
+      <h2>5. CONCLUSION ET RECOMMANDATIONS</h2>
+      
+      <h3>5.1 Synthèse</h3>
+      <p>
+        Le projet présenté dans cet Avant-Projet Sommaire constitue une base solide pour poursuivre les études. 
+        Les grandes lignes architecturales et techniques sont définies, le budget prévisionnel est établi et le 
+        calendrier est réaliste.
+      </p>
+      
+      <div class="highlight-box">
+        <strong>Points forts du projet :</strong>
+        <ul style="margin-top: 10px;">
+          <li>Programme fonctionnel adapté aux besoins</li>
+          <li>Estimation budgétaire cohérente</li>
+          <li>Planning réaliste et maîtrisable</li>
+          <li>Respect des normes en vigueur</li>
+        </ul>
+      </div>
+      
+      <h3>5.2 Recommandations</h3>
+      <p>Poursuivre le projet en phase APD (Avant-Projet Définitif) afin de :</p>
+      <ul>
+        <li>Affiner l'estimation budgétaire avec un chiffrage détaillé</li>
+        <li>Détailler les solutions techniques retenues</li>
+        <li>Préparer le dossier de Permis de Construire</li>
+        <li>Consulter les entreprises et obtenir des devis fermes</li>
+      </ul>
+      
+      <h3>5.3 Décision Recommandée</h3>
+      <div class="highlight-box" style="border-left-color: #2ecc71;">
+        <strong class="success">✅ VALIDER L'APS</strong><br>
+        <small>et autoriser le passage en phase APD</small>
+      </div>
+      
+      <h3>5.4 Prochaines Étapes</h3>
+      <ol style="margin-left: 30px;">
+        <li>Validation de l'APS par le maître d'ouvrage</li>
+        <li>Lancement des études APD</li>
+        <li>Choix définitifs des matériaux et équipements</li>
+        <li>Élaboration du dossier de Permis de Construire</li>
+        <li>Dépôt du dossier en mairie</li>
+      </ol>
+      
+      <div class="footer">
+        <span id="footerProject5">Villa Moderna</span>
+        <span>Page 6</span>
+      </div>
+    </div>
+    
+  </div>
+  
+  <script>
+    // Mise à jour du template
+    function updateTemplate(silent = false) {
+      const projectName = document.getElementById('projectName').value;
+      const clientName = document.getElementById('clientName').value;
+      const description = document.getElementById('projectDescription').value;
+      const area = document.getElementById('totalArea').value;
+      const budget = document.getElementById('budget').value;
+      const timeline = document.getElementById('timeline').value;
+      
+      // Mise à jour de la couverture
+      document.getElementById('coverProjectName').textContent = projectName;
+      document.getElementById('coverDate').textContent = new Date().toLocaleDateString('fr-FR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      
+      // Mise à jour de la présentation
+      document.getElementById('presClient').textContent = clientName;
+      document.getElementById('presArea').textContent = area;
+      document.getElementById('presDescription').textContent = description;
+      
+      // Mise à jour du programme
+      document.getElementById('progTotal').textContent = area;
+      
+      // Mise à jour de l'estimation
+      const budgetNum = parseInt(budget.replace(/[^0-9]/g, ''), 10) || 0;
+      document.getElementById('estBudget').textContent = `${budgetNum.toLocaleString('fr-FR')} FCFA`;
+      document.getElementById('estPerSqm').textContent = Math.round(budgetNum / (parseInt(area, 10) || 1)).toLocaleString('fr-FR');
+      document.getElementById('totalBudget').textContent = budgetNum.toLocaleString('fr-FR');
+      
+      // Mise à jour des lots
+      const lots = [8, 30, 5, 8, 5, 7, 12, 10, 5, 10];
+      lots.forEach((percent, i) => {
+        const lotValue = Math.round(budgetNum * percent / 100);
+        document.getElementById(`lot${i + 1}`).textContent = lotValue.toLocaleString('fr-FR');
+      });
+      
+      // Mise à jour du calendrier
+      document.getElementById('calTimeline').textContent = timeline;
+      
+      // Mise à jour des pieds de page
+      for (let i = 0; i < 6; i++) {
+        const footer = document.getElementById(`footerProject${i > 0 ? i : ''}`);
+        if (footer) footer.textContent = projectName;
+      }
+      
+      if (silent !== true) alert('✅ Template mis à jour avec succès !');
+    }
+    
+    // Initialisation
+    document.addEventListener('DOMContentLoaded', () => {
+      updateTemplate(true);
+    });
+  </script>
+</body>
+</html>

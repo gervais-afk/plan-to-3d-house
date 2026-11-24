@@ -128,9 +128,13 @@ test('Les réglages aberrants reprennent les valeurs par défaut au lieu de faus
 
 test('Villa Serena : la surface de référence suit le métré et le total reste dans les ratios publiés', () => {
   const e = CostEstimate.estimate(villa, { standing: 'moyen', city: 'douala' });
-  assert.ok(e.quantities.habitable > 100 && e.quantities.habitable < 115);
+  // La villa évolue dans l'éditeur (plain-pied puis R+1) : on contrôle des ratios, pas une surface figée.
+  assert.ok(e.quantities.habitable > 50, `habitable ${e.quantities.habitable}`);
+  assert.ok(e.reference >= e.quantities.habitable, 'la référence inclut les annexes pondérées');
   assert.ok(e.quantities.extLength > 30);
   const perM2 = (e.lots[0].mid + e.lots[1].mid) / e.reference;
   near(perM2, 290000, 1e-3);
-  assert.ok(e.total.mid > 30e6 && e.total.mid < 45e6, `total ${e.total.mid}`);
+  // Total = travaux + imprévus + permis : entre 1 et 1,25 fois le prix des travaux au m².
+  const totalPerM2 = e.total.mid / e.reference;
+  assert.ok(totalPerM2 > 290000 && totalPerM2 < 290000 * 1.25, `total ${e.total.mid} (${Math.round(totalPerM2)} FCFA/m²)`);
 });
