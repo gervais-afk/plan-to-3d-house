@@ -84,3 +84,8 @@ test('Catalogue premium : les images IA du projet illustrent la couverture et le
   assert.ok(!all.includes('Programme des espaces'), 'les vues remplacent le programme');
   assert.ok(!all.includes('Plan du rez-de-chaussée'), 'la façade remplace le plan en couverture');
 });
+
+test('Catalogue premium : la statistique compte les pièces principales', () => {
+  assert.equal(Premium.summary(require('../projects/residence-verandas/project.json')).mainRooms, 7);
+  assert.equal(Premium.summary(villa).mainRooms, 5);
+});

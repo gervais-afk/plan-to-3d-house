@@ -10,7 +10,7 @@
 const Habitability = (() => {
   const RULES = { doorMin: 0.9, ceilingMin: 2.4, glazingMin: 0.10 };
   const plain = text => String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  const isCirculation = name => /\b(hall|degagement|couloir|circulation|entree|placard|dressing|cellier|magasin|rangement|buanderie|garage|local)\b/.test(name);
+  const isCirculation = name => /\b(hall|degagement|couloir|circulation|entree|palier|escaliers?|placard|dressing|cellier|magasin|rangement|buanderie|garage|local)\b/.test(name);
   const isWet = name => /\b(wc|toilettes?|salle d.?eau|sdb|salle de bains?|bains?|douche|cuisine|kitchenette)\b/.test(name);
 
   function outline(room) {

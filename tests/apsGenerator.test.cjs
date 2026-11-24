@@ -105,3 +105,14 @@ test('APS : la façade photoréaliste du projet illustre la couverture', async (
   const without = await render(villa);
   assert.ok(!without.all.includes('générée par IA'));
 });
+
+test('APS : pièces principales au sens immobilier, « R+1 » lisible, pas d’« annexe » répétée', async () => {
+  const verandas = require('../projects/residence-verandas/project.json');
+  const content = APSGenerator.buildContent(verandas);
+  // Séjour, salle à manger, séjour étage et 4 chambres ; ni cuisine, ni pièces d'eau, ni paliers, ni dressing.
+  assert.equal(content.mainRoomCount, 7);
+  assert.equal(content.nature, 'Construction neuve — R+1 (2 niveaux)');
+  const { all } = await render(verandas);
+  assert.doesNotMatch(all, /\(annexe\) \(annexe\)|Annexe \(annexe\)|r\+1/);
+  assert.match(all, /7 pièces principales/);
+});

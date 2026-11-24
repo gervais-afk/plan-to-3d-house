@@ -100,13 +100,21 @@ const ClientBrochurePremium = (() => {
   }
 
   /** Surfaces et pièces, que le projet vienne de la visite 3D (totals, area) ou de l'éditeur. */
+  /** Pièce principale au sens immobilier : séjours et chambres (ni cuisine, ni pièce d'eau, ni circulation, ni annexe). */
+  const NOT_MAIN = /cuisine|kitchen|salle d.?eau|salle de bains?|bains?|douche|\bwc\b|toilette|palier|escalier|degagement|hall|couloir|circulation|entree|dressing|placard|cellier|magasin|buanderie|rangement|garage|veranda|terrasse|porche/;
+  function isMainRoom(room) {
+    const name = String(room.name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    return room.habitable !== false && !NOT_MAIN.test(name);
+  }
+
   function summary(data) {
     const rooms = (data.rooms || []).map(room => ({ ...room, area: roomArea(room), level: room.level || 0 }));
     const habitable = Number.isFinite(data.totals?.habitable)
       ? data.totals.habitable
       : rooms.filter(r => r.habitable !== false).reduce((sum, r) => sum + r.area, 0);
     const total = rooms.reduce((sum, r) => sum + r.area, 0);
-    return { rooms, habitable, total, habitableCount: rooms.filter(r => r.habitable !== false).length };
+    const mainRooms = rooms.filter(isMainRoom).length;
+    return { rooms, habitable, total, habitableCount: rooms.filter(r => r.habitable !== false).length, mainRooms };
   }
 
   function bbox(data, level = 0) {
@@ -340,7 +348,7 @@ const ClientBrochurePremium = (() => {
       const statsY = 218, statW = 50, statH = 52;
       drawStatCard(doc, margin, statsY, statW, statH, 'Surface habitable', Math.round(info.habitable), 'm²');
       drawStatCard(doc, margin + statW + 10, statsY, statW, statH, 'Surface totale', Math.round(info.total), 'm²');
-      drawStatCard(doc, margin + (statW + 10) * 2, statsY, statW, statH, 'Pièces', info.habitableCount, '');
+      drawStatCard(doc, margin + (statW + 10) * 2, statsY, statW, statH, 'Pièces principales', info.mainRooms, '');
     }
     premiumText(doc, `Style ${STYLES[currentStyle].label}`, margin, 287, 7, { color: COLORS.light });
     const aiImages = !!(options.images?.facade?.data || options.images?.interiors?.some(image => image?.data));
