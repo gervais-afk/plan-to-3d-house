@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-24T09:17:19.162Z",
+  "timestamp": "2026-11-24T09:26:49.608Z",
   "branch": "arena/1d9c67e2-plan-to-3d-house",
   "results": {
     "passed": 87,
@@ -55,19 +55,19 @@
     },
     {
       "status": "PASS",
-      "message": "js/clientBrochurePremium.js (426 lignes)"
+      "message": "js/clientBrochurePremium.js (471 lignes)"
     },
     {
       "status": "PASS",
-      "message": "js/aiEnhance.js (295 lignes)"
+      "message": "js/aiEnhance.js (239 lignes)"
     },
     {
       "status": "PASS",
-      "message": "js/apsGenerator.js (584 lignes)"
+      "message": "js/apsGenerator.js (598 lignes)"
     },
     {
       "status": "PASS",
-      "message": "js/editorPremium.js (339 lignes)"
+      "message": "js/editorPremium.js (388 lignes)"
     },
     {
       "status": "PASS",
@@ -195,11 +195,11 @@
     },
     {
       "status": "PASS",
-      "message": "AIEnhance - Module navigateur (nécessite DOM)"
+      "message": "AIEnhance - Sublimation via le relais OpenRouter (api/ai/images)"
     },
     {
       "status": "PASS",
-      "message": "Tous les tests passent (419/423)"
+      "message": "Tous les tests passent (427/431)"
     },
     {
       "status": "PASS",

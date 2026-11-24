@@ -333,7 +333,7 @@ const APSGenerator = (() => {
   // PAGES
   // =====================================================================
 
-  function drawCover(doc, content, project, studio, variant) {
+  function drawCover(doc, content, project, studio, variant, options = {}) {
     drawGradient(doc, 0, 0, CONFIG.pageWidth, CONFIG.pageHeight, CONFIG.colors.primary, CONFIG.colors.secondary, 30);
     text(doc, 'AVANT-PROJET SOMMAIRE (APS)', CONFIG.margin, 60, 13, { bold: true, color: CONFIG.colors.accent });
     doc.setFont(CONFIG.font, 'bold').setFontSize(30).setTextColor(CONFIG.colors.white);
@@ -347,7 +347,21 @@ const APSGenerator = (() => {
     doc.line(CONFIG.margin, y + 4, CONFIG.margin + 60, y + 4);
 
     const imageTop = Math.max(y + 14, 150);
-    if (studio?.hs && typeof studio.capture === 'function' && project.walls?.length) {
+    const cover = options.coverImage;
+    if (cover?.data) {
+      // Image IA du projet (façade sublimée) rognée au cadre, sans déformation.
+      const frameH = 85, ratio = (cover.width || 16) / (cover.height || 9);
+      let iw = WIDTH, ih = WIDTH / ratio;
+      if (ih < frameH) { ih = frameH; iw = frameH * ratio; }
+      doc.saveGraphicsState();
+      doc.rect(CONFIG.margin, imageTop, WIDTH, frameH, null);
+      doc.clip();
+      doc.discardPath();
+      doc.addImage(cover.data, /^data:image\/png/i.test(cover.data) ? 'PNG' : 'JPEG',
+        CONFIG.margin + (WIDTH - iw) / 2, imageTop + (frameH - ih) / 2, iw, ih);
+      doc.restoreGraphicsState();
+      text(doc, 'Image photoréaliste générée par IA, à titre d\'illustration', CONFIG.margin, imageTop + frameH + 5, 7, { color: CONFIG.colors.mediumGray });
+    } else if (studio?.hs && typeof studio.capture === 'function' && project.walls?.length) {
       try {
         const shots = selectShots(project);
         const image = studio.capture(shots.facade, 1600, 800, 1, { clean: true, solar: variant });
@@ -550,7 +564,7 @@ const APSGenerator = (() => {
    * @param {object} project
    * @param {object} [studio] — studio 3D (capture de la façade)
    * @param {object} [variant]
-   * @param {object} [options] — { JsPDF, save: false, date } (utile aux tests)
+   * @param {object} [options] — { coverImage: { data, width, height }, JsPDF, save: false, date }
    * @returns {Promise<object>} — le document jsPDF
    */
   async function generateAPS(project, studio = null, variant = null, options = {}) {
@@ -560,7 +574,7 @@ const APSGenerator = (() => {
     const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: options.compress !== false });
     doc.setProperties({ title: pdfSafe(`APS - ${content.name}`), subject: 'Avant-projet sommaire', creator: 'Plan to 3D House' });
 
-    drawCover(doc, content, project, studio, variant);
+    drawCover(doc, content, project, studio, variant, options);
     const ctx = pageContext(doc, content);
     drawPresentation(ctx);
     drawProgram(ctx);

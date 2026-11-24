@@ -229,6 +229,25 @@ const ClientBrochurePremium = (() => {
     return { facade, interior };
   }
 
+  /** Format jsPDF d'une image data URL (JPEG ou PNG). */
+  function imageFormat(data) {
+    return /^data:image\/png/i.test(data) ? 'PNG' : 'JPEG';
+  }
+
+  /** Place une image en la rognant au cadre (sans déformation). */
+  function drawFitted(doc, image, x, y, w, h) {
+    const ratio = (image.width || 16) / (image.height || 9);
+    let iw = w, ih = w / ratio;
+    if (ih < h) { ih = h; iw = h * ratio; }
+    const ix = x + (w - iw) / 2, iy = y + (h - ih) / 2;
+    doc.saveGraphicsState();
+    doc.rect(x, y, w, h, null);
+    doc.clip();
+    doc.discardPath();
+    doc.addImage(image.data, imageFormat(image.data), ix, iy, iw, ih);
+    doc.restoreGraphicsState();
+  }
+
   function hasStudio(studio) {
     return !!(studio && studio.hs && typeof studio.capture === 'function' && typeof HouseAuto !== 'undefined');
   }
@@ -295,7 +314,15 @@ const ClientBrochurePremium = (() => {
 
     const imgY = 82, imgH = 120;
     drawShadow(doc, margin, imgY, width, imgH, 5);
-    if (hasStudio(studio)) {
+    const facadeImage = options.images?.facade;
+    if (facadeImage?.data) {
+      drawFitted(doc, facadeImage, margin, imgY, width, imgH);
+      withOpacity(doc, 0.45, () => {
+        doc.setFillColor('#000000');
+        doc.rect(margin, imgY + imgH - 11, width, 11, 'F');
+      });
+      premiumText(doc, facadeImage.label || 'Vue extérieure', margin + 4, imgY + imgH - 4, 8.5, { color: '#ffffff', maxWidth: width - 8 });
+    } else if (hasStudio(studio)) {
       const shots = selectShots(data, studio.hs);
       doc.addImage(studio.capture(shots.facade, 1600, 800, 1, { clean: true, solar: variant }), 'JPEG', margin, imgY, width, imgH);
       withOpacity(doc, 0.3, () => {
@@ -316,7 +343,10 @@ const ClientBrochurePremium = (() => {
       drawStatCard(doc, margin + (statW + 10) * 2, statsY, statW, statH, 'Pièces', info.habitableCount, '');
     }
     premiumText(doc, `Style ${STYLES[currentStyle].label}`, margin, 287, 7, { color: COLORS.light });
-    if (variant?.aiEnhanced) premiumText(doc, 'Rendus sublimés par IA', margin + width, 287, 8, { color: COLORS.accent, align: 'right' });
+    const aiImages = !!(options.images?.facade?.data || options.images?.interiors?.some(image => image?.data));
+    if (aiImages || variant?.aiEnhanced) {
+      premiumText(doc, 'Images photoréalistes générées par IA, à titre d\'illustration', margin + width, 287, 7, { color: COLORS.light, align: 'right' });
+    }
   }
 
   function drawProgram(doc, data, top) {
@@ -360,7 +390,21 @@ const ClientBrochurePremium = (() => {
     }
 
     const shots = hasStudio(studio) && options.includeInterior !== false ? selectShots(data, studio.hs).interior.slice(0, 2) : [];
-    if (shots.length) {
+    const photos = options.includeInterior !== false ? (options.images?.interiors || []).filter(image => image?.data).slice(0, 2) : [];
+    if (photos.length) {
+      premiumText(doc, 'Vues intérieures', margin, next, 22, { bold: true });
+      const photoW = (width - 10) / 2, photoH = 65, y = next + 10;
+      photos.forEach((photo, i) => {
+        const x = margin + i * (photoW + 10);
+        drawShadow(doc, x, y, photoW, photoH, 4);
+        drawFitted(doc, photo, x, y, photoW, photoH);
+        withOpacity(doc, 0.7, () => {
+          doc.setFillColor('#000000');
+          doc.rect(x, y + photoH - 12, photoW, 12, 'F');
+        });
+        premiumText(doc, photo.label || 'Vue intérieure', x + 3, y + photoH - 4, 10, { bold: true, color: '#ffffff', maxWidth: photoW - 6 });
+      });
+    } else if (shots.length) {
       premiumText(doc, 'Vues intérieures', margin, next, 22, { bold: true });
       const photoW = (width - 10) / 2, photoH = 65, y = next + 10;
       shots.forEach((shot, i) => {
@@ -391,7 +435,8 @@ const ClientBrochurePremium = (() => {
    * @param {object|null} studio — studio 3D ; sans studio, le plan remplace les vues 3D
    * @param {object|null} variant
    * @param {Function} prepare — préparation de la scène, renvoie une fonction de restauration
-   * @param {object} options — { style, includeStats, includePlan, includeInterior, JsPDF, save }
+   * @param {object} options — { style, includeStats, includePlan, includeInterior, images: { facade, interiors }, JsPDF, save }
+   *   images : images IA en data URL ({ data, label, width, height }) ; elles priment sur le studio et le plan
    * @returns {Promise<object>} — le document jsPDF
    */
   async function exportPDF(data, studio = null, variant = null, prepare = () => {}, options = {}) {

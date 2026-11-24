@@ -33,7 +33,7 @@
    - ✅ `versionComparison.js` — 18 tests — Comparaison de versions
 
 3. **Phase 3 — Documentation et tests**
-   - ✅ 423 tests unitaires (419 réussis, 4 ignorés, 0 échec)
+   - ✅ 431 tests unitaires (427 réussis, 4 ignorés, 0 échec)
    - ✅ 13 tests d'intégration
    - ✅ Documentation API complète (`API_DOCUMENTATION.md`)
    - ✅ Page de démonstration (`demo.html`)
@@ -56,7 +56,7 @@
 
 ```
 Modules implémentés : 11
-Tests unitaires : 423 (0 échec, 4 ignorés)
+Tests unitaires : 431 (0 échec, 4 ignorés)
 Tests d'intégration : 13
 Fichiers JS créés : 57
 Pages de documentation : 7+
@@ -388,7 +388,7 @@ const enhancedData = AIEnhance.loadEnhancedImages();
 
 ### Exécuter tous les tests
 ```bash
-# Tests unitaires (423 tests)
+# Tests unitaires (431 tests)
 node --test tests/*.test.cjs
 
 # Tests d'intégration (13 tests)
@@ -401,7 +401,7 @@ node --test tests/vectorization.test.cjs
 ### Couverture des tests
 - ✅ Modules stratégiques : 244 tests
 - ✅ Tests d'intégration : 13 tests
-- ✅ **Total : 423 tests, 0 échec**
+- ✅ **Total : 431 tests, 0 échec**
 
 ---
 
@@ -623,7 +623,7 @@ try {
 ## 🔮 Prochaines Étapes Possibles
 
 ### Priorité Haute
-1. **Intégrer l'API IA réelle** (remplacer la simulation dans `aiEnhance.js`)
+1. ✅ **Sublimation IA réelle** : `aiEnhance.js` passe par le relais OpenRouter du serveur local
 2. **Ajouter plus de styles** (ex: Méditerranéen, Scandinave, Japonais)
 3. **Optimiser les performances** (gros projets > 50 pièces)
 4. **Tests E2E** (Playwright ou Cypress)
@@ -684,7 +684,7 @@ Pour un assistant IA qui reprend le projet :
 **Projet** : Plan to 3D House — Conversion plans 2D → visites 3D  
 **État** : ✅ Production ready  
 **Modules** : 11 modules stratégiques implémentés  
-**Tests** : 423 tests, 0 échec  
+**Tests** : 431 tests, 0 échec  
 **PDF** : Module premium avec 3 styles, intégré dans l'éditeur  
 **IA** : Bouton "Sublimer avec l'IA" fonctionnel  
 **Documentation** : 7 guides complets  
@@ -705,7 +705,7 @@ Pour un assistant IA qui reprend le projet :
 Bonjour ! Tu reprends le projet **Plan to 3D House**. Voici ce que tu dois savoir :
 
 ### ✅ Ce qui est terminé
-- 11 modules stratégiques implémentés et testés (423 tests, 0 échec)
+- 11 modules stratégiques implémentés et testés (431 tests, 0 échec)
 - Module PDF premium avec 3 styles (Moderne, Luxe, Industriel)
 - Intégration complète dans l'éditeur avec bouton "Sublimer avec l'IA"
 - Documentation exhaustive (7 guides)
@@ -713,7 +713,7 @@ Bonjour ! Tu reprends le projet **Plan to 3D House**. Voici ce que tu dois savoi
 ### 🎯 Ce que tu peux faire maintenant
 1. **Améliorer** les modules existants (optimisation, nouvelles fonctionnalités)
 2. **Ajouter** de nouveaux styles PDF
-3. **Intégrer** une vraie API IA (actuellement simulée)
+3. **Capturer** les vues 3D depuis l'éditeur pour sublimer sans passer par la visite
 4. **Créer** de nouveaux modules (ex: export Revit, collaboration WebSocket)
 5. **Optimiser** les performances pour les gros projets
 

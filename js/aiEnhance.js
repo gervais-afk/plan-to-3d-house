@@ -1,294 +1,238 @@
 /**
- * AI ENHANCE — Module de sublimation des rendus 3D par IA
- * 
- * Permet à l'utilisateur de "sublimer" les rendus 3D avec l'IA :
- * - Amélioration des textures
- * - Optimisation de l'éclairage
- * - Ajout de détails réalistes
- * - Badge automatique "✨ Sublimé avec IA" dans le PDF
+ * AI ENHANCE — Sublimation des rendus par IA (OpenRouter, via le serveur local)
+ *
+ * Part des captures 3D enregistrées par la visite (projects/<slug>/generated/renders/)
+ * et les photoréalise avec le relais du serveur local :
+ *   POST api/ai/images      → OpenRouter /api/v1/images (modèles autorisés dans serve.js)
+ *   POST api/save-generated → image + entrée du manifeste du projet
+ * C'est le même flux et le même prompt que la photoréalisation de la visite 3D (js/app.js).
+ *
+ * Les images obtenues (et celles déjà générées pour le projet) alimentent ensuite
+ * le catalogue premium et l'APS.
+ *
+ * Chaque appel est facturé par OpenRouter : une confirmation avec l'estimation
+ * est toujours demandée avant d'envoyer quoi que ce soit.
  */
 
 const AIEnhance = (() => {
   'use strict';
 
-  let enhancedImages = null;
+  // Même prompt que la photoréalisation de la visite 3D (js/app.js) : géométrie strictement conservée.
+  const PHOTOREAL_PROMPT = 'Create a photorealistic, magazine-quality architectural visualization of the attached image (Architectural Digest / Dwell editorial style): warm, inviting, lived-in, refined materials, layered natural light, rich but restrained styling, realistic shadows and reflections. Preserve the exact camera framing and architectural geometry: do not move, add, remove, resize, or redesign any walls, doors, windows, openings, ceiling lines, or main volumes; keep their positions and proportions strictly unchanged. Keep the room layout and the position and identity of all existing furniture. You may enrich interior styling with tasteful, correctly scaled decor that does not obstruct openings or alter architecture: elegant linen curtains at existing windows, a textured rug beneath the bed or seating, carefully arranged cushions and a soft throw on the bed, warm glowing bedside lamps, one contemporary artwork on a suitable blank wall, and a healthy green plant. Integrate these additions naturally and avoid clutter. For exterior views preserve the existing landscape and context. The result should feel warm, sophisticated, realistic, and inhabited—not sterile.';
 
-  /**
-   * Sublimer les rendus avec l'IA
-   */
-  async function sublimateWithAI(data, studio) {
-    const btn = document.getElementById('btn-sublimate');
-    const status = document.getElementById('ai-status');
-    const progress = document.getElementById('ai-progress');
-    
-    try {
-      // 1. Désactiver le bouton
-      btn.disabled = true;
-      btn.innerHTML = '<span class="ai-spinner"></span> Traitement...';
-      
-      // 2. Afficher la progression
-      if (progress) {
-        progress.hidden = false;
-        progress.textContent = '📸 Capture des vues 3D...';
-      }
-      
-      // 3. Capturer les vues 3D
-      const views = await capture3DViews(data, studio);
-      
-      // 4. Simuler le traitement IA (2-3 secondes)
-      if (progress) progress.textContent = '🤖 Amélioration par IA en cours...';
-      await simulateAIEnhancement(views);
-      
-      // 5. Stocker les images améliorées
-      if (progress) progress.textContent = '💾 Finalisation...';
-      storeEnhancedImages(views);
-      
-      // 6. Marquer comme sublimé
-      if (window.currentVariant) {
-        window.currentVariant.aiEnhanced = true;
-      }
-      enhancedImages = { timestamp: Date.now(), count: views.length };
-      
-      // 7. Afficher le statut
-      if (status) status.hidden = false;
-      if (progress) progress.hidden = true;
-      
-      // 8. Réactiver le bouton
-      btn.disabled = false;
-      btn.innerHTML = '✨ Rendus sublimés !';
-      
-      // 9. Notification
-      showToast('✨ Rendus sublimés avec succès ! Les images ont été améliorées par l\'IA.', 'success');
-      
-      return views;
-      
-    } catch (error) {
-      console.error('❌ Erreur lors de la sublimation:', error);
-      btn.disabled = false;
-      btn.innerHTML = '✨ Sublimer avec l\'IA';
-      if (progress) progress.hidden = true;
-      showToast('Erreur lors de la sublimation : ' + error.message, 'error');
-      throw error;
-    }
-  }
-
-  /**
-   * Capturer les vues 3D
-   */
-  async function capture3DViews(data, studio) {
-    const views = [];
-    
-    // Si le module premium est disponible, utiliser ses sélecteurs de vues
-    if (typeof ClientBrochurePremium !== 'undefined' && ClientBrochurePremium.selectShots) {
-      const shots = ClientBrochurePremium.selectShots(data, studio.hs);
-      
-      // Capture de la façade
-      const facadeImg = studio.capture(shots.facade, 1600, 800, 1, { clean: true });
-      views.push({
-        type: 'facade',
-        label: shots.facade.label || 'Façade principale',
-        image: facadeImg,
-        width: 1600,
-        height: 800
-      });
-      
-      // Capture des vues intérieures
-      for (const shot of shots.interior) {
-        const img = studio.capture(shot, 1200, 750, 1, { clean: true });
-        views.push({
-          type: 'interior',
-          label: shot.label || 'Vue intérieure',
-          room: shot.room,
-          image: img,
-          width: 1200,
-          height: 750
-        });
-      }
-    } else {
-      // Fallback : capturer une vue par défaut
-      const defaultView = {
-        type: 'facade',
-        label: 'Vue principale',
-        width: 1600,
-        height: 800
-      };
-      
-      // Simuler une capture si pas de studio disponible
-      defaultView.image = generatePlaceholderImage(1600, 800, 'Vue 3D');
-      views.push(defaultView);
-    }
-    
-    return views;
-  }
-
-  /**
-   * Simuler l'amélioration IA (à remplacer par un vrai appel API)
-   */
-  async function simulateAIEnhancement(views) {
-    // Simuler un traitement de 2 secondes
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Marquer les vues comme améliorées
-    views.forEach(view => {
-      view.enhanced = true;
-      view.enhancedAt = Date.now();
-      view.enhancements = [
-        'Texture améliorée',
-        'Éclairage optimisé',
-        'Détails ajoutés',
-        'Rendu photoréaliste'
-      ];
-    });
-    
-    console.log('🤖 IA : Améliorations simulées appliquées');
-  }
-
-  /**
-   * Générer une image placeholder (fallback)
-   */
-  function generatePlaceholderImage(width, height, label) {
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    
-    // Fond dégradé
-    const gradient = ctx.createLinearGradient(0, 0, width, height);
-    gradient.addColorStop(0, '#667eea');
-    gradient.addColorStop(1, '#764ba2');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, height);
-    
-    // Texte
-    ctx.fillStyle = 'white';
-    ctx.font = 'bold 48px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, width / 2, height / 2);
-    
-    return canvas.toDataURL('image/jpeg', 0.9);
-  }
-
-  /**
-   * Stocker les images améliorées
-   */
-  function storeEnhancedImages(views) {
-    try {
-      const data = {
-        images: views,
-        timestamp: Date.now(),
-        version: '1.0'
-      };
-      
-      localStorage.setItem('ai-enhanced-images', JSON.stringify(data));
-      
-      // Aussi dans l'état global
-      if (window.EDITOR_STATE) {
-        window.EDITOR_STATE.aiEnhanced = data;
-      }
-      
-      console.log('💾 Images améliorées stockées:', views.length, 'vues');
-    } catch (error) {
-      console.warn('⚠️ Impossible de stocker les images:', error);
-    }
-  }
-
-  /**
-   * Charger les images améliorées
-   */
-  function loadEnhancedImages() {
-    try {
-      const stored = localStorage.getItem('ai-enhanced-images');
-      if (stored) {
-        return JSON.parse(stored);
-      }
-    } catch (error) {
-      console.warn('⚠️ Impossible de charger les images:', error);
-    }
-    return null;
-  }
-
-  /**
-   * Vérifier si les rendus ont été sublimés
-   */
-  function isEnhanced() {
-    if (enhancedImages) return true;
-    
-    const data = loadEnhancedImages();
-    return data && data.images && data.images.length > 0;
-  }
-
-  /**
-   * Effacer les améliorations IA
-   */
-  function clearEnhanced() {
-    enhancedImages = null;
-    localStorage.removeItem('ai-enhanced-images');
-    
-    if (window.EDITOR_STATE) {
-      window.EDITOR_STATE.aiEnhanced = null;
-    }
-    
-    if (window.currentVariant) {
-      window.currentVariant.aiEnhanced = false;
-    }
-    
-    const status = document.getElementById('ai-status');
-    if (status) status.hidden = true;
-    
-    const btn = document.getElementById('btn-sublimate');
-    if (btn) btn.innerHTML = '✨ Sublimer avec l\'IA';
-    
-    console.log('🗑️ Améliorations IA effacées');
-  }
-
-  /**
-   * Afficher une notification
-   */
-  function showToast(message, type = 'info') {
-    const toast = document.getElementById('ed-toast');
-    if (toast) {
-      toast.textContent = message;
-      toast.className = `ed-toast show ${type}`;
-      setTimeout(() => {
-        toast.classList.remove('show');
-      }, 4000);
-    }
-  }
-
-  // Initialisation au chargement
-  function init() {
-    const data = loadEnhancedImages();
-    if (data && data.images && data.images.length > 0) {
-      enhancedImages = data;
-      
-      // Mettre à jour l'UI
-      const status = document.getElementById('ai-status');
-      if (status) status.hidden = false;
-      
-      const btn = document.getElementById('btn-sublimate');
-      if (btn) btn.innerHTML = '✨ Rendus sublimés !';
-      
-      if (window.currentVariant) {
-        window.currentVariant.aiEnhanced = true;
-      }
-      
-      console.log('✅ IA : Images améliorées détectées au chargement');
-    }
-  }
-
-  return {
-    sublimateWithAI,
-    isEnhanced,
-    loadEnhancedImages,
-    clearEnhanced,
-    init
+  /** Modèles autorisés par serve.js (IMAGE_MODELS) ; le premier est utilisé par défaut. */
+  const MODELS = {
+    'google/gemini-3.1-flash-image': { label: 'Gemini 3.1 Flash Image', perImageUSD: 0.068 },
+    'bytedance-seed/seedream-5-0-flash': { label: 'Seedream 5.0 Flash (brouillon)', perImageUSD: 0.018 }
   };
+  const DEFAULT_MODEL = 'google/gemini-3.1-flash-image';
+  const EXTERIOR = /facade|fa[cç]ade|aerien|a[ée]rien|porche|exterieur|ext[ée]rieur|jardin/i;
+  const MAX_IMAGES = 3; // 1 vue extérieure + 2 vues intérieures : ce qu'utilise le catalogue
+
+  let lastMedia = null;
+
+  // =====================================================================
+  // CHOIX DES IMAGES (pur, testable sous Node)
+  // =====================================================================
+
+  const baseName = file => String(file).split('/').pop().replace(/\.[a-z0-9]+$/i, '');
+  const isExterior = name => EXTERIOR.test(name) && !/^soir-sejour/i.test(name);
+  const isPlan = name => /^plan-/i.test(name);
+
+  /**
+   * Captures 3D à sublimer : celles qui n'ont pas encore d'image IA, la vue extérieure d'abord.
+   * @param {{images: object[], renders: string[]}} media — réponse de api/gallery/media
+   */
+  function planSublimation(media, max = MAX_IMAGES) {
+    const images = media?.images || [];
+    const done = new Set(images.map(image => image.reference).filter(Boolean));
+    const candidates = (media?.renders || [])
+      .filter(file => /\.(?:jpe?g|png)$/i.test(file) && !isPlan(baseName(file)) && !done.has(file))
+      .map(file => ({ file, name: baseName(file), exterior: isExterior(baseName(file)) }));
+    // On complète seulement ce qui manque aux documents : 1 vue extérieure et 2 intérieures au total.
+    const doneExterior = images.some(image => !image.room && isExterior(baseName(image.reference || image.file)));
+    const doneInteriors = new Set(images.filter(image => image.room && !isPlan(baseName(image.reference || image.file)))
+      .map(image => image.reference || image.file)).size;
+    const exterior = doneExterior ? [] : candidates.filter(c => c.exterior).slice(0, 1);
+    const interiors = candidates.filter(c => !c.exterior && !/^soir-/i.test(c.name)).slice(0, Math.max(0, max - 1 - doneInteriors));
+    return [...exterior, ...interiors].slice(0, max).map(c => ({
+      ...c,
+      id: `photor-${c.name}`.slice(0, 76),
+      label: c.name.replace(/[-_]+/g, ' ').replace(/^\w/, ch => ch.toUpperCase())
+    }));
+  }
+
+  /**
+   * Images IA du projet pour les documents : une vue extérieure et jusqu'à deux intérieures.
+   * Les images générées priment ; à défaut, rien (les documents gardent le plan).
+   */
+  function pickImages(media, interiorsWanted = 2) {
+    const images = (media?.images || []).filter(image => /\.(?:jpe?g|png)$/i.test(image.file || ''));
+    const nameOf = image => baseName(image.reference || image.file);
+    const facade = images.find(image => image.cover) || images.find(image => !image.room && isExterior(nameOf(image)))
+      || images.find(image => !image.room && !isPlan(nameOf(image)));
+    // Une image par capture d'origine : la plus récente du manifeste (sublimation la plus récente).
+    const byReference = new Map();
+    for (const image of images) {
+      if (image === facade || !image.room || isPlan(nameOf(image))) continue;
+      byReference.set(image.reference || image.file, image);
+    }
+    const interiors = [...byReference.values()].slice(0, interiorsWanted);
+    return { facade: facade || null, interiors };
+  }
+
+  function estimateUSD(count, model = DEFAULT_MODEL) {
+    return Math.round(count * (MODELS[model]?.perImageUSD || MODELS[DEFAULT_MODEL].perImageUSD) * 1000) / 1000;
+  }
+
+  // =====================================================================
+  // ACCÈS AU SERVEUR LOCAL
+  // =====================================================================
+
+  const api = (endpoint, slug) => `${endpoint}?project=${encodeURIComponent(slug)}`;
+
+  async function readJson(response, what) {
+    let body = null;
+    try { body = await response.json(); } catch (_) { /* réponse non JSON */ }
+    if (!response.ok || body?.error) {
+      const detail = body?.error?.message || body?.error || `HTTP ${response.status}`;
+      throw new Error(`${what} : ${detail}`);
+    }
+    return body;
+  }
+
+  async function loadMedia(slug, { fetch: fetchImpl = fetch } = {}) {
+    lastMedia = await readJson(await fetchImpl(api('api/gallery/media', slug), { cache: 'no-store' }), 'Médias du projet');
+    return lastMedia;
+  }
+
+  async function dataUrl(url, fetchImpl = fetch) {
+    if (url.startsWith('data:image/')) return url;
+    const response = await fetchImpl(url);
+    if (!response.ok) throw new Error(`Image inaccessible (HTTP ${response.status}) : ${url}`);
+    const blob = await response.blob();
+    if (typeof FileReader === 'undefined') { // Node (tests)
+      const type = blob.type || (/\.png$/i.test(url) ? 'image/png' : 'image/jpeg');
+      return `data:${type};base64,${Buffer.from(await blob.arrayBuffer()).toString('base64')}`;
+    }
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error(`Lecture impossible : ${url}`));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function dimensions(source) {
+    if (typeof Image === 'undefined') return Promise.resolve({ width: 1920, height: 1080 }); // Node (tests)
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      img.onerror = () => resolve({ width: 1920, height: 1080 });
+      img.src = source;
+    });
+  }
+
+  /** Les PNG générés pèsent plusieurs Mo : JPEG 85 % (max 2000 px) pour garder un PDF léger. */
+  async function toJpeg(source) {
+    if (typeof document === 'undefined' || !/^data:image\/png/i.test(source)) return source;
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('Image illisible'));
+      el.src = source;
+    });
+    const scale = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.85);
+  }
+
+  /** Charge les images choisies par pickImages en data URL, prêtes pour jsPDF. */
+  async function documentImages(slug, options = {}) {
+    if (!slug) return { facade: null, interiors: [] };
+    const media = await loadMedia(slug, options);
+    const picked = pickImages(media);
+    const load = async image => image && ({
+      data: await toJpeg(await dataUrl(image.file, options.fetch || fetch)),
+      label: String(image.label || '').replace(/\s+[—-]\s+photor[ée]aliste$/i, ''),
+      width: image.width || 1920,
+      height: image.height || 1080
+    });
+    return { facade: await load(picked.facade), interiors: await Promise.all(picked.interiors.map(load)) };
+  }
+
+  // =====================================================================
+  // SUBLIMATION
+  // =====================================================================
+
+  /**
+   * Photoréalise les captures 3D du projet qui ne le sont pas encore.
+   * @param {string} slug — projet enregistré (projects/<slug>)
+   * @param {object} [options] — { model, fetch, confirm, onProgress }
+   * @returns {Promise<{created: object[], skipped: string}>}
+   */
+  async function sublimateWithAI(slug, options = {}) {
+    if (!slug) throw new Error('Enregistrez le projet avant de sublimer ses rendus.');
+    const fetchImpl = options.fetch || fetch;
+    const ask = options.confirm || (message => window.confirm(message));
+    const progress = options.onProgress || (() => {});
+    const model = MODELS[options.model] ? options.model : DEFAULT_MODEL;
+
+    const status = await readJson(await fetchImpl('api/ai/status', { cache: 'no-store' }), 'Statut IA');
+    if (!status.configured) throw new Error('Clé OpenRouter absente sur le serveur local (openrouter.key ou OPENROUTER_API_KEY).');
+
+    const media = await loadMedia(slug, { fetch: fetchImpl });
+    if (!(media.renders || []).length) {
+      return { created: [], skipped: 'Aucune capture 3D pour ce projet : ouvrez la visite 3D et enregistrez des vues, puis relancez la sublimation.' };
+    }
+    const plan = planSublimation(media);
+    if (!plan.length) return { created: [], skipped: 'Toutes les vues utiles sont déjà sublimées.' };
+
+    const list = plan.map(p => `• ${p.label}`).join('\n');
+    const cost = estimateUSD(plan.length, model);
+    if (!ask(`Sublimer ${plan.length} vue(s) avec ${MODELS[model].label} ?\n\n${list}\n\nCoût estimé : environ ${cost.toLocaleString('fr-FR')} $ (facturé par OpenRouter). Continuer ?`)) {
+      return { created: [], skipped: 'Sublimation annulée.' };
+    }
+
+    const created = [];
+    for (const [index, item] of plan.entries()) {
+      progress(`Sublimation ${index + 1}/${plan.length} : ${item.label}…`);
+      const source = await dataUrl(item.file, fetchImpl);
+      const result = await readJson(await fetchImpl('api/ai/images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, prompt: PHOTOREAL_PROMPT, aspect_ratio: '16:9', input_references: [{ type: 'image_url', image_url: { url: source } }] })
+      }), `Génération « ${item.label} »`);
+      const generated = result.data?.[0];
+      const output = generated?.b64_json ? `data:${generated.media_type || 'image/png'};base64,${generated.b64_json}` : generated?.url;
+      if (!output) throw new Error(`Le modèle n'a pas renvoyé d'image pour « ${item.label} ».`);
+      const image = await dataUrl(output, fetchImpl);
+      const size = await dimensions(image);
+      const saved = await readJson(await fetchImpl(api('api/save-generated', slug), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: item.id, data: image,
+          metadata: { reference: item.file, room: item.exterior ? null : item.name, label: `${item.label} — photoréaliste`, width: size.width, height: size.height, model, prompt: PHOTOREAL_PROMPT }
+        })
+      }), `Enregistrement « ${item.label} »`);
+      created.push(saved.item);
+    }
+    await loadMedia(slug, { fetch: fetchImpl });
+    return { created, skipped: '' };
+  }
+
+  /** Vrai si le projet chargé en dernier a au moins une image générée par IA. */
+  function isEnhanced() {
+    return !!(lastMedia?.images || []).length;
+  }
+
+  return { sublimateWithAI, documentImages, loadMedia, isEnhanced, planSublimation, pickImages, estimateUSD, MODELS, DEFAULT_MODEL, PHOTOREAL_PROMPT };
 })();
 
-// Initialisation automatique
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => AIEnhance.init());
-} else {
-  AIEnhance.init();
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = AIEnhance;
 }

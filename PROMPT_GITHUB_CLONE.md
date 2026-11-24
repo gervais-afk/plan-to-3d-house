@@ -31,7 +31,7 @@ git checkout -b ma-nouvelle-branche origin/main
 **Projet** : Plan to 3D House — Application web de conversion de plans 2D en visites 3D  
 **Stack** : Vanilla JavaScript (ES6+), HTML5, CSS3  
 **État** : ✅ Production ready — Modules stratégiques + PDF premium intégrés  
-**Tests** : 423 tests unitaires (419 réussis, 4 ignorés, 0 échec) + 13 tests d'intégration  
+**Tests** : 431 tests unitaires (427 réussis, 4 ignorés, 0 échec) + 13 tests d'intégration  
 **Dernière mise à jour** : 24 novembre 2026
 
 ### 🎯 Ce Qui est Terminé
@@ -155,7 +155,7 @@ cat INTEGRATION_COMPLETE.md
 # Installer Node.js si nécessaire (v18+)
 node --version
 
-# Exécuter tous les tests unitaires (423 tests)
+# Exécuter tous les tests unitaires (431 tests)
 node --test tests/*.test.cjs
 
 # Exécuter les tests d'intégration (13 tests)
@@ -168,8 +168,8 @@ node --test tests/vectorization.test.cjs
 ### ✅ Résultat Attendu
 
 ```
-# tests 423
-# pass 419
+# tests 431
+# pass 427
 # fail 0
 # skipped 0
 ```
@@ -328,10 +328,10 @@ await ClientBrochurePremium.exportPDF(data, studio, variant);
 
 ### Priorité Haute
 
-1. **Intégrer l'API IA réelle**
-   - Actuellement simulée dans `js/aiEnhance.js`
-   - Remplacer `simulateAIEnhancement()` par un vrai appel API
-   - APIs possibles : OpenAI DALL-E, Stability AI, Midjourney API
+1. **Sublimation IA** ✅ branchée sur OpenRouter
+   - `js/aiEnhance.js` photoréalise les captures 3D de la visite via `api/ai/images` (serveur local)
+   - Les images sont enregistrées dans le projet et reprises par le catalogue premium et l'APS
+   - Reste : capturer les vues 3D depuis l'éditeur même (aujourd'hui, il faut passer par la visite 3D)
 
 2. **Ajouter plus de styles PDF**
    - Méditerranéen (bleu ciel, blanc, terracotta)
@@ -417,7 +417,7 @@ await ClientBrochurePremium.exportPDF(data, studio, variant);
 Pour vérifier que tu es prêt à travailler :
 
 - [ ] Projet cloné depuis GitHub
-- [ ] Tests exécutés (419 pass, 0 fail, 4 skipped)
+- [ ] Tests exécutés (427 pass, 0 fail, 4 skipped)
 - [ ] Éditeur ouvert dans le navigateur
 - [ ] Bouton "✨ Sublimer avec l'IA" testé
 - [ ] Bouton "🎨 Catalogue Premium" testé
@@ -434,7 +434,7 @@ Pour vérifier que tu es prêt à travailler :
 **Projet** : Plan to 3D House  
 **État** : ✅ Production ready  
 **Modules** : 11 modules stratégiques + PDF premium  
-**Tests** : 423 tests, 0 échec  
+**Tests** : 431 tests, 0 échec  
 **Dernière action** : Intégration PDF premium (commit `bd9f0f6`)  
 **Prochaine action** : Continuer le développement
 

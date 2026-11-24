@@ -88,3 +88,12 @@ test('APS : un projet à étage et un long programme passent sur plusieurs pages
 test('APS : un projet sans pièces est refusé clairement', async () => {
   await assert.rejects(APSGenerator.generateAPS({}, null, null, { JsPDF: jsPDF, save: false }), /sans pièces/);
 });
+
+test('APS : la façade photoréaliste du projet illustre la couverture', async () => {
+  const fs = require('node:fs');
+  const coverImage = { data: `data:image/jpeg;base64,${fs.readFileSync('projects/villa-serena/generated/renders/facade-sud.jpg').toString('base64')}`, width: 1376, height: 768 };
+  const { all } = await render(villa, { coverImage });
+  assert.ok(all.includes('générée par IA'));
+  const without = await render(villa);
+  assert.ok(!without.all.includes('générée par IA'));
+});

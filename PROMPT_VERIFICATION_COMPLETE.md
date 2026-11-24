@@ -15,7 +15,7 @@
 ```
 [ ] 1. Clonage et installation
 [ ] 2. Structure du projet (fichiers clés présents)
-[ ] 3. Tests unitaires (423 tests)
+[ ] 3. Tests unitaires (431 tests)
 [ ] 4. Tests d'intégration (13 tests)
 [ ] 5. Vérification des modules stratégiques (11 modules)
 [ ] 6. Vérification du module PDF Premium
@@ -142,7 +142,7 @@ done
 
 ---
 
-## 🧪 ÉTAPE 3 : TESTS UNITAIRES (423 tests)
+## 🧪 ÉTAPE 3 : TESTS UNITAIRES (431 tests)
 
 ### Commandes à exécuter
 
@@ -151,8 +151,8 @@ done
 node --test tests/*.test.cjs 2>&1 | tail -20
 
 # Résultat attendu (dernières lignes) :
-# # tests 423
-# # pass 419
+# # tests 431
+# # pass 427
 # # fail 0
 # # skipped 0
 ```
@@ -169,8 +169,8 @@ done
 ```
 
 ### ✅ Critères de succès
-- **423 tests exécutés**
-- **419 tests passent** (4 ignorés, 0 échec)
+- **431 tests exécutés**
+- **427 tests passent** (4 ignorés, 0 échec)
 - **0 test échoue**
 - **0 test ignoré**
 
@@ -610,8 +610,8 @@ xdg-open aps-template.html
 - [ ] Tous les fichiers présents
 
 ### 2. Tests Unitaires
-- [ ] 423 tests exécutés
-- [ ] 419 tests passent, 4 ignorés
+- [ ] 431 tests exécutés
+- [ ] 427 tests passent, 4 ignorés
 - [ ] 0 test échoue
 
 ### 3. Tests d'Intégration
@@ -778,7 +778,7 @@ python3 serve.py
 Avant de valider, vérifier :
 
 ```
-[ ] Tous les tests unitaires passent (419/423, 4 ignorés)
+[ ] Tous les tests unitaires passent (427/431, 4 ignorés)
 [ ] Tous les tests d'intégration passent (13/13)
 [ ] Tous les modules stratégiques fonctionnent (11/11)
 [ ] Le module PDF Premium fonctionne

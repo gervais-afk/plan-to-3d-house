@@ -174,7 +174,7 @@ function verifyModules() {
 
   // Modules spéciaux qui nécessitent un environnement navigateur
   const browserModules = [
-    { name: 'AIEnhance', file: './js/aiEnhance.js', note: 'Module navigateur (nécessite DOM)' }
+    { name: 'AIEnhance', file: './js/aiEnhance.js', note: 'Sublimation via le relais OpenRouter (api/ai/images)' }
   ];
 
   let allLoaded = true;
@@ -201,7 +201,8 @@ function verifyModules() {
   browserModules.forEach(mod => {
     if (fileExists(mod.file)) {
       const content = fs.readFileSync(mod.file, 'utf8');
-      if (content.includes('AIEnhance') && content.includes('sublimateWithAI')) {
+      // Sublimation réelle : relais OpenRouter du serveur local, plus de simulation.
+      if (content.includes('sublimateWithAI') && content.includes('api/ai/images') && !/simulateAIEnhancement|Améliorations simulées/.test(content)) {
         pass(`${mod.name} - ${mod.note}`);
       } else {
         fail(`${mod.name} - Contenu invalide`);
@@ -490,7 +491,7 @@ function generateReport() {
     console.log('');
     log('  Toutes les vérifications automatiques passent.', 'green');
     log('  Non couvert ici : l\'affichage dans le navigateur (à tester dans l\'éditeur)', 'yellow');
-    log('  et la sublimation IA, encore simulée (aucun service d\'IA appelé).', 'yellow');
+    log('  et un appel OpenRouter réel (facturé), testé avec un faux serveur.', 'yellow');
   } else {
     log('  ⚠️  DES PROBLÈMES ONT ÉTÉ DÉTECTÉS', 'red');
     log('  ❌ PROJET NON VALIDÉ', 'red');

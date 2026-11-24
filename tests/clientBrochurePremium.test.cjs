@@ -65,3 +65,16 @@ test('Catalogue premium : les options du dialogue sont respectées', async () =>
 test('Catalogue premium : un projet sans pièces est refusé clairement', async () => {
   await assert.rejects(Premium.exportPDF({ rooms: [] }, null, null, () => {}, { JsPDF: jsPDF, save: false }), /sans pièces/);
 });
+
+test('Catalogue premium : les images IA du projet illustrent la couverture et les intérieurs', async () => {
+  const fs = require('node:fs');
+  const image = (file, label) => ({ data: `data:image/jpeg;base64,${fs.readFileSync(file).toString('base64')}`, label, width: 1376, height: 768 });
+  const renders = 'projects/villa-serena/generated/renders/';
+  const images = { facade: image(`${renders}facade-sud.jpg`, 'Façade sud'), interiors: [image(`${renders}sejour.jpg`, 'Séjour'), image(`${renders}cuisine.jpg`, 'Cuisine')] };
+  const { all } = await render(villa, { images });
+  for (const expected of ['Façade sud', 'Vues intérieures', 'Séjour', 'Cuisine', 'générées par IA']) {
+    assert.ok(all.includes(expected), `« ${expected} » absent`);
+  }
+  assert.ok(!all.includes('Programme des espaces'), 'les vues remplacent le programme');
+  assert.ok(!all.includes('Plan du rez-de-chaussée'), 'la façade remplace le plan en couverture');
+});

@@ -43,10 +43,10 @@ node verify_all.js
 ▶ 3. VÉRIFICATION DES TESTS
 ----------------------------------------------------------------------
   Exécution des tests unitaires...
-  Tests exécutés: 423
-  Tests réussis: 419
+  Tests exécutés: 431
+  Tests réussis: 427
   Tests échoués: 0
-  ✅ Tous les tests passent (419/423)
+  ✅ Tous les tests passent (427/431)
 
 ...
 
@@ -100,7 +100,7 @@ node verify_all.js
 - AIEnhance (navigateur)
 - APSGenerator
 
-### 3. Tests unitaires (423 tests)
+### 3. Tests unitaires (431 tests)
 - Exécution automatique de tous les tests
 - Vérification du taux de réussite
 - Détection des tests échoués
@@ -169,7 +169,7 @@ Le script génère un rapport JSON : `verification_report.json`
 - Tous les modules sont fonctionnels
 - La documentation est complète
 - L'intégration est correcte
-- Toutes les vérifications automatiques passent (la sublimation IA reste simulée)
+- Toutes les vérifications automatiques passent (la sublimation IA est testée avec un faux serveur, sans appel facturé)
 
 ### ⚠️ PROJET VALIDÉ AVEC AVERTISSEMENTS
 
@@ -237,8 +237,8 @@ Le script génère un rapport JSON : `verification_report.json`
 |-----------|--------|
 | Fichiers vérifiés | 33 |
 | Modules vérifiés | 14 |
-| Tests exécutés | 423 |
-| Tests réussis | 419 |
+| Tests exécutés | 431 |
+| Tests réussis | 427 |
 | Vérifications totales | 87 |
 | Taux de succès | 100% |
 
@@ -357,7 +357,7 @@ node verify_all.js
 - 3 avertissements mineurs
 - Taux de succès : 100%
 
-**Toutes les vérifications automatiques passent.** La sublimation IA reste simulée : à brancher sur un vrai service avant la mise en production.
+**Toutes les vérifications automatiques passent.** La sublimation IA appelle OpenRouter via le serveur local ; un premier essai réel (facturé, environ 0,07 $ par image) reste à faire dans l'éditeur.
 
 ---
 

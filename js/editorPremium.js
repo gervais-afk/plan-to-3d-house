@@ -118,19 +118,64 @@
       return;
     }
 
-    // La sublimation retravaille des vues 3D : sans studio 3D (cas de l'éditeur), il n'y a rien
-    // à sublimer. On le dit clairement plutôt que de marquer des images inexistantes comme « améliorées ».
-    const studio = getStudio();
-    if (!studio) {
-      showToast('La sublimation IA a besoin des vues 3D de la visite, que l\'éditeur ne calcule pas. Le catalogue premium utilise le plan à la place.', 'info');
+    const slug = await savedSlug(data);
+    if (!slug) {
+      showToast('Enregistrez le projet, puis enregistrez des vues dans la visite 3D avant de les sublimer.', 'error');
       return;
     }
 
+    // Photoréalisation des captures 3D enregistrées par la visite, via OpenRouter (serveur local).
+    const btn = document.getElementById('btn-sublimate');
+    const status = document.getElementById('ai-status');
+    const label = btn?.textContent;
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Sublimation…'; }
     try {
-      await AIEnhance.sublimateWithAI(data, studio);
+      const result = await AIEnhance.sublimateWithAI(slug, {
+        onProgress: message => { if (status) status.textContent = message; }
+      });
+      if (result.skipped) {
+        showToast(result.skipped, 'info');
+        if (status) status.textContent = result.skipped;
+      } else {
+        const message = `${result.created.length} vue(s) sublimée(s) et enregistrée(s) dans le projet : elles seront utilisées par le catalogue et l'APS.`;
+        showToast(message, 'success');
+        if (status) status.textContent = message;
+      }
       updateAIStatus();
     } catch (error) {
       console.error('Erreur sublimation:', error);
+      showToast('Sublimation interrompue : ' + error.message, 'error');
+      if (status) status.textContent = '✗ ' + error.message;
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = label; }
+    }
+  }
+
+  /**
+   * Slug du projet s'il est enregistré sur le serveur local (sinon null : rien à lire ni à créer).
+   */
+  async function savedSlug(data) {
+    const slug = (window.ACTIVE_PROJECT_SLUG || data?.meta?.slug || '').toLowerCase();
+    if (!/^[a-z0-9-]{1,60}$/.test(slug)) return null;
+    try {
+      const response = await fetch('api/projects', { cache: 'no-store' });
+      const projects = response.ok ? await response.json() : [];
+      return projects.some(project => project.slug === slug) ? slug : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /** Images IA du projet (façade + intérieurs) ; documents sans images si rien n'est disponible. */
+  async function projectImages(data) {
+    if (typeof AIEnhance === 'undefined') return { facade: null, interiors: [] };
+    const slug = await savedSlug(data);
+    if (!slug) return { facade: null, interiors: [] };
+    try {
+      return await AIEnhance.documentImages(slug);
+    } catch (error) {
+      console.warn('[EditorPremium] Images IA indisponibles :', error);
+      return { facade: null, interiors: [] };
     }
   }
 
@@ -142,6 +187,10 @@
     if (dlgPremium) {
       dlgPremium.showModal();
     }
+    // Statut IA à jour pour le projet ouvert (images réellement présentes dans le projet).
+    savedSlug(getProjectData()).then(slug => slug && typeof AIEnhance !== 'undefined' ? AIEnhance.loadMedia(slug) : null)
+      .catch(() => null)
+      .finally(updateAIStatus);
   }
 
   /**
@@ -160,8 +209,9 @@
     }
 
     try {
-      // La vue 3D de couverture est facultative : l'éditeur n'a pas toujours de studio 3D.
-      await APSGenerator.generateAPS(data, window.studio || window.RENDER_STUDIO || null);
+      // Couverture : façade photoréaliste du projet si elle existe, sinon vue 3D du studio, sinon rien.
+      const images = await projectImages(data);
+      await APSGenerator.generateAPS(data, window.studio || window.RENDER_STUDIO || null, null, { coverImage: images.facade });
       showToast('✅ APS généré avec succès !', 'success');
     } catch (error) {
       console.error('Erreur génération APS:', error);
@@ -193,12 +243,11 @@
 
     try {
       const variant = window.currentVariant ? { ...window.currentVariant } : null;
-      // Le badge « sublimé » n'a de sens que si des vues 3D ont réellement été traitées.
-      if (variant && studio && typeof AIEnhance !== 'undefined' && AIEnhance.isEnhanced()) {
-        variant.aiEnhanced = true;
-      }
+      // Images photoréalistes du projet : elles priment sur le studio 3D et sur le plan.
+      const images = await projectImages(data);
 
       await ClientBrochurePremium.exportPDF(data, studio, variant, () => {}, {
+        images,
         style: currentStyle,
         includeStats: pdfOptions.includeStats,
         includePlan: pdfOptions.includePlan,
