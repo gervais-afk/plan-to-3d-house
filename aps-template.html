@@ -298,8 +298,8 @@
     </div>
     
     <div class="control-group">
-      <label>Budget Estimé (€)</label>
-      <input type="text" id="budget" value="250 000" placeholder="Budget prévisionnel">
+      <label>Budget estimé (FCFA)</label>
+      <input type="text" id="budget" value="43 500 000" placeholder="Budget prévisionnel">
     </div>
     
     <div class="control-group">
@@ -463,8 +463,8 @@
       
       <h3>3.1 Estimation Globale</h3>
       <div class="highlight-box">
-        <strong>Budget prévisionnel : <span id="estBudget">250 000 €</span></strong><br>
-        <small>Soit environ <span id="estPerSqm">1 667</span> €/m²</small>
+        <strong>Budget prévisionnel : <span id="estBudget">43 500 000 FCFA</span></strong><br>
+        <small>Soit environ <span id="estPerSqm">290 000</span> FCFA/m²</small>
       </div>
       
       <h3>3.2 Répartition par Lots</h3>
@@ -473,7 +473,7 @@
           <tr>
             <th>Lot</th>
             <th>% du coût</th>
-            <th>Estimation (€)</th>
+            <th>Estimation (FCFA)</th>
           </tr>
         </thead>
         <tbody>
@@ -530,7 +530,7 @@
           <tr style="background: var(--light-gray); font-weight: bold;">
             <td>TOTAL</td>
             <td>100%</td>
-            <td id="totalBudget">250 000</td>
+            <td id="totalBudget">43 500 000</td>
           </tr>
         </tbody>
       </table>
@@ -687,7 +687,7 @@
   
   <script>
     // Mise à jour du template
-    function updateTemplate() {
+    function updateTemplate(silent = false) {
       const projectName = document.getElementById('projectName').value;
       const clientName = document.getElementById('clientName').value;
       const description = document.getElementById('projectDescription').value;
@@ -712,9 +712,9 @@
       document.getElementById('progTotal').textContent = area;
       
       // Mise à jour de l'estimation
-      const budgetNum = parseInt(budget.replace(/\s/g, '').replace('€', ''));
-      document.getElementById('estBudget').textContent = budget;
-      document.getElementById('estPerSqm').textContent = Math.round(budgetNum / parseInt(area));
+      const budgetNum = parseInt(budget.replace(/[^0-9]/g, ''), 10) || 0;
+      document.getElementById('estBudget').textContent = `${budgetNum.toLocaleString('fr-FR')} FCFA`;
+      document.getElementById('estPerSqm').textContent = Math.round(budgetNum / (parseInt(area, 10) || 1)).toLocaleString('fr-FR');
       document.getElementById('totalBudget').textContent = budgetNum.toLocaleString('fr-FR');
       
       // Mise à jour des lots
@@ -733,12 +733,12 @@
         if (footer) footer.textContent = projectName;
       }
       
-      alert('✅ Template mis à jour avec succès !');
+      if (silent !== true) alert('✅ Template mis à jour avec succès !');
     }
     
     // Initialisation
     document.addEventListener('DOMContentLoaded', () => {
-      updateTemplate();
+      updateTemplate(true);
     });
   </script>
 </body>

@@ -148,15 +148,14 @@
     }
 
     const data = getProjectData();
-    const studio = getStudio();
-
-    if (!data || !studio) {
-      showToast('Projet ou studio non disponible', 'error');
+    if (!data || !data.rooms?.length) {
+      showToast('Dessinez au moins une pièce avant de générer l\'APS', 'error');
       return;
     }
 
     try {
-      await APSGenerator.generateAPS(data, studio);
+      // La vue 3D de couverture est facultative : l'éditeur n'a pas toujours de studio 3D.
+      await APSGenerator.generateAPS(data, window.studio || window.RENDER_STUDIO || null);
       showToast('✅ APS généré avec succès !', 'success');
     } catch (error) {
       console.error('Erreur génération APS:', error);
@@ -298,7 +297,8 @@
    * Obtenir les données du projet
    */
   function getProjectData() {
-    // Essayer différentes sources
+    // Source principale : le projet complet tel que l'éditeur l'enregistre (tous niveaux).
+    if (window.EditorAPI?.toProjectJson) return window.EditorAPI.toProjectJson();
     if (window.EDITOR_STATE) return window.EDITOR_STATE;
     if (window.projectData) return window.projectData;
     if (typeof getProject === 'function') return getProject();
