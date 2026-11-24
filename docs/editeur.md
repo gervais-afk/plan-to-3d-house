@@ -39,7 +39,7 @@ Ces boutons de la barre d'outils travaillent sur le projet **ouvert dans l'édit
 
 Produit un PDF de 6 pages à partir des données réelles du projet (`js/apsGenerator.js`) :
 
-1. **Couverture** : nom, sous-titre, maître d'ouvrage, ville, programme, date. Si le projet a une façade photoréaliste, elle illustre la couverture avec la mention « générée par IA, à titre d'illustration ».
+1. **Couverture** : nom, sous-titre, maître d'ouvrage, ville, programme, date. Si le projet a une façade photoréaliste validée « Catalogue » dans la galerie, elle illustre la couverture avec la mention « générée par IA, à titre d'illustration ».
 2. **Présentation** : nature (plain-pied ou R+n), surfaces habitables brute et nette, annexes, surface de référence, hauteur sous plafond, menuiseries.
 3. **Programme** : chaque pièce, son usage et sa surface, par niveau (pagination automatique).
 4. **Estimation** : lots et total en FCFA calculés par `CostEstimate`, comme le panneau **Estimation FCFA** (voir [estimation.md](estimation.md)).
@@ -52,8 +52,8 @@ Pour un APS personnalisable à la main, ouvrez `aps-template.html` (montants en 
 
 Brochure client de 2 pages (`js/clientBrochurePremium.js`), en 3 styles : **Moderne**, **Luxe**, **Industriel** (`setStyle()`).
 
-- **Couverture** : façade photoréaliste du projet si elle existe ; sinon vue 3D (dans la visite) ; sinon plan du rez-de-chaussée avec le nom des pièces. Statistiques : surface habitable, surface totale, nombre de pièces.
-- **Page 2** : plan de masse, puis deux vues intérieures photoréalistes si elles existent, sinon le programme des espaces.
+- **Couverture** : façade photoréaliste **validée « Catalogue »** si elle existe ; sinon vue 3D (dans la visite) ; sinon plan du rez-de-chaussée avec le nom des pièces. Statistiques : surface habitable, surface totale, nombre de pièces.
+- **Page 2** : plan de masse, puis deux vues intérieures photoréalistes validées si elles existent, sinon le programme des espaces.
 - Les cases du dialogue (statistiques, plan, vues intérieures) sont prises en compte.
 
 ### ✨ Sublimer avec l'IA
@@ -63,9 +63,12 @@ Photoréalise les **vues enregistrées dans la visite 3D** (`projects/<dossier>/
 1. Le projet doit être enregistré et avoir au moins une vue enregistrée dans la visite 3D (l'éditeur ne calcule pas de vue 3D lui-même).
 2. Seules les vues **manquantes** pour les documents sont traitées : au total une vue extérieure et deux vues intérieures.
 3. Une confirmation affiche les vues et le **coût estimé** (Gemini 3.1 Flash Image : environ 0,068 $ par image) avant tout appel facturé.
-4. Le serveur relaie l'appel (`POST api/ai/images`) avec le même prompt que la visite 3D, qui interdit de modifier murs, ouvertures et volumes ; l'image est enregistrée dans le projet (`api/save-generated`) et apparaît dans la galerie, le catalogue et l'APS.
+4. Le serveur relaie l'appel (`POST api/ai/images`) avec le prompt piloté par le projet (`js/aiPrompt.js`, comme la visite 3D) : prompt extérieur qui conserve arbres, ombres, ouvertures et couleur de façade, prompt intérieur selon l'usage de la pièce. L'image est enregistrée dans la galerie du projet (`api/save-generated`) avec son contrôle de fidélité.
+5. **Validation obligatoire** : un rendu IA peut inventer ou retirer des éléments (essais réels : lit posé sur la pelouse, arbres supprimés avec leur ombre restée, façade recolorée). Comparez-le à la vue 3D dans la galerie de la visite, puis cochez **Catalogue**. Le catalogue et l'APS n'utilisent **que** les images cochées ; sans image validée, ils gardent le plan.
 
-La clé OpenRouter est lue par `serve.js` dans `openrouter.key` (ignoré par Git) ou `OPENROUTER_API_KEY`. Le contrôle de fidélité de la galerie (`js/fidelityCheck.js`) signale les rendus qui s'écartent de la vue d'origine.
+Le contrôle de fidélité (`js/fidelityCheck.js`) compare les lignes de l'architecture : il repère une caméra déplacée ou une baie inventée, mais **pas** un objet ajouté ou retiré. Le contrôle visuel de l'architecte reste indispensable.
+
+La clé OpenRouter est lue par `serve.js` dans `openrouter.key` (ignoré par Git) ou `OPENROUTER_API_KEY`.
 
 ### Outils avancés
 
