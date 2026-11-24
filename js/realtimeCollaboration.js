@@ -96,11 +96,13 @@ const RealtimeCollaboration = (() => {
     
     // Si plus personne, nettoyer la session après 5 minutes
     if (session.users.size === 0) {
-      setTimeout(() => {
+      const cleanupTimer = setTimeout(() => {
         if (sessions.has(sessionId) && sessions.get(sessionId).users.size === 0) {
           sessions.delete(sessionId);
         }
       }, 5 * 60 * 1000);
+      // Sous Node.js, ce minuteur ne doit pas empêcher le processus de se terminer.
+      if (cleanupTimer && typeof cleanupTimer.unref === 'function') cleanupTimer.unref();
     }
   }
 
