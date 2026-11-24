@@ -18,7 +18,8 @@ test('Le socle de fidélité géométrique est toujours en tête du prompt', () 
     const { prompt } = AiPrompt.build({ kind, room: sejour });
     assert.match(prompt, FIDELITY);
     assert.ok(prompt.indexOf('Preserve') < 200, 'la contrainte de fidélité ouvre le prompt');
-    assert.match(prompt, /non-contractual/);
+    assert.doesNotMatch(prompt, /non-contractual|illustrative render/i);
+    assert.match(prompt, /watermarks/);
   }
   assert.match(AiPrompt.build({ kind: 'plan2d' }).prompt, /exact geometry of all walls/);
 });
@@ -28,6 +29,7 @@ test('La pièce et la finition choisie par le client apparaissent dans le prompt
   assert.match(prompt, /living room/);
   assert.match(prompt, /Séjour véranda/);
   assert.match(prompt, /light natural oak parquet/);
+  assert.match(prompt, /off-white ceiling/);
   assert.equal(tags.floor, 'oak');
   assert.equal(tags.use, 'living');
   assert.equal(tags.room, 'r3');
@@ -75,6 +77,7 @@ test('La façade choisie et le climat local pilotent un rendu extérieur', () =>
   const { prompt, tags } = AiPrompt.build({ kind: 'exterior', finishes: { facade: 'timber' }, city: 'douala' });
   assert.match(prompt, /timber cladding/);
   assert.match(prompt, /Douala/);
+  assert.match(prompt, /palm|mango/i);
   assert.equal(tags.city, 'douala');
 });
 

@@ -14,8 +14,8 @@ const AiPrompt = (() => {
   };
 
   const CLOSING = {
-    interior: 'Keep the existing furniture layout and circulation clear; add only sparse, correctly scaled styling where it cannot conceal or alter the architecture. Avoid people, vehicles, neighboring buildings, text, logos, watermarks, and decorative elements that are not supported by the reference. The image is an illustrative non-contractual mood render, not a technical source; fidelity must be visually reviewed against the source model.',
-    exterior: 'Keep every existing tree, hedge, fence, path and terrace exactly where the reference shows it: do not remove, add or move trees, and every shadow must be cast by an object visible in the image. Keep each opening as it is: an open bay stays open, a door stays a door, a window stays a window; do not turn openings into sliding glass doors. Do not place furniture, beds, rugs, lamps or curtains outdoors. Keep planting low and away from openings so it never hides or alters the architecture. Avoid people, vehicles, neighboring buildings, text, logos, watermarks, and elements not supported by the reference. The image is an illustrative non-contractual mood render, not a technical source; fidelity must be visually reviewed against the source model.',
+    interior: 'Keep the existing furniture layout and circulation clear; add only sparse, correctly scaled styling where it cannot conceal or alter the architecture. Avoid people, vehicles, neighboring buildings, text, captions, logos, watermarks, and decorative elements that are not supported by the reference.',
+    exterior: 'Keep every existing tree, hedge, fence, path and terrace exactly where the reference shows it, translating simplified 3D trees and hedges into authentic local tropical species (mango trees, palms, bougainvillea, broad-leaf shrubs): do not remove, add or move trees, and every shadow must be cast by an object visible in the image. Keep each opening as it is: an open bay stays open, a door stays a door, a window stays a window; do not turn openings into sliding glass doors. Do not place furniture, beds, rugs, lamps or curtains outdoors. Keep planting low and away from openings so it never hides or alters the architecture. Avoid people, vehicles, neighboring buildings, text, captions, logos, watermarks, and elements not supported by the reference.',
     plan2d: 'Infill solid walls with deep matte charcoal poché and subtle cast shadows. Add tastefully scaled minimalist top-down furniture and subtle potted plants. Keep all spaces clearly readable, with clean linen-white background, crisp lines, and refined architectural palette. No perspective distortion, no tilt, strictly 2D flat top-down. No text, logos or watermarks added.'
   };
 
@@ -47,8 +47,8 @@ const AiPrompt = (() => {
   ];
 
   const CLIMATES = {
-    douala: 'humid coastal tropical climate of Douala: soft hazy sky, lush broad-leaf vegetation',
-    'buea-kribi': 'coastal tropical climate: soft hazy sky, lush palms and broad-leaf vegetation',
+    douala: 'humid coastal tropical climate of Douala, Cameroon: warm luminous equatorial daylight, soft hazy tropical sky, lush broad-leaf plants, palms and mango foliage',
+    'buea-kribi': 'coastal tropical climate of Cameroon: warm equatorial daylight, soft hazy sky, lush palms and broad-leaf vegetation',
     yaounde: 'green hilly equatorial climate of Yaoundé: clear tropical sky, dense green vegetation',
     ebolowa: 'equatorial forest climate: humid sky, dense green vegetation',
     bafoussam: 'cool western highlands climate: clear sky, green terraced vegetation',
@@ -131,7 +131,7 @@ const AiPrompt = (() => {
       if (use) parts.push(`The space is ${use.phrase}${o.room?.name ? ` (« ${o.room.name} »)` : ''}.`);
       // Sans finition choisie, la façade garde sa couleur : un essai réel avait viré un enduit blanc au beige.
       const materials = kind === 'interior'
-        ? [floorId ? `floor in ${FLOORS[floorId]}` : null, 'walls in warm mineral lime plaster', 'matte black aluminium window frames']
+        ? [floorId ? `floor in ${FLOORS[floorId]}` : null, 'walls in light warm mineral lime plaster', 'clean flat matte off-white ceiling', 'matte black aluminium window frames']
         : [facadeId ? `facade in ${FACADES[facadeId]}` : 'facade colour and finish exactly as in the reference', 'matte black aluminium window frames', 'restrained natural stone details'];
       parts.push(`Materials, exactly as specified by the project: ${materials.filter(Boolean).join(', ')}.`);
       parts.push(lightPhrase(o.sun, o.night, kind));
