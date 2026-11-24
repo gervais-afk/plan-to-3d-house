@@ -37,11 +37,17 @@
       btnSublimate.addEventListener('click', handleSublimate);
     }
 
-    // Bouton Catalogue Premium
-    const btnExportPremium = document.getElementById('btn-export-premium');
-    if (btnExportPremium) {
-      btnExportPremium.addEventListener('click', handleExportPremium);
-    }
+  // Bouton Catalogue Premium
+  const btnExportPremium = document.getElementById('btn-export-premium');
+  if (btnExportPremium) {
+    btnExportPremium.addEventListener('click', handleExportPremium);
+  }
+
+  // Bouton APS Auto
+  const btnAPS = document.getElementById('btn-aps');
+  if (btnAPS) {
+    btnAPS.addEventListener('click', handleGenerateAPS);
+  }
 
     // Dialogue premium
     const dlgPremium = document.getElementById('dlg-premium');
@@ -129,6 +135,32 @@
     const dlgPremium = document.getElementById('dlg-premium');
     if (dlgPremium) {
       dlgPremium.showModal();
+    }
+  }
+
+  /**
+   * Générer l'APS automatique
+   */
+  async function handleGenerateAPS() {
+    if (typeof APSGenerator === 'undefined') {
+      showToast('Module APSGenerator non chargé', 'error');
+      return;
+    }
+
+    const data = getProjectData();
+    const studio = getStudio();
+
+    if (!data || !studio) {
+      showToast('Projet ou studio non disponible', 'error');
+      return;
+    }
+
+    try {
+      await APSGenerator.generateAPS(data, studio);
+      showToast('✅ APS généré avec succès !', 'success');
+    } catch (error) {
+      console.error('Erreur génération APS:', error);
+      showToast('Erreur lors de la génération de l\'APS : ' + error.message, 'error');
     }
   }
 
