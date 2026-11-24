@@ -66,7 +66,9 @@ test('Aucune finition ni ville inconnue n’est inventée', () => {
   assert.doesNotMatch(prompt, /marbre-or|titane|paris/i);
   assert.equal(tags.facade, null);
   assert.equal(tags.city, null);
-  assert.match(prompt, /warm mineral render/);
+  // Sans finition choisie, la couleur de la façade de référence est conservée (pas d'enduit imposé).
+  assert.match(prompt, /facade colour and finish exactly as in the reference/);
+  assert.doesNotMatch(prompt, /warm mineral render/);
 });
 
 test('La façade choisie et le climat local pilotent un rendu extérieur', () => {
@@ -82,4 +84,12 @@ test('La version du plan change dès que la géométrie change', () => {
   assert.equal(AiPrompt.planVersion(plan), AiPrompt.planVersion(structuredClone(plan)));
   assert.notEqual(AiPrompt.planVersion(plan), AiPrompt.planVersion(moved));
   assert.match(AiPrompt.planVersion(plan), /^[0-9a-f]{8}$/);
+});
+
+test('Rendu extérieur : arbres, ombres et ouvertures protégés (écarts constatés lors d’essais réels)', () => {
+  const { prompt } = AiPrompt.build({ kind: 'exterior', city: 'douala' });
+  assert.match(prompt, /do not remove, add or move trees/);
+  assert.match(prompt, /every shadow must be cast by an object visible/);
+  assert.match(prompt, /open bay stays open, a door stays a door/);
+  assert.match(prompt, /Do not place furniture, beds, rugs, lamps or curtains outdoors/);
 });

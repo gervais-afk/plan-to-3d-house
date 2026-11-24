@@ -47,11 +47,11 @@ test('Sublimation : ne refait pas ce qui existe déjà (aucun coût inutile)', (
 
 test('Documents : façade et intérieurs distincts, la sublimation la plus récente prime', () => {
   const picked = AIEnhance.pickImages({ images: [
-    { id: 'plan', file: `${I}plan.png`, reference: `${R}plan-2d.png`, room: null },
-    { id: 'facade', file: `${I}facade.jpg`, reference: `${R}facade-sud.jpg`, room: null },
-    { id: 'sejour', file: `${I}sejour.jpg`, reference: `${R}sejour.jpg`, room: 'living' },
-    { id: 'photor-sejour', file: `${I}photor-sejour.png`, reference: `${R}sejour.jpg`, room: 'living' },
-    { id: 'photor-chambre', file: `${I}photor-chambre.png`, reference: `${R}chambre.jpg`, room: 'bed1' }
+    { id: 'plan', file: `${I}plan.png`, reference: `${R}plan-2d.png`, room: null, catalog: true },
+    { id: 'facade', file: `${I}facade.jpg`, reference: `${R}facade-sud.jpg`, room: null, catalog: true },
+    { id: 'sejour', file: `${I}sejour.jpg`, reference: `${R}sejour.jpg`, room: 'living', catalog: true },
+    { id: 'photor-sejour', file: `${I}photor-sejour.png`, reference: `${R}sejour.jpg`, room: 'living', catalog: true },
+    { id: 'photor-chambre', file: `${I}photor-chambre.png`, reference: `${R}chambre.jpg`, room: 'bed1', catalog: true }
   ] });
   assert.equal(picked.facade.id, 'facade');
   assert.deepEqual(picked.interiors.map(i => i.id), ['photor-sejour', 'photor-chambre']);
@@ -79,7 +79,8 @@ test('Sublimation : appelle le relais OpenRouter puis enregistre dans le projet'
   assert.equal(saves[0].body.metadata.reference, `${R}facade-sud.jpg`);
   assert.equal(saves[0].body.metadata.room, null);
   assert.equal(saves[1].body.metadata.room, 'sejour');
-  assert.ok(AIEnhance.isEnhanced());
+  // Une image tout juste générée n'est pas validée : elle n'entre dans aucun document avant la case « Catalogue ».
+  assert.equal(AIEnhance.isEnhanced(), false);
 });
 
 test('Sublimation : refus de la confirmation = aucun appel facturé', async () => {
@@ -100,7 +101,9 @@ test('Prompt extérieur : aucun mobilier ni décor intérieur (essai réel : un 
   const project = require('../projects/maison-croquis/project.json');
   const exterior = AIEnhance.promptFor({ name: 'facade', exterior: true }, project);
   assert.match(exterior.prompt, /exterior visualization/);
-  assert.doesNotMatch(exterior.prompt, /bed|curtain|rug|bedside|cushion|furniture/i);
+  // Aucune déco intérieure demandée ; l'interdiction explicite est attendue.
+  assert.doesNotMatch(exterior.prompt, /linen curtains|rug beneath|bedside lamps|cushions|soft throw/i);
+  assert.match(exterior.prompt, /Do not place furniture, beds, rugs, lamps or curtains outdoors/);
   assert.equal(exterior.tags.kind, 'exterior');
   const interior = AIEnhance.promptFor({ name: 'chambre-1', exterior: false }, project);
   assert.equal(interior.room.name, 'CHAMBRE 1');
@@ -111,4 +114,15 @@ test('Libellés lisibles : accents rétablis à partir des noms de fichiers', ()
   const [facade, sejour] = AIEnhance.planSublimation({ images: [], renders: [`${R}facade-sud.jpg`, `${R}sejour.jpg`] });
   assert.equal(facade.label, 'Façade sud');
   assert.equal(sejour.label, 'Séjour');
+});
+
+test('Documents : seules les images validées « Catalogue » par l’architecte sont utilisées', () => {
+  const images = [
+    { id: 'photor-facade', file: `${I}photor-facade.png`, reference: `${R}facade.jpg`, room: null },
+    { id: 'photor-cuisine', file: `${I}photor-cuisine.png`, reference: `${R}cuisine.jpg`, room: 'kitchen', catalog: false },
+    { id: 'photor-sejour', file: `${I}photor-sejour.png`, reference: `${R}sejour.jpg`, room: 'living', catalog: true }
+  ];
+  const picked = AIEnhance.pickImages({ images });
+  assert.equal(picked.facade, null, 'façade non validée : le document garde le plan');
+  assert.deepEqual(picked.interiors.map(i => i.id), ['photor-sejour']);
 });

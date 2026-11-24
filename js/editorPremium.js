@@ -138,7 +138,8 @@
         showToast(result.skipped, 'info');
         if (status) status.textContent = result.skipped;
       } else {
-        const message = `${result.created.length} vue(s) sublimée(s) et enregistrée(s) dans le projet : elles seront utilisées par le catalogue et l'APS.`;
+        // L'IA peut inventer ou retirer des éléments : rien n'entre dans un document client sans validation.
+        const message = `${result.created.length} vue(s) sublimée(s), enregistrée(s) dans la galerie du projet. Comparez-les à la vue 3D dans la galerie de la visite, puis cochez « Catalogue » pour les utiliser dans le catalogue et l'APS.`;
         showToast(message, 'success');
         if (status) status.textContent = message;
       }
