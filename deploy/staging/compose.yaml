@@ -1,0 +1,32 @@
+name: plan3d-staging
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/staging/Dockerfile
+    environment:
+      PRIVATE_PORTAL: '1'
+      PORTAL_ORIGIN: https://${STAGING_HOST:?Renseigner STAGING_HOST (nom DNS de la préproduction)}
+      PORTAL_PASSWORD: ${PORTAL_PASSWORD:?Fournir PORTAL_PASSWORD dans l’environnement}
+      PORTAL_DEFAULT_PROJECT: atelier-temoin
+    restart: unless-stopped
+    volumes:
+      - portal:/app/.private-portal
+      - projects:/app/projects
+  edge:
+    image: caddy:2-alpine
+    environment:
+      STAGING_HOST: ${STAGING_HOST:?Renseigner STAGING_HOST}
+    ports:
+      - '80:80'
+      - '443:443'
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+volumes:
+  portal:
+  projects:
+  caddy_data:
+  caddy_config:

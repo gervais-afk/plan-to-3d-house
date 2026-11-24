@@ -1,0 +1,139 @@
+{
+  "meta": {
+    "name": "Atelier Témoin",
+    "slug": "atelier-temoin",
+    "subtitle": "MAQUETTE FICTIVE — RECETTE HTTPS"
+  },
+  "config": {
+    "wallHeight": 2.65,
+    "floorHeight": 3,
+    "elevationEnd": 0.18
+  },
+  "walls": [
+    {
+      "from": [
+        -4,
+        -2.75
+      ],
+      "to": [
+        4,
+        -2.75
+      ],
+      "type": "ext",
+      "thick": 0.24,
+      "openings": [
+        {
+          "type": "window",
+          "at": 4,
+          "w": 1.4
+        }
+      ]
+    },
+    {
+      "from": [
+        4,
+        -2.75
+      ],
+      "to": [
+        4,
+        2.75
+      ],
+      "type": "ext",
+      "thick": 0.24,
+      "openings": []
+    },
+    {
+      "from": [
+        4,
+        2.75
+      ],
+      "to": [
+        -4,
+        2.75
+      ],
+      "type": "ext",
+      "thick": 0.24,
+      "openings": [
+        {
+          "type": "door",
+          "at": 5.3,
+          "w": 0.9,
+          "entry": true
+        },
+        {
+          "type": "window",
+          "at": 1.7,
+          "w": 1.5
+        }
+      ]
+    },
+    {
+      "from": [
+        -4,
+        2.75
+      ],
+      "to": [
+        -4,
+        -2.75
+      ],
+      "type": "ext",
+      "thick": 0.24,
+      "openings": []
+    },
+    {
+      "from": [
+        0,
+        -2.75
+      ],
+      "to": [
+        0,
+        2.75
+      ],
+      "type": "int",
+      "thick": 0.12,
+      "openings": [
+        {
+          "type": "open",
+          "at": 2.75,
+          "w": 1.1,
+          "h": 2.5
+        }
+      ]
+    }
+  ],
+  "rooms": [
+    {
+      "id": "salon",
+      "name": "Salon témoin",
+      "level": 0,
+      "habitable": true,
+      "floorType": "parquet",
+      "bounds": {
+        "xMin": -3.87,
+        "xMax": -0.06,
+        "zMin": -2.62,
+        "zMax": 2.62
+      }
+    },
+    {
+      "id": "atelier",
+      "name": "Atelier fictif",
+      "level": 0,
+      "habitable": true,
+      "floorType": "concrete",
+      "bounds": {
+        "xMin": 0.06,
+        "xMax": 3.87,
+        "zMin": -2.62,
+        "zMax": 2.62
+      }
+    }
+  ],
+  "furniture": [],
+  "canopies": [],
+  "assets": {
+    "hdri": null,
+    "models": {}
+  },
+  "stairwells": []
+}

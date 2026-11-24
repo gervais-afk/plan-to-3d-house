@@ -1,18 +1,41 @@
-<!DOCTYPE html>
-<html lang="fr">
+<!doctype html>
+<html lang="fr" data-scheme="auto">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Villa Serena — Du Plan 2D à la Maison 3D Interactive</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#f4f2eb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141a16" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Le dossier architectural, du plan à la visite 3D.">
+  <title>Plan to 3D — Dossier architectural</title>
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="fr_FR">
+  <meta property="og:title" content="Dossier architectural — du plan à la visite 3D">
+  <meta property="og:description" content="Plans, rendus et maquette interactive du projet.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Crect width='36' height='36' rx='6' fill='%231f2a1f'/%3E%3Cg fill='none' stroke='%23dcea9f'%3E%3Cpath d='M6 28V8h24v20H6Zm0-11h14V8m0 9v11m0-5h10' stroke-width='1.9'/%3E%3Cpath d='M9 11h8v3H9zm14 15h4' stroke-width='1.3'/%3E%3C/g%3E%3C/svg%3E">
+  <meta name="color-scheme" content="light dark">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/motion.css">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/clientTools.css">
+  <link rel="stylesheet" href="css/accueil.css">
+  <link rel="stylesheet" href="css/presentation.css">
+  <link rel="stylesheet" href="css/workspace.css">
+  <script src="js/portal-context.js" defer></script>
+  <script src="js/workspace.js" defer></script>
 </head>
-<body>
+<body data-workspace-view="cover">
+  <div id="editorial-workspace"></div>
+  <p id="workspace-status" class="workspace-status" role="status">Chargement du dossier…</p>
+  <noscript><p class="workspace-status">Activez JavaScript pour parcourir le dossier et la maquette.</p></noscript>
+  <template id="viewer-template">
+  <section id="visit-workspace" aria-label="Visite 3D" hidden>
+
 
   <!-- Conteneur 3D WebGL fixé en arrière-plan -->
-  <div id="webgl-container"></div>
+  <div id="webgl-container" tabindex="-1" role="group" aria-label="Maquette 3D" aria-describedby="fps-hint"></div>
+  <p id="viewer-error" class="viewer-error" role="alert" hidden>La vue 3D ne peut pas démarrer. Vérifiez la connexion et la prise en charge de WebGL, puis <a href="">réessayez</a>.</p>
+  <noscript><p class="viewer-error">Activez JavaScript pour ouvrir la visite 3D.</p></noscript>
 
   <!-- Fondu IA facultatif à l'arrêt sur une pièce photoréalisée -->
   <div id="photo-mode-overlay" class="photo-mode-overlay" aria-hidden="true"></div>
@@ -32,72 +55,202 @@
   <div class="ui-layer">
     <!-- En-tête / Cartouche d'architecte -->
     <header class="top-bar">
-      <div class="architect-header interactive">
-        <div class="brand-tag">
-          <span class="brand-dot"></span>
-          <span>Atelier Architecture & IA</span>
-        </div>
-        <h1 class="project-title">VILLA SERENA</h1>
-        <p class="project-meta">PLAN N° A-102 • ÉCHELLE 1:50 • PHASE PRO</p>
+      <div class="viewer-identity interactive">
+        <p class="brand-tag">MAQUETTE INTERACTIVE</p>
+        <p class="project-title">Visite architecturale</p>
+        <p class="project-meta" hidden></p>
       </div>
 
-      <div class="technical-stamp interactive">
-        <span id="mode-badge" class="mode-badge">MODE PLAN & SCROLL 3D</span>
-        <button id="btn-toggle-mode" class="btn-toggle">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-          </svg>
-          <span>Explorer en Visite Libre (ZQSD)</span>
-        </button>
-        <div class="btn-row">
-          <label class="project-picker-label" for="project-picker">📁 Projets</label>
-          <select id="project-picker" class="project-picker" aria-label="Choisir un projet"><option value="">Chargement…</option></select>
-          <button id="btn-night" class="btn-toggle btn-small" title="Touche N">☀ Jour</button>
-          <button id="btn-quality" class="btn-toggle btn-small" title="Touche H">Qualité : Haute</button>
+      <div class="tool-trigger interactive">
+        <button type="button" id="variant-resume" class="btn-toggle btn-small" hidden>Reprendre la visite</button>
+        <button type="button" id="viewer-command-toggle" class="btn-toggle btn-small" aria-expanded="false" aria-controls="viewer-commands"><svg class="i" aria-hidden="true"><use href="#i-cube"></use></svg> Outils</button>
+      </div>
+      <nav id="viewer-commands" class="technical-stamp interactive" aria-label="Commandes de la visite" hidden>
+        <div class="btn-row viewer-primary">
+          <span id="mode-badge" class="mode-badge">Visite guidée</span>
+          <button id="btn-renders" type="button" class="btn-toggle btn-small" aria-haspopup="dialog"><svg class="i" aria-hidden="true"><use href="#i-gallery"></use></svg> Galerie</button>
+          <button id="btn-present" type="button" class="btn-toggle btn-small" aria-pressed="false" title="Plein écran sans outils ; flèches pour avancer, Échap pour quitter"><svg class="i" aria-hidden="true"><use href="#i-present"></use></svg> <span>Présenter</span></button>
+          <a id="portal-account" href="portal.html" class="btn-toggle btn-small" hidden>Espace privé</a>
         </div>
-        <div class="btn-row">
-          <button id="btn-plan-style" class="btn-toggle btn-small" title="Touche B">Plan : Rendu</button>
-          <button id="btn-renders" class="btn-toggle btn-small" title="Touche R">📷 Rendus HD</button>
-          <button id="btn-section" class="btn-toggle btn-small" title="Touche C : activer/désactiver la coupe">✂ Coupe</button>
-          <button id="btn-explode" class="btn-toggle btn-small" title="Touche X : vue éclatée">↕ Vue éclatée</button>
-          <button id="btn-timelapse" class="btn-toggle btn-small" title="Rejouer le phasage de construction">⏱ Chantier 4D</button>
-          <button id="btn-photo-mode" class="btn-toggle btn-small is-active" title="Touche F : basculer le Mode photo">✨ Mode photo : Actif</button>
-        </div>
-        <div class="btn-row">
-          <button id="btn-export-video" class="btn-toggle btn-small" title="Enregistrer gratuitement le parcours complet avec MediaRecorder">🎥 Exporter l’animation vidéo</button>
+        <div class="btn-row client-panel-tabs">
+          <details id="client-tools" class="client-tools" name="viewer-panels">
+            <summary class="btn-toggle btn-small">Finitions</summary>
+            <fieldset id="client-tool-fields" class="client-tool-fields">
+              <legend class="sr-only">Outils de visite</legend>
+              <div class="client-finish-row">
+                <label>Sols intérieurs
+                  <select id="client-floor">
+                    <option value="">Du projet</option><option value="oak">Parquet chêne clair</option>
+                    <option value="tile">Carrelage gris anthracite</option><option value="concrete">Béton ciré</option>
+                  </select>
+                </label>
+                <label>Façades extérieures
+                  <select id="client-facade">
+                    <option value="">Du projet</option><option value="plaster">Crépi blanc</option>
+                    <option value="timber">Bardage bois contemporain</option><option value="stone">Parement pierre</option>
+                  </select>
+                </label>
+              </div>
+              <div class="client-sun">
+                <label for="client-hour"><span>Ensoleillement indicatif</span><output id="client-hour-value" for="client-hour">13h00</output></label>
+                <div><input id="client-hour" type="range" min="7" max="20" step="0.25" value="13">
+                  <span class="client-compass" id="client-compass" title="Nord sur le plan, vu du dessus">N <span aria-hidden="true">↑</span></span>
+                </div>
+                <div id="client-hour-scale" class="client-hour-scale">07h00 — simulation indicative — 20h00</div>
+                <label class="client-check"><input id="solar-geo" type="checkbox"> Étude par lieu et date</label>
+                <div id="solar-inputs" class="solar-inputs" hidden>
+                  <label>Latitude (°)<input id="solar-lat" type="number" min="-90" max="90" step="any" placeholder="Nord +"></label>
+                  <label>Longitude (°)<input id="solar-lon" type="number" min="-180" max="180" step="any" placeholder="Est +"></label>
+                  <label>Date locale<input id="solar-date" type="date"></label>
+                  <label>Décalage UTC (h)<input id="solar-utc" type="number" min="-12" max="14" step="any"></label>
+                  <label>Nord sur le plan (°)<input id="solar-north" type="number" min="0" max="360" step="any"></label>
+                  <output id="solar-result" aria-live="polite"></output>
+                </div>
+              </div>
+              <div class="btn-row client-actions">
+                <button type="button" id="client-measure" class="btn-toggle btn-small" aria-pressed="false" title="Touche M"><svg class="i" aria-hidden="true"><use href="#i-ruler"></use></svg> Mesurer</button>
+                <button type="button" id="client-clear" class="btn-toggle btn-small" disabled>Effacer les cotes</button>
+                <label class="client-check"><input id="client-hotspots" type="checkbox" checked> Pièces</label>
+              </div>
+              <button type="button" id="client-pdf" class="btn-toggle btn-small"><svg class="i" aria-hidden="true"><use href="#i-document"></use></svg> Exporter la brochure PDF</button>
+              <span id="client-pdf-status" role="status"></span>
+              <div class="book-tools">
+                <button type="button" id="book-open" class="btn-toggle btn-small"><svg class="i" aria-hidden="true"><use href="#i-book"></use></svg> Composer le cahier A3</button>
+                <button type="button" id="catalog-pdf" class="btn-toggle btn-small"><svg class="i" aria-hidden="true"><use href="#i-gallery"></use></svg> Catalogue des intérieurs (PDF)</button>
+                <span id="book-status" role="status"></span>
+              </div>
+            </fieldset>
+          </details>
+          <details id="client-variants" class="client-tools" name="viewer-panels">
+            <summary class="btn-toggle btn-small">Variantes</summary>
+            <fieldset id="variant-fields" class="client-tool-fields">
+              <legend class="sr-only">Variantes et partage</legend>
+              <label class="client-field">Nom de la variante <input id="variant-name" maxlength="60" placeholder="Ex. Façade bois"></label>
+              <div class="btn-row client-actions">
+                <button type="button" id="variant-save" class="btn-toggle btn-small">Enregistrer</button>
+                <button type="button" id="variant-link" class="btn-toggle btn-small">Copier le lien</button>
+              </div>
+              <input id="variant-url" type="url" aria-label="Lien à copier" readonly hidden>
+              <div class="client-finish-row">
+                <label>Variante A <select id="variant-a"></select></label>
+                <label>Variante B <select id="variant-b"></select></label>
+              </div>
+              <div class="btn-row client-actions">
+                <button type="button" id="variant-load" class="btn-toggle btn-small">Ouvrir A</button>
+                <button type="button" id="variant-delete" class="btn-toggle btn-small">Supprimer A</button>
+                <button type="button" id="variant-compare" class="btn-toggle btn-small" aria-pressed="false">Comparer A/B</button>
+                <button type="button" id="variant-pdf" class="btn-toggle btn-small">Exporter la variante</button>
+              </div>
+              <span id="variant-status" role="status"></span>
+            </fieldset>
+          </details>
+          <details id="client-feedback" class="client-tools" name="viewer-panels">
+            <summary class="btn-toggle btn-small">Retours</summary>
+            <fieldset id="feedback-fields" class="client-tool-fields">
+              <legend class="sr-only">Retours client</legend>
+              <p id="feedback-intro">Les détenteurs du lien peuvent lire et ajouter des remarques à ce dossier.</p>
+              <div class="btn-row client-actions">
+                <button type="button" id="feedback-create" class="btn-toggle btn-small">Créer un dossier</button>
+                <button type="button" id="feedback-share" class="btn-toggle btn-small" disabled>Partager le dossier</button>
+                <button type="button" id="feedback-start" class="btn-toggle btn-small" aria-pressed="false" disabled>Placer un repère</button>
+                <button type="button" id="feedback-refresh" class="btn-toggle btn-small" disabled>Actualiser</button>
+              </div>
+              <form id="feedback-form" hidden>
+                <label class="client-field"><span id="feedback-anchor">Remarque</span><textarea id="feedback-text" maxlength="700" rows="3" required></textarea></label>
+                <div class="btn-row client-actions">
+                  <button type="submit" id="feedback-submit" class="btn-toggle btn-small">Publier</button>
+                  <button type="button" id="feedback-cancel" class="btn-toggle btn-small">Annuler</button>
+                </div>
+              </form>
+              <span id="feedback-status" role="status"></span>
+              <div id="feedback-list"></div>
+              <section id="decision-section" hidden>
+                <h4>Variantes proposées et décisions</h4>
+                <form id="decision-create" hidden>
+                  <label class="client-field">Nom de la version <input id="decision-name" maxlength="60" placeholder="Nom de la variante actuelle par défaut"></label>
+                  <button type="submit" class="btn-toggle btn-small">Proposer la vue actuelle</button>
+                </form>
+                <p id="decision-status" role="status"></p>
+                <ul id="decision-list"></ul>
+              </section>
+            </fieldset>
+          </details>
+          <details id="viewer-options" class="client-tools" name="viewer-panels">
+            <summary class="btn-toggle btn-small">Options</summary>
+            <div class="client-tool-fields viewer-options-fields">
+              <a id="viewer-home" data-view="cover" class="btn-toggle btn-small" href="accueil.html">Présentation du projet ↗</a>
+              <label class="client-field" id="guided-select-label">Aller à une étape <select id="guided-select"></select></label>
+              <button type="button" id="btn-toggle-mode" class="btn-toggle btn-small">Visite libre (clavier)</button>
+              <label class="client-check"><input id="viewer-shortcuts" type="checkbox" checked> Raccourcis clavier (N, R…)</label>
+              <div class="btn-row client-actions">
+                <button type="button" id="btn-night" class="btn-toggle btn-small" title="Touche N"><svg class="i" aria-hidden="true"><use href="#i-sun"></use></svg> Jour</button>
+                <button type="button" id="btn-quality" class="btn-toggle btn-small" title="Touche H">Qualité : Haute</button>
+                <button type="button" id="btn-plan-style" class="btn-toggle btn-small" title="Touche B">Plan : Rendu</button>
+                <button type="button" id="btn-timelapse" class="btn-toggle btn-small">Chantier 4D</button>
+                <button type="button" id="btn-photo-mode" class="btn-toggle btn-small is-active" title="Touche F" aria-pressed="true">Mode photo</button>
+                <button type="button" id="btn-export-video" class="btn-toggle btn-small">Exporter l’animation vidéo</button>
+              </div>
+            </div>
+          </details>
         </div>
         <span id="video-export-status" class="video-export-status" role="status" aria-live="polite"></span>
-      </div>
+      </nav>
     </header>
 
-    <!-- Pied de page : Infos de la pièce active & Radar 2D -->
-    <footer class="bottom-bar">
-      <!-- Fiche d'espace en cours de visite -->
-      <div class="room-card interactive">
-        <div class="room-meta-row">
-          <h2 id="hud-room-name" class="room-name">PLAN D'ARCHITECTE 2D</h2>
-          <span id="hud-room-surface" class="room-surface">≈ 109 m²</span>
-        </div>
-        <p id="hud-room-desc" class="room-desc">Faites défiler vers le bas pour voir les murs s'élever et visiter la maison.</p>
-        
-        <div class="stats-row">
-          <div class="stats-item">ÉLÉVATION 3D : <strong id="hud-elevation-percent">0%</strong></div>
-          <div class="stats-item">HSP : <strong>2.80 m</strong></div>
-          <div class="stats-item">ENTRÉE : <strong>PLEIN SUD</strong></div>
-        </div>
+    <section id="approval-card" class="approval-card interactive" aria-labelledby="approval-heading" hidden>
+      <div>
+        <p class="approval-kicker">Validation de projet</p>
+        <h2 id="approval-heading">Proposition à examiner</h2>
+        <p id="approval-project" class="approval-project"></p>
+        <p id="approval-version" class="approval-version"></p>
       </div>
+      <div id="approval-actions" class="approval-actions">
+        <button id="approval-approve" type="button" class="approval-primary">Valider cette version</button>
+        <button id="approval-request-toggle" type="button">Demander une modification</button>
+      </div>
+      <form id="approval-request-form" class="approval-request" hidden>
+        <label for="approval-comment">Commentaire obligatoire</label>
+        <textarea id="approval-comment" maxlength="700" rows="3" required></textarea>
+        <button id="approval-submit" type="submit">Envoyer la demande</button>
+      </form>
+      <button id="approval-return" type="button" class="approval-return" hidden>Revenir à la vue proposée</button>
+      <p id="approval-status" role="status" aria-live="polite"></p>
+    </section>
 
-      <!-- Minimap / Radar architectural 2D -->
-      <div class="minimap-card interactive">
-        <div class="minimap-header">
-          <span>RADAR ÉTAGE</span>
-          <span>NORD ↑</span>
+    <footer class="bottom-bar">
+      <nav id="guided-controls" class="guided-controls tour-dock interactive" aria-label="Commandes du parcours">
+        <div class="dock-context">
+          <div class="dock-meta"><span class="guided-kicker" id="guided-step">Parcours guidé</span><span id="guided-count">—</span></div>
+          <div class="room-meta-row"><h2 id="hud-room-name" class="room-name">Plan d’architecte 2D</h2><span id="hud-room-surface" class="room-surface"></span></div>
+          <div id="guided-timeline" class="guided-timeline" aria-hidden="true"></div>
+          <p id="hud-room-desc" class="sr-only"></p>
+          <span class="sr-only">Élévation <span id="hud-elevation-percent">0%</span> · HSP <span id="hud-wall-height">—</span></span>
+          <span id="guided-announcement" class="sr-only" role="status"></span>
         </div>
-        <canvas id="minimap-canvas"></canvas>
-        <span class="minimap-footer">Cliquez sur une pièce pour y aller</span>
+        <div class="guided-actions" id="guided-actions">
+          <button type="button" id="guided-prev" class="btn-toggle dock-arrow" aria-label="Étape précédente" disabled>←</button>
+          <button type="button" id="guided-next" class="btn-toggle dock-arrow" aria-label="Étape suivante">→</button>
+        </div>
+        <button type="button" id="guided-action" class="btn-toggle guided-next">Démarrer la visite</button>
+        <div class="dock-shortcuts">
+          <button type="button" id="btn-section" class="btn-toggle" aria-label="Coupe" aria-keyshortcuts="C" aria-pressed="false"><svg class="i dock-shortcut-icon" aria-hidden="true"><use href="#i-section"></use></svg><span>Coupe</span> <kbd>C</kbd></button>
+          <button type="button" id="btn-explode" class="btn-toggle" aria-label="Vue éclatée" aria-keyshortcuts="X" aria-pressed="false"><svg class="i dock-shortcut-icon" aria-hidden="true"><use href="#i-explode"></use></svg><span>Éclaté</span> <kbd>X</kbd></button>
+        </div>
+      </nav>
+      <div class="minimap-card interactive">
+        <button type="button" id="minimap-toggle" class="btn-toggle" aria-expanded="false" aria-controls="minimap-panel" aria-label="Radar du plan"><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg><span>Plan</span></button>
+        <div id="minimap-panel" hidden>
+          <div class="minimap-header"><span>RADAR ÉTAGE</span><span>NORD ↑</span></div>
+          <canvas id="minimap-canvas" aria-label="Plan interactif de l’étage"></canvas>
+          <span class="minimap-footer">Cliquez sur une pièce pour y aller</span>
+        </div>
       </div>
     </footer>
   </div>
+
+  <div id="client-annotations"></div>
+  <div id="client-measure-status" role="status" hidden></div>
+  <div id="feedback-prompt" class="client-feedback-prompt" role="status" hidden></div>
 
   <!-- Barre de progression du scroll -->
   <div class="progress-bar-container">
@@ -114,28 +267,66 @@
       <div><span class="key-badge">N</span> Jour / Soir · <span class="key-badge">H</span> Qualité</div>
       <div><span class="key-badge">B</span> Style du plan · <span class="key-badge">R</span> Rendus HD · <span class="key-badge">F</span> Mode photo</div>
     </div>
-    <p class="fps-hint">Cliquez sur l'écran pour verrouiller le regard de la caméra.<br>Appuyez sur <span class="key-badge">Échap</span> ou <span class="key-badge">Espace</span> pour quitter le mode marche.</p>
+    <p id="fps-hint" class="fps-hint">Cliquez dans la maquette pour tourner la caméra à la souris.<br>Appuyez sur <span class="key-badge">Échap</span> pour revenir à la visite guidée.</p>
   </div>
 
+  <!-- Composition du cahier de plans : choisir, vérifier, approuver, puis assembler -->
+  <dialog id="book-dialog" class="book-dialog" aria-labelledby="book-title">
+    <form method="dialog" class="book-form" id="book-form">
+      <header class="book-head">
+        <div>
+          <p class="book-kicker">Cahier de plans A3</p>
+          <h2 id="book-title">Composer le cahier</h2>
+          <p class="book-intro">Cochez les planches, ajoutez les images d’ambiance et vos PDF, puis approuvez la composition pour lancer l’assemblage.</p>
+        </div>
+        <button type="submit" value="close" class="btn-toggle btn-small" aria-label="Fermer la composition"><svg class="i" aria-hidden="true"><use href="#i-close"></use></svg></button>
+      </header>
+      <section class="book-block" aria-labelledby="book-sheets-title">
+        <h3 id="book-sheets-title"><span>1</span> Planches</h3>
+        <p class="book-note">La couverture avec cartouche est toujours incluse.</p>
+        <div id="book-sheets" class="book-sheets"></div>
+      </section>
+      <section class="book-block" aria-labelledby="book-images-title">
+        <h3 id="book-images-title"><span>2</span> Images d’ambiance <small id="book-images-count"></small></h3>
+        <p class="book-note">Cliquez une image pour l’ajouter au cahier ou l’en retirer. Sans sélection, les quatre premières vues sont reprises.</p>
+        <div id="book-images" class="book-images" role="group" aria-labelledby="book-images-title"></div>
+      </section>
+      <section class="book-block" aria-labelledby="book-annex-title">
+        <h3 id="book-annex-title"><span>3</span> Vos PDF en annexe <small>facultatif</small></h3>
+        <label class="btn-toggle btn-small book-files">＋ Ajouter des PDF<input id="book-files" type="file" accept="application/pdf,.pdf" multiple></label>
+        <ul id="book-files-list" class="book-files-list"></ul>
+      </section>
+      <section class="book-block book-approve" aria-labelledby="book-approve-title">
+        <h3 id="book-approve-title"><span>4</span> Approbation</h3>
+        <p id="book-summary" class="book-summary"></p>
+        <label class="book-check"><input id="book-approved" type="checkbox"> J’ai vérifié la composition et je l’approuve.</label>
+        <div class="book-actions">
+          <span id="book-dialog-status" role="status"></span>
+          <button type="button" id="book-export" class="btn-toggle book-primary" disabled>Assembler et exporter le PDF</button>
+        </div>
+      </section>
+    </form>
+  </dialog>
+
   <!-- Galerie des rendus grandeur nature & ultra-réalistes -->
-  <div id="render-gallery" class="render-gallery hidden">
+  <dialog id="render-gallery" class="render-gallery hidden" aria-labelledby="rg-title">
     <div class="rg-header">
       <div>
-        <h3 class="rg-title">Galerie des vues</h3>
+        <h2 id="rg-title" class="rg-title">Galerie des vues</h2>
         <p class="rg-intro">Les vues 3D sont capturées gratuitement depuis la maquette. Les rendus IA sont facultatifs et facturés par appel.</p>
-        <p id="rg-status" class="rg-status"></p>
+        <p id="rg-status" class="rg-status" role="status"></p>
       </div>
       <div class="rg-actions">
-        <button id="rg-regen" class="btn-toggle btn-small" title="Recapture gratuitement toutes les vues depuis la maquette Three.js">📷 Actualiser toutes les vues 3D</button>
-        <button id="rg-generate-videos" class="btn-toggle btn-small" title="Générer les deux clips Seedance après confirmation du coût">🎞 Générer les clips IA · estimation 0,67 $</button>
-        <button id="rg-close" class="btn-toggle btn-small">Fermer ✕</button>
+        <button id="rg-regen" class="btn-toggle btn-small" title="Recapture gratuitement toutes les vues depuis la maquette Three.js"><svg class="i" aria-hidden="true"><use href="#i-camera"></use></svg> Actualiser toutes les vues 3D</button>
+        <button id="rg-generate-videos" class="btn-toggle btn-small" title="Générer les deux clips Seedance après confirmation du coût"><svg class="i" aria-hidden="true"><use href="#i-film"></use></svg> Générer les clips IA · estimation 0,67 $</button>
+        <button id="rg-close" class="btn-toggle btn-small" autofocus><svg class="i" aria-hidden="true"><use href="#i-close"></use></svg> Fermer</button>
       </div>
     </div>
 
     <div id="rg-grid" class="rg-grid"></div>
 
     <!-- Visionneuse / Lightbox -->
-    <div id="rg-lightbox" class="rg-lightbox hidden">
+    <dialog id="rg-lightbox" class="rg-lightbox hidden" aria-labelledby="rg-caption">
       <!-- Zone d'affichage : Image simple, Vidéo ou Comparaison Côte-à-Côte -->
       <div id="rg-media-container" class="rg-media-container">
         <!-- Image unique -->
@@ -163,10 +354,10 @@
           <span id="rg-meta" class="rg-meta"></span>
         </div>
         <div class="rg-actions">
-          <button id="rg-btn-compare" class="btn-toggle btn-small hidden">↔ Comparer Avant (3D) / Après (IA)</button>
+          <button id="rg-btn-compare" class="btn-toggle btn-small hidden"><svg class="i" aria-hidden="true"><use href="#i-compare"></use></svg> Comparer Avant (3D) / Après (IA)</button>
           <button id="rg-goto" class="btn-toggle btn-small">Aller à cette vue</button>
           <a id="rg-download" class="btn-toggle btn-small" download>Télécharger</a>
-          <button id="rg-lb-close" class="btn-toggle btn-small">Retour</button>
+          <button id="rg-lb-close" class="btn-toggle btn-small" autofocus>Retour</button>
         </div>
       </div>
 
@@ -174,28 +365,10 @@
       <div id="rg-prompt-box" class="rg-prompt-box hidden">
         <div id="rg-prompt-text"></div>
       </div>
-    </div>
-  </div>
+    </dialog>
+  </dialog>
 
-  <!-- Bibliothèque 3D Three.js via CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <!-- Modules d'exemples Three.js r128 (même version que le cœur) -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/environments/RoomEnvironment.js"></script>
-
-  <!-- Scripts du projet -->
-  <script src="js/data.js"></script>
-  <script src="js/projectLoader.js"></script>
-  <script src="js/scene.js"></script>
-  <script src="js/realism.js"></script>
-  <script src="js/assets.js"></script>
-  <script src="js/presentationPlan.js"></script>
-  <script src="js/renderStudio.js"></script>
-  <script src="js/scrollTour.js"></script>
-  <script src="js/walkController.js"></script>
-  <script src="js/minimap.js"></script>
-  <script src="js/app.js"></script>
-
+  </section>
+  </template>
 </body>
 </html>

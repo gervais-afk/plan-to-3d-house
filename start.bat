@@ -8,7 +8,7 @@ rem Use the user's existing private OpenRouter .env without copying the key into
 if exist "%USERPROFILE%\Desktop\K1_MATHINFO_CLOUD\.env" set "OPENROUTER_ENV_FILE=%USERPROFILE%\Desktop\K1_MATHINFO_CLOUD\.env"
 where node >nul 2>nul
 if %ERRORLEVEL% EQU 0 (
-    start "" http://localhost:8000/index.html
+    start "" http://localhost:8000/
     node serve.js
     goto :end
 )

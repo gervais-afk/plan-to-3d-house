@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+  <meta name="referrer" content="no-referrer">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Éditeur de plan — Plan 2D vers visite 3D</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/motion.css">
   <link rel="stylesheet" href="css/editor.css">
+  <link rel="stylesheet" href="css/editorAdvanced.css">
 </head>
 <body>
   <header class="ed-top">
@@ -15,40 +16,45 @@
       <span class="ed-dot"></span>
       <strong>ÉDITEUR DE PLAN</strong>
       <span id="ed-project-name" class="ed-muted">Nouveau projet</span>
+      <span id="ed-save-state" class="ed-save-state" role="status"></span>
     </div>
-    <div class="ed-actions">
+    <div class="ed-actions" role="group" aria-label="Actions du projet">
       <button id="btn-new" title="Nouveau projet">Nouveau</button>
       <button id="btn-open" title="Ouvrir un projet enregistré">Ouvrir…</button>
       <button id="btn-import-villa" title="Charger la Villa Serena (js/data.js) comme exemple">Exemple Villa Serena</button>
+      <button id="btn-cabinet" type="button" title="Profil du cabinet">Profil Cabinet</button>
       <label class="ed-btn-file" title="Importer une image ou un PDF de plan">Plan PDF / image…<input id="file-plan" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,.png,.jpg,.jpeg"></label>
-      <button id="btn-ai-read" title="Lecture automatique du plan par IA (OpenRouter)">✨ Lecture IA</button>
-      <button id="btn-undo" title="Annuler (Ctrl+Z)">↶</button>
-      <button id="btn-redo" title="Rétablir (Ctrl+Y)">↷</button>
+      <button id="btn-ai-read" title="Lecture automatique du plan par IA (OpenRouter)"><svg class="i" aria-hidden="true"><use href="#i-sparkle"></use></svg> Lecture IA</button>
+      <button id="btn-undo" aria-label="Annuler" title="Annuler (Ctrl+Z)">↶</button>
+      <button id="btn-redo" aria-label="Rétablir" title="Rétablir (Ctrl+Y)">↷</button>
       <button id="btn-save" class="ed-primary" title="Enregistrer dans projects/ (Ctrl+S)">Enregistrer</button>
-      <button id="btn-preview" class="ed-primary" title="Enregistrer puis ouvrir la visite 3D de ce projet">👁 Lancer la visite 3D</button>
+      <button id="btn-export-json" type="button">Exporter le JSON</button>
+      <button id="btn-estimate" type="button" title="Métré et estimation indicative en FCFA">Estimation FCFA</button>
+      <button id="btn-advanced" type="button" title="Outils avancés : export BIM, analyse structurelle, bioclimatique…"><svg class="i" aria-hidden="true"><use href="#i-sparkle"></use></svg> Outils avancés</button>
+      <button id="btn-preview" title="Enregistrer puis ouvrir la visite 3D de ce projet"><svg class="i" aria-hidden="true"><use href="#i-eye"></use></svg> Lancer la visite 3D</button>
     </div>
   </header>
 
   <aside class="ed-tools" id="ed-tools">
-    <button data-tool="select" title="Sélection / déplacement (V)"><b>⬚</b><span>Sélection</span><kbd>V</kbd></button>
-    <button data-tool="calibrate" title="Calibrer l'échelle : 2 clics sur une cote connue (K)"><b>⟷</b><span>Échelle</span><kbd>K</kbd></button>
+    <button data-tool="select" title="Sélection / déplacement (V)"><svg class="i" aria-hidden="true"><use href="#i-cursor"></use></svg><span>Sélection</span><kbd>V</kbd></button>
+    <button data-tool="calibrate" title="Calibrer l'échelle : 2 clics sur une cote connue (K)"><svg class="i" aria-hidden="true"><use href="#i-scale"></use></svg><span>Échelle</span><kbd>K</kbd></button>
     <hr>
-    <button data-tool="wall-ext" title="Mur extérieur 25 cm, clics successifs (M)"><b>▬</b><span>Mur ext.</span><kbd>M</kbd></button>
-    <button data-tool="wall-int" title="Cloison 15 cm, clics successifs (C)"><b>▭</b><span>Cloison</span><kbd>C</kbd></button>
-    <button data-tool="door" title="Porte : clic sur un mur (D)"><b>◜</b><span>Porte</span><kbd>D</kbd></button>
-    <button data-tool="window" title="Fenêtre : clic sur un mur (F)"><b>▤</b><span>Fenêtre</span><kbd>F</kbd></button>
-    <button data-tool="open" title="Passage libre : clic sur un mur (B)"><b>⊓</b><span>Passage</span><kbd>B</kbd></button>
+    <button data-tool="wall-ext" title="Mur extérieur 25 cm, clics successifs (M)"><svg class="i" aria-hidden="true"><use href="#i-wall-ext"></use></svg><span>Mur ext.</span><kbd>M</kbd></button>
+    <button data-tool="wall-int" title="Cloison 15 cm, clics successifs (C)"><svg class="i" aria-hidden="true"><use href="#i-wall-int"></use></svg><span>Cloison</span><kbd>C</kbd></button>
+    <button data-tool="door" title="Porte : clic sur un mur (D)"><svg class="i" aria-hidden="true"><use href="#i-door"></use></svg><span>Porte</span><kbd>D</kbd></button>
+    <button data-tool="window" title="Fenêtre : clic sur un mur (F)"><svg class="i" aria-hidden="true"><use href="#i-window"></use></svg><span>Fenêtre</span><kbd>F</kbd></button>
+    <button data-tool="open" title="Passage libre : clic sur un mur (B)"><svg class="i" aria-hidden="true"><use href="#i-passage"></use></svg><span>Passage</span><kbd>B</kbd></button>
     <hr>
-    <button data-tool="room-auto" title="Pièce auto : cliquer à l'intérieur d'un espace fermé par des murs (W)"><b>✦</b><span>Pièce auto</span><kbd>W</kbd></button>
-    <button data-tool="room" title="Pièce rectangle : glisser un rectangle (A)"><b>▦</b><span>Rectangle</span><kbd>A</kbd></button>
-    <button data-tool="room-poly" title="Pièce polygone : cliquer les sommets, Entrée pour fermer (P)"><b>⬠</b><span>Polygone</span><kbd>P</kbd></button>
-    <button data-tool="column" title="Colonne / poteau : clic (O)"><b>■</b><span>Colonne</span><kbd>O</kbd></button>
-    <button data-tool="slab" title="Auvent (dalle) : glisser un rectangle (U)"><b>⌸</b><span>Auvent</span><kbd>U</kbd></button>
-    <button data-tool="stairwell" title="Trémie d'escalier : glisser un rectangle sur le plan d'étage"><b>▱</b><span>Trémie</span></button>
-    <button data-tool="pergola" title="Pergola : glisser un rectangle (G)"><b>☰</b><span>Pergola</span><kbd>G</kbd></button>
-    <button data-tool="furniture" title="Mobilier : choisir dans la bibliothèque puis cliquer (E)"><b>🛋</b><span>Mobilier</span><kbd>E</kbd></button>
+    <button data-tool="room-auto" title="Pièce auto : cliquer à l'intérieur d'un espace fermé par des murs (W)"><svg class="i" aria-hidden="true"><use href="#i-room-auto"></use></svg><span>Pièce auto</span><kbd>W</kbd></button>
+    <button data-tool="room" title="Pièce rectangle : glisser un rectangle (A)"><svg class="i" aria-hidden="true"><use href="#i-rect"></use></svg><span>Rectangle</span><kbd>A</kbd></button>
+    <button data-tool="room-poly" title="Pièce polygone : cliquer les sommets, Entrée pour fermer (P)"><svg class="i" aria-hidden="true"><use href="#i-polygon"></use></svg><span>Polygone</span><kbd>P</kbd></button>
+    <button data-tool="column" title="Colonne / poteau : clic (O)"><svg class="i" aria-hidden="true"><use href="#i-column"></use></svg><span>Colonne</span><kbd>O</kbd></button>
+    <button data-tool="slab" title="Auvent (dalle) : glisser un rectangle (U)"><svg class="i" aria-hidden="true"><use href="#i-canopy"></use></svg><span>Auvent</span><kbd>U</kbd></button>
+    <button data-tool="stairwell" title="Trémie d'escalier : glisser un rectangle sur le plan d'étage"><svg class="i" aria-hidden="true"><use href="#i-stairs"></use></svg><span>Trémie</span></button>
+    <button data-tool="pergola" title="Pergola : glisser un rectangle (G)"><svg class="i" aria-hidden="true"><use href="#i-pergola"></use></svg><span>Pergola</span><kbd>G</kbd></button>
+    <button data-tool="furniture" title="Mobilier : choisir dans la bibliothèque puis cliquer (E)"><svg class="i" aria-hidden="true"><use href="#i-sofa"></use></svg><span>Mobilier</span><kbd>E</kbd></button>
     <hr>
-    <button data-tool="camera" title="Caméras du parcours : déplacer, orienter, ajouter (T)"><b>🎥</b><span>Caméras</span><kbd>T</kbd></button>
+    <button data-tool="camera" title="Caméras du parcours : déplacer, orienter, ajouter (T)"><svg class="i" aria-hidden="true"><use href="#i-video"></use></svg><span>Caméras</span><kbd>T</kbd></button>
   </aside>
 
   <main class="ed-stage" id="ed-stage">
@@ -74,8 +80,9 @@
     </section>
   </aside>
 
-  <dialog id="dlg-open" class="ed-dialog">
-    <h3>Ouvrir un projet</h3>
+  <dialog id="dlg-open" class="ed-dialog" aria-labelledby="dlg-open-title">
+    <h3 id="dlg-open-title">Ouvrir un projet</h3>
+    <p id="dlg-open-status" class="ed-note" role="status"></p>
     <div id="dlg-open-list" class="ed-list"></div>
     <div class="ed-dialog-actions">
       <label class="ed-btn-file">Importer un project.json…<input id="file-json" type="file" accept="application/json,.json"></label>
@@ -83,29 +90,171 @@
     </div>
   </dialog>
 
-  <dialog id="dlg-ai" class="ed-dialog">
-    <h3>✨ Lecture automatique du plan</h3>
+  <dialog id="dlg-ai" class="ed-dialog" aria-labelledby="dlg-ai-title">
+    <h3 id="dlg-ai-title">Lecture automatique du plan</h3>
     <p class="ed-note">L'image du plan est envoyée au modèle choisi via OpenRouter. Il renvoie murs, portes, fenêtres, pièces et mobilier, que vous corrigez ensuite dans l'éditeur.</p>
-    <div class="ed-field"><label>Modèle</label><select id="ai-model"></select></div>
+    <div class="ed-field"><label for="ai-model">Modèle</label><select id="ai-model"></select></div>
     <p id="ai-cost-estimate" class="ed-note" aria-live="polite"></p>
-    <div class="ed-field"><label>Tracé existant</label>
+    <div class="ed-field"><label for="ai-mode">Tracé existant</label>
       <select id="ai-mode"><option value="replace">Remplacer</option><option value="merge">Ajouter</option></select></div>
-    <div class="ed-field"><label>Échelle</label>
+    <div class="ed-field"><label for="ai-scale">Échelle</label>
       <select id="ai-scale"><option value="ai">Détectée par l'IA (cotes du plan)</option><option value="calibrated">Celle que j'ai calibrée (K)</option></select></div>
-    <div class="ed-field"><label>Mobilier</label><input type="checkbox" id="ai-furniture" checked></div>
-    <p id="ai-status" class="ed-note"></p>
+    <div class="ed-field"><label for="ai-furniture">Mobilier</label><input type="checkbox" id="ai-furniture" checked></div>
+    <p id="ai-status" class="ed-note" role="status"></p>
     <div class="ed-dialog-actions">
       <button id="ai-cancel">Fermer</button>
       <button id="ai-run" class="ed-primary">Lancer la lecture</button>
     </div>
   </dialog>
+  <dialog id="dlg-estimate" class="ed-dialog ed-estimate" aria-labelledby="dlg-estimate-title">
+    <h3 id="dlg-estimate-title">Métré et estimation — Cameroun (FCFA)</h3>
+    <p class="ed-note">Quantités calculées depuis le plan ; prix indicatifs sourcés, modifiables. Ce n’est ni un devis ni un engagement de prix.</p>
+    <form id="est-form" class="ed-est-form">
+      <fieldset class="ed-est-group"><legend>Prix au m²</legend>
+        <div class="ed-field"><label for="est-profile">Référence de prix</label><select id="est-profile" name="profile"></select></div>
+        <div class="ed-field"><label for="est-standing">Standing</label><select id="est-standing" name="standing"></select></div>
+        <div class="ed-field"><label for="est-city">Ville</label><select id="est-city" name="city"></select></div>
+        <div class="ed-field" id="est-vat-row" hidden><label for="est-vat">Ajouter la TVA (19,25 %)</label><input id="est-vat" name="vat" type="checkbox"></div>
+        <div class="ed-field"><label for="est-perM2">Prix au m² saisi (FCFA)</label><input id="est-perM2" name="perM2" type="number" min="0" step="5000" inputmode="numeric" placeholder="selon la référence"></div>
+        <div class="ed-field"><label for="est-annexWeight">Annexes comptées à (%)</label><input id="est-annexWeight" name="annexWeight" type="number" min="0" max="100" step="5" data-percent></div>
+        <div class="ed-field"><label for="est-grossShare">Part gros œuvre (%)</label><input id="est-grossShare" name="grossShare" type="number" min="20" max="90" step="1" data-percent></div>
+        <div class="ed-field"><label for="est-contingency">Imprévus (%)</label><input id="est-contingency" name="contingency" type="number" min="0" max="50" step="1" data-percent></div>
+        <div class="ed-field" id="est-permit-row" hidden><label for="est-permitOther">Taxe de permis (FCFA)</label><input id="est-permitOther" name="permitOther" type="number" min="0" step="10000" inputmode="numeric"></div>
+      </fieldset>
+      <fieldset class="ed-est-group"><legend>Bordereau d’achats</legend>
+        <div class="ed-field"><label for="est-blockPrice20">Parpaing de 20 (FCFA)</label><input id="est-blockPrice20" name="blockPrice20" type="number" min="0" step="5" inputmode="numeric"></div>
+        <div class="ed-field"><label for="est-blockPrice15">Parpaing de 15 (FCFA)</label><input id="est-blockPrice15" name="blockPrice15" type="number" min="0" step="5" inputmode="numeric"></div>
+        <div class="ed-field"><label for="est-tileFormat">Carrelage</label><select id="est-tileFormat" name="tileFormat"></select></div>
+        <div class="ed-field"><label for="est-tileWaste">Chutes de carrelage (%)</label><input id="est-tileWaste" name="tileWaste" type="number" min="0" max="50" step="1" data-percent></div>
+        <div class="ed-field"><label for="est-roofType">Couverture</label><select id="est-roofType" name="roofType"></select></div>
+      </fieldset>
+      <fieldset class="ed-est-group"><legend>Budget global (postes souvent oubliés)</legend>
+        <div class="ed-field"><label for="est-studies">Études et permis</label><input id="est-studies" name="studies" type="checkbox"></div>
+        <div class="ed-field"><label for="est-studiesLow">Études : de (FCFA)</label><input id="est-studiesLow" name="studiesLow" type="number" min="0" step="100000" inputmode="numeric"></div>
+        <div class="ed-field"><label for="est-studiesHigh">à (FCFA)</label><input id="est-studiesHigh" name="studiesHigh" type="number" min="0" step="100000" inputmode="numeric"></div>
+        <div class="ed-field"><label for="est-exterior">Clôture et extérieurs</label><input id="est-exterior" name="exterior" type="checkbox"></div>
+        <div class="ed-field"><label for="est-exteriorLow">Extérieurs : de (%)</label><input id="est-exteriorLow" name="exteriorLow" type="number" min="0" max="50" step="1" data-percent></div>
+        <div class="ed-field"><label for="est-exteriorHigh">à (%)</label><input id="est-exteriorHigh" name="exteriorHigh" type="number" min="0" max="50" step="1" data-percent></div>
+        <div class="ed-field"><label for="est-land">Terrain à acheter</label><input id="est-land" name="land" type="checkbox"></div>
+        <div class="ed-field"><label for="est-plotArea">Surface de la parcelle (m²)</label><input id="est-plotArea" name="plotArea" type="number" min="0" step="10" inputmode="numeric"></div>
+        <div class="ed-field"><label for="est-landZone">Situation</label><select id="est-landZone" name="landZone"></select></div>
+      </fieldset>
+    </form>
+    <div id="est-result" aria-live="polite"></div>
+    <div class="ed-dialog-actions">
+      <button id="est-reset" type="button">Valeurs par défaut</button>
+      <button id="est-csv" type="button">Bordereau CSV</button>
+      <button id="est-close" type="button" class="ed-primary">Fermer</button>
+    </div>
+  </dialog>
 
-  <div id="ed-toast" class="ed-toast"></div>
+  <dialog id="dlg-cabinet" class="ed-dialog" aria-labelledby="dlg-cabinet-title">
+    <h3 id="dlg-cabinet-title">Profil Cabinet</h3>
+    <p class="ed-note">Renseignez votre identité éditoriale. Le logo est utilisé sans recadrage ; sans logo, le nom du cabinet sert de signature.</p>
+    <div class="ed-field"><label for="cabinet-name">Nom du cabinet</label><input id="cabinet-name" maxlength="120" autocomplete="organization"></div>
+    <div class="ed-field"><label for="cabinet-architect">Architecte par défaut</label><input id="cabinet-architect" maxlength="120" autocomplete="name"></div>
+    <div class="ed-field"><label for="cabinet-logo">Logo transparent (PNG)</label><input id="cabinet-logo" type="file" accept="image/png,.png"></div>
+    <img id="cabinet-logo-preview" class="cabinet-logo-preview" alt="Aperçu du logo du cabinet" hidden>
+    <button id="cabinet-remove-logo" type="button">Retirer le logo — utiliser le nom du cabinet</button>
+    <p id="cabinet-status" class="ed-note" role="status"></p>
+    <div class="ed-dialog-actions"><button id="cabinet-close" type="button">Fermer</button><button id="cabinet-save" type="button" class="ed-primary">Enregistrer le profil</button></div>
+  </dialog>
 
+  <dialog id="dlg-advanced" class="ed-dialog ed-dialog-wide" aria-labelledby="dlg-advanced-title">
+    <h3 id="dlg-advanced-title">🚀 Outils avancés</h3>
+    <p class="ed-note">Modules stratégiques : export BIM, analyse structurelle, bioclimatique, collaboration temps réel…</p>
+    
+    <div class="ed-advanced-grid">
+      <div class="ed-advanced-card" id="adv-vectorization">
+        <h4>📐 Vectorisation & Export DXF/SVG</h4>
+        <p class="ed-note">Convertir le plan en vecteurs et exporter en DXF/AutoCAD ou SVG.</p>
+        <button id="btn-run-vectorize" type="button">Vectoriser le plan</button>
+        <button id="btn-export-dxf" type="button" disabled>Exporter DXF</button>
+        <button id="btn-export-svg" type="button" disabled>Exporter SVG</button>
+        <div id="vec-result" class="ed-advanced-result"></div>
+      </div>
+
+      <div class="ed-advanced-card" id="adv-structural">
+        <h4>🏗️ Analyse structurelle</h4>
+        <p class="ed-note">Détecter les murs porteurs, calculer les charges, vérifier la stabilité.</p>
+        <button id="btn-run-structural" type="button">Analyser la structure</button>
+        <div id="struct-result" class="ed-advanced-result"></div>
+      </div>
+
+      <div class="ed-advanced-card" id="adv-bioclimatic">
+        <h4>🌿 Analyse bioclimatique</h4>
+        <p class="ed-note">Orientation solaire, ventilation naturelle, inertie thermique.</p>
+        <button id="btn-run-bioclimatic" type="button">Analyser le bioclimatique</button>
+        <div id="bioclim-result" class="ed-advanced-result"></div>
+      </div>
+
+      <div class="ed-advanced-card" id="adv-bim">
+        <h4>🏢 Export BIM (IFC / gbXML)</h4>
+        <p class="ed-note">Exporter le projet en format IFC (Revit/ArchiCAD) ou gbXML (analyse thermique).</p>
+        <button id="btn-export-ifc" type="button">Exporter IFC</button>
+        <button id="btn-export-gbxml" type="button">Exporter gbXML</button>
+        <div id="bim-result" class="ed-advanced-result"></div>
+      </div>
+
+      <div class="ed-advanced-card" id="adv-compliance">
+        <h4>✅ Vérification réglementaire</h4>
+        <p class="ed-note">Vérifier la conformité PLU, RE2020, PMR et habitabilité.</p>
+        <button id="btn-run-compliance" type="button">Vérifier la conformité</button>
+        <div id="compliance-result" class="ed-advanced-result"></div>
+      </div>
+
+      <div class="ed-advanced-card" id="adv-variants">
+        <h4>🎨 Générateur de variantes</h4>
+        <p class="ed-note">Générer des variantes d'aménagement automatiquement.</p>
+        <button id="btn-generate-variants" type="button">Générer des variantes</button>
+        <div id="variants-result" class="ed-advanced-result"></div>
+      </div>
+
+      <div class="ed-advanced-card" id="adv-copilot">
+        <h4>🤖 Copilot IA</h4>
+        <p class="ed-note">Suggestions IA basées sur votre plan actuel.</p>
+        <button id="btn-run-copilot" type="button">Obtenir des suggestions</button>
+        <div id="copilot-result" class="ed-advanced-result"></div>
+      </div>
+
+      <div class="ed-advanced-card" id="adv-compare">
+        <h4>🔀 Comparaison de versions</h4>
+        <p class="ed-note">Comparer deux versions du projet et voir les différences.</p>
+        <button id="btn-compare-versions" type="button">Comparer avec la dernière sauvegarde</button>
+        <div id="compare-result" class="ed-advanced-result"></div>
+      </div>
+    </div>
+
+    <div class="ed-dialog-actions">
+      <button id="adv-close" type="button" class="ed-primary">Fermer</button>
+    </div>
+  </dialog>
+
+  <div id="ed-toast" class="ed-toast" role="status"></div>
+
+  <script src="js/icons.js"></script>
+  <script src="js/motion.js"></script>
+  <script src="js/houseDataCore.js"></script>
   <script src="js/data.js"></script>
   <script src="js/projectLoader.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="js/costEstimate.js"></script>
+  <script src="js/habitability.js"></script>
+  <!-- Modules stratégiques -->
+  <script src="js/vectorization.js"></script>
+  <script src="js/structuralAnalysis.js"></script>
+  <script src="js/bimExport.js"></script>
+  <script src="js/bioclimaticAnalysis.js"></script>
+  <script src="js/smartAnnotations.js"></script>
+  <script src="js/realtimeCollaboration.js"></script>
+  <script src="js/versionComparison.js"></script>
+  <script src="js/sketchRecognition.js"></script>
+  <script src="js/variantGenerator.js"></script>
+  <script src="js/codeCompliance.js"></script>
+  <script src="js/architectCopilot.js"></script>
   <script src="js/editor.js"></script>
   <script src="js/editorAI.js"></script>
+  <script src="js/editorEstimate.js"></script>
+  <script src="js/editorAdvanced.js"></script>
 </body>
 </html>

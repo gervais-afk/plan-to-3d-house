@@ -87,6 +87,17 @@
     this.quality = 'high';
     this.night = 0;
     this.nightTarget = 0;
+    this.solarHour = this.solarTarget = SolarStudy.day;
+    this.northDegrees = HouseAuto.northAngle(HOUSE_DATA);
+    this.sunOrigin = this.sunLight.position.clone();
+    const bb = HouseAuto.bbox(HOUSE_DATA);
+    const topLevel = HOUSE_DATA.walls.reduce((max, wall) => Math.max(max, wall.level), 0);
+    const height = this.levelOffset(topLevel) + HOUSE_DATA.config.wallHeight;
+    this.sunCenter = new THREE.Vector3(bb.cx, height / 2, bb.cz);
+    this.sunDistance = Math.max(24, Math.hypot(bb.w, bb.d, height) * 1.3);
+    this.sunLight.shadow.camera.far = this.sunDistance * 2.5;
+    this.sunLight.shadow.camera.updateProjectionMatrix();
+    this.scene.add(this.sunLight.target);
     this.roomLights = [];
     this.windGroups = [];
     this.waterMeshes = [];
@@ -418,24 +429,34 @@
     return q;
   };
 
-  P.toggleNight = function () {
-    this.nightTarget = this.nightTarget > 0.5 ? 0 : 1;
-    return this.nightTarget === 1;
+  P.setSolarHour = function (hour) {
+    if (!Number.isFinite(hour)) return;
+    this.solarTarget = SolarStudy.clampHour(hour, this.solarGeo);
+    this.nightTarget = SolarStudy.position(this.solarTarget, this.northDegrees, this.solarGeo).dusk;
+    this._atmoDirty = true;
   };
 
   // Couleurs de ciel / sol / intensités selon élévation (maquette → réel) et Jour / Soir
   const C = {
     paper: new THREE.Color(0xF5F2EB), sky: new THREE.Color(0xdce8f0), nightSky: new THREE.Color(0x131a28),
     lawn: new THREE.Color(0x8fa86a), nightLawn: new THREE.Color(0x26301f),
-    sunDay: new THREE.Color(0xfff4e0), sunNight: new THREE.Color(0x9fb4ff)
+    sunDay: new THREE.Color(0xffffff), sunWarm: new THREE.Color(0xffa450), warmSky: new THREE.Color(0xe9b291), sunNight: new THREE.Color(0x9fb4ff)
   };
   const tmp = new THREE.Color();
 
   P.applyAtmosphere = function () {
     const k = smooth(0.4, 1.0, this.elevationProgress);
-    const n = this.night;
+    const solar = this.solarHour == null ? null : SolarStudy.position(this.solarHour, this.northDegrees, this.solarGeo);
+    const n = solar ? solar.dusk : this.night;
+    if (solar) {
+      this.sunLight.target.position.copy(this.sunCenter);
+      this.sunLight.position.set(solar.x, solar.y, solar.z).multiplyScalar(this.sunDistance).add(this.sunCenter);
+    } else {
+      this.sunLight.target.position.set(0, 0, 0);
+      this.sunLight.position.copy(this.sunOrigin);
+    }
 
-    tmp.copy(C.paper).lerp(C.sky, k).lerp(C.nightSky, n * k);
+    tmp.copy(C.paper).lerp(C.sky, k).lerp(C.warmSky, solar ? solar.warmth * 0.52 * k : 0).lerp(C.nightSky, n * k);
     this.scene.background.copy(tmp);
     this.scene.fog.color.copy(tmp);
     this.groundMaterial.color.copy(C.paper).lerp(C.lawn, k).lerp(C.nightLawn, n * k);
@@ -446,6 +467,10 @@
     const dayIn = inside * (1 - n);
     this.sunLight.intensity = lerp(1.05, 0.08, nk);
     this.sunLight.color.copy(C.sunDay).lerp(C.sunNight, nk);
+    if (solar) {
+      this.sunLight.intensity = lerp(1.05, 1.5 * solar.light, k);
+      this.sunLight.color.copy(C.sunDay).lerp(C.sunWarm, solar.warmth * k);
+    }
     // (intérieur de jour : diffuse modérée pour garder volumes et contrastes, lampes chaudes d'appoint)
     this.ambientLight.intensity = lerp(lerp(lerp(0.6, 0.32, k), 0.14, dayIn), 0.05, nk);
     this.fillLight.intensity = lerp(lerp(lerp(0.45, 0.3, k), 0.42, dayIn), 0.06, nk);
@@ -492,7 +517,7 @@
   };
 
   const matKey = (m) => {
-    if (m.emissive && m.emissive.getHex() !== 0) return m.uuid; // matériaux animés : identité conservée
+    if (m.userData.keepBatch || (m.emissive && m.emissive.getHex() !== 0)) return m.uuid; // matériaux animés : identité conservée
     const t = (x) => (x ? x.uuid : '');
     return [m.type, m.color && m.color.getHexString(), m.roughness, m.metalness, t(m.map), t(m.normalMap), t(m.roughnessMap), t(m.metalnessMap), t(m.alphaMap), m.alphaTest,
       m.transparent, m.opacity, m.side, m.flatShading, m.depthWrite].join('|');
@@ -610,7 +635,11 @@
       }
       attr.needsUpdate = true; mesh.geometry.computeVertexNormals();
     });
-    if (this.night !== this.nightTarget) {
+    if (this.solarHour != null && this.solarHour !== this.solarTarget) {
+      this.solarHour = lerp(this.solarHour, this.solarTarget, Math.min(1, dt * 14));
+      if (Math.abs(this.solarHour - this.solarTarget) < 0.01) this.solarHour = this.solarTarget;
+      this._atmoDirty = true;
+    } else if (this.solarHour == null && this.night !== this.nightTarget) {
       const step = dt / 1.2;
       this.night = this.nightTarget > this.night ? Math.min(this.nightTarget, this.night + step) : Math.max(this.nightTarget, this.night - step);
       this._atmoDirty = true;

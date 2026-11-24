@@ -1,0 +1,57 @@
+/*
+ * Plan / 3D — système de mouvement (voir DESIGN.md, section Mouvement).
+ * Transitions courtes « t-* » inspirées de transitions.dev, écrites pour ce projet :
+ * pilotées par les tokens, sans rebond, et coupées par prefers-reduced-motion (règle globale de tokens.css).
+ */
+
+/* ---------- Fenêtres (modal) ---------- */
+@keyframes t-modal-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } }
+@keyframes t-fade-in { from { opacity: 0; } }
+@keyframes t-panel-in { from { opacity: 0; transform: translateY(-6px); } }
+
+dialog[open]:not(.render-gallery):not(.rg-lightbox) { animation: t-modal-in var(--dur-3) var(--ease-out); }
+dialog[open]::backdrop { animation: t-fade-in var(--dur-3) var(--ease-out); }
+.render-gallery[open], .rg-lightbox[open] { animation: t-fade-in var(--dur-3) var(--ease-out); }
+
+/* ---------- Panneaux qui se déplient (panel reveal) ---------- */
+.client-tools[open] > .client-tool-fields { animation: t-panel-in var(--dur-3) var(--ease-out); transform-origin: top right; }
+
+/* ---------- Chiffres qui apparaissent (number pop-in), avec décalage --i ---------- */
+@keyframes t-pop { from { opacity: 0; transform: translateY(0.35em); filter: blur(2px); } }
+.t-pop { animation: t-pop var(--dur-4) var(--ease-out) both; animation-delay: calc(var(--i, 0) * 70ms); }
+
+/* ---------- Changement de message (text swap) ---------- */
+@keyframes t-swap { from { opacity: 0; transform: translateY(4px); } }
+.t-swap { animation: t-swap var(--dur-2) var(--ease-out); }
+
+/* ---------- Succès : coche tracée ---------- */
+@keyframes t-draw { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+.t-success { color: var(--success); font-weight: 700; }
+.t-success .i { stroke-dasharray: 24; animation: t-draw var(--dur-4) var(--ease-out) both; }
+
+/* ---------- Erreur : secousse brève, retour automatique (error shake) ---------- */
+@keyframes t-shake {
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+.t-shake { animation: t-shake 360ms var(--ease-in-out); }
+.t-error { color: var(--danger); }
+
+/* ---------- Squelettes de chargement des vignettes ---------- */
+@keyframes t-shimmer { to { background-position: -200% 0; } }
+.rg-thumb-wrap, .view-figure, .book-image {
+  background-color: var(--paper-2);
+  background-image: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.38) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: t-shimmer 1.4s linear infinite;
+}
+.rg-thumb-wrap { background-color: var(--night-2); background-image: linear-gradient(100deg, transparent 30%, rgba(238, 240, 232, 0.08) 50%, transparent 70%); }
+
+/* ---------- Passage animé accueil → maquette (View Transitions entre documents) ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition { navigation: auto; }
+  ::view-transition-group(plan3d-hero) { animation-duration: var(--dur-4); animation-timing-function: var(--ease-in-out); }
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: var(--dur-3); }
+}

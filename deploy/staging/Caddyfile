@@ -1,0 +1,8 @@
+{$STAGING_HOST} {
+    header {
+        # Aucune réponse personnalisée ne doit être réutilisée après révocation.
+        >Cache-Control "private, no-store"
+        Strict-Transport-Security "max-age=86400"
+    }
+    reverse_proxy app:8000
+}

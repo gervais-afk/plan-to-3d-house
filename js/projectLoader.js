@@ -41,6 +41,27 @@ const HouseAuto = (() => {
   const contains = (r, x, z) => (window.roomContains ? roomContains(r, x, z) : inRoom(r, { x, z }, 0));
   const roomAtPoint = (data, x, z) => (data.rooms || []).find(r => contains(r, x, z)) || null;
 
+  // Face extérieure d'un mur orienté : sondes de part et d'autre, sur le même niveau.
+  function exteriorSide(data, wall, bb = bbox(data)) {
+    const rooms = data.rooms.filter(r => r.level === wall.level);
+    const half = wall.thick / 2 + 0.08;
+    let score = 0;
+    for (const fraction of [0.2, 0.5, 0.8]) {
+      const { p, n } = openingFrame(wall, { at: wall.length * fraction });
+      const weight = side => Math.max(0, ...rooms.filter(r => contains(r, p.x + n.x * half * side, p.z + n.z * half * side)).map(r => r.habitable ? 2 : 1));
+      score += weight(-1) - weight(1);
+    }
+    if (score) return Math.sign(score);
+    const { p, n } = openingFrame(wall, { at: wall.length / 2 });
+    return (p.x - bb.cx) * n.x + (p.z - bb.cz) * n.z < 0 ? -1 : 1;
+  }
+
+  // Le Nord est -Z par défaut, angle horaire dans le plan (90° = +X).
+  function northAngle(data) {
+    const degrees = Number(data.config.northDegrees);
+    return Number.isFinite(degrees) ? ((degrees % 360) + 360) % 360 : 0;
+  }
+
   // Graphe de circulation : chaque porte / passage relie les deux espaces qu'il sépare ('outside' = extérieur)
   function doorGraph(data, level) {
     if (level !== undefined && level !== null) {
@@ -139,9 +160,13 @@ const HouseAuto = (() => {
     }
     if (!cam) {
       const b = r.bounds;
-      cam = v2(b.xMin + Math.min(0.5, (b.xMax - b.xMin) * 0.2), b.zMax - Math.min(0.5, (b.zMax - b.zMin) * 0.2));
+      const candidates = [0.2, 0.5, 0.8].flatMap(u => [0.8, 0.5, 0.2].map(v => v2(
+        b.xMin + (b.xMax - b.xMin) * u, b.zMin + (b.zMax - b.zMin) * v)));
+      candidates.unshift(v2(b.xMin + Math.min(0.5, (b.xMax - b.xMin) * 0.2), b.zMax - Math.min(0.5, (b.zMax - b.zMin) * 0.2)));
+      cam = candidates.find(p => contains(r, p.x, p.z) && Math.hypot(p.x - c.x, p.z - c.z) > 0.1) || c;
     }
     const look = v2(c.x + (c.x - cam.x) * 0.9, c.z + (c.z - cam.z) * 0.9);
+    if (Math.hypot(look.x - cam.x, look.z - cam.z) < 0.001) look.z += 1;
     return { cam, look };
   }
 
@@ -296,31 +321,57 @@ const HouseAuto = (() => {
     return data;
   }
 
-  return { complete, bbox, doorGraph, doorPath };
+  return { complete, bbox, doorGraph, doorPath, findEntry, roomPose, exteriorSide, northAngle };
 })();
 window.HouseAuto = HouseAuto;
 
 // --- Chargement synchrone du projet demandé (avant la construction de la scène) ---
 (function loadProject() {
+  if (typeof HOUSE_DATA === 'undefined') return;
   const params = new URLSearchParams(location.search);
   const requested = params.get('project');
-  const stored = localStorage.getItem('lastProject');
+  let stored = window.PORTAL_CONTEXT?.project;
+  try { stored ||= localStorage.getItem('lastProject'); } catch { /* stockage facultatif */ }
   let name = requested || (stored && /^[a-z0-9-]{1,60}$/.test(stored) ? stored : 'villa-serena');
   window.ACTIVE_PROJECT_SLUG = /^[a-z0-9-]{1,60}$/.test(name) ? name : 'villa-serena';
   if (!/^[a-z0-9-]{1,60}$/.test(name)) { console.warn('Nom de projet invalide :', name); return; }
   const xhr = new XMLHttpRequest();
   xhr.open('GET', `projects/${name}/project.json?t=${Date.now()}`, false);
   try { xhr.send(); } catch (e) { console.warn('Projet introuvable :', name); }
-  if (xhr.status !== 200 && name !== 'villa-serena') {
+  if (xhr.status !== 200 && !window.PORTAL_CONTEXT?.project && name !== 'villa-serena' && !requested) {
     name = 'villa-serena';
     window.ACTIVE_PROJECT_SLUG = name;
     xhr.open('GET', `projects/${name}/project.json?t=${Date.now()}`, false);
     try { xhr.send(); } catch (e) { console.warn('Projet introuvable :', name); }
   }
-  if (xhr.status !== 200) { console.warn('Projet introuvable :', name); return; }
+  if (xhr.status !== 200) {
+    if (window.PORTAL_CONTEXT?.role) {
+      window.PROJECT_ACCESS_FAILED = true;
+      location.replace('portal.html?session=inaccessible');
+    } else console.warn('Projet introuvable :', name);
+    return;
+  }
 
-  localStorage.setItem('lastProject', name);
-  const p = JSON.parse(xhr.responseText);
+  let p;
+  try {
+    p = JSON.parse(xhr.responseText);
+    if (!Array.isArray(p?.walls) || !Array.isArray(p?.rooms)) throw new Error('Murs ou pièces manquants');
+  } catch (error) {
+    window.PROJECT_DATA_INVALID = true;
+    console.warn('Impossible de lire le projet :', error.message);
+    return;
+  }
+  try { localStorage.setItem('lastProject', name); } catch { /* stockage facultatif */ }
+  if (window.PORTAL_CONTEXT?.role && globalThis.crypto?.subtle) {
+    const serverHash = xhr.getResponseHeader('X-Project-Model-Hash');
+    if (serverHash && /^[a-f0-9]{64}$/.test(serverHash)) window.PROJECT_MODEL_HASH = Promise.resolve(serverHash);
+    else {
+      const bytes = new TextEncoder().encode(xhr.responseText);
+      window.PROJECT_MODEL_HASH = crypto.subtle.digest('SHA-256', bytes)
+        .then(buffer => Array.from(new Uint8Array(buffer), byte => byte.toString(16).padStart(2, '0')).join(''))
+        .catch(() => null);
+    }
+  }
   const baseConfig = Object.assign({}, HOUSE_DATA.config);
   delete baseConfig.walkStart; delete baseConfig.walkBounds; delete baseConfig.planImage;
   const baseAssets = HOUSE_DATA.assets;
@@ -331,26 +382,13 @@ window.HouseAuto = HouseAuto;
   HOUSE_DATA.assets = p.assets || baseAssets;
   HOUSE_DATA.meta = Object.assign({ name: name.toUpperCase(), slug: name }, p.meta || {});
 
-  normalizeHouseData(HOUSE_DATA);
-  HouseAuto.complete(HOUSE_DATA);
+  try {
+    normalizeHouseData(HOUSE_DATA);
+    HouseAuto.complete(HOUSE_DATA);
+  } catch (error) {
+    window.PROJECT_DATA_INVALID = true;
+    console.warn('Géométrie du projet invalide :', error.message);
+    return;
+  }
 
-  // index.html?project=…#wp=3 : ouvre directement le parcours sur l'étape 3 (aperçu depuis l'éditeur)
-  window.addEventListener('load', () => {
-    const m = /wp=(\d+)/.exec(location.hash);
-    if (!m) return;
-    const n = HOUSE_DATA.tourWaypoints.length - 1;
-    setTimeout(() => {
-      const h = document.documentElement.scrollHeight - innerHeight;
-      window.scrollTo(0, (h * Math.min(n, +m[1])) / n);
-    }, 400);
-  });
-
-  document.addEventListener('DOMContentLoaded', () => {
-    const m = HOUSE_DATA.meta;
-    document.title = `${m.name} — Visite 3D interactive`;
-    const t = document.querySelector('.project-title');
-    if (t) t.textContent = m.name;
-    const meta = document.querySelector('.project-meta');
-    if (meta && m.subtitle) meta.textContent = m.subtitle;
-  });
 })();

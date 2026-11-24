@@ -67,6 +67,9 @@
   const canvas = document.getElementById('ed-canvas');
   const ctx = canvas.getContext('2d');
   const $ = id => document.getElementById(id);
+  const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+  let cabinetProfile = { name: '', architect: '', logoUrl: '' };
+  let pendingCabinetLogo;
 
   const S = {
     p: null,              // projet en cours d'édition
@@ -106,8 +109,12 @@
     // après un changement de niveau sur les tableaux d'un autre étage.
     S.undo = []; S.redo = [];
     S.sel = null; S.draft = null; S.drag = null;
-    document.querySelectorAll('.ed-level-tabs [data-level]').forEach(b => b.classList.toggle('active', Number(b.dataset.level) === level));
-    if (markDirty) { S.dirty = true; }
+    document.querySelectorAll('.ed-level-tabs [data-level]').forEach(b => {
+      const active = Number(b.dataset.level) === level;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-pressed', String(active));
+    });
+    if (markDirty) { S.dirty = true; setSaveState('Modifications non enregistrées'); }
     refreshPanel(); draw();
   }
   function allLevelItems(key) {
@@ -197,6 +204,7 @@
   // ---------------------------------------------------------------------------
   function snapshot() { return JSON.stringify(S.p); }
   function commit() {
+    setSaveState('Modifications non enregistrées');
     S.undo.push(snapshot());
     if (S.undo.length > 120) S.undo.shift();
     S.redo = [];
@@ -216,12 +224,14 @@
   // ---------------------------------------------------------------------------
   // CHARGEMENT
   // ---------------------------------------------------------------------------
-  const EDITABLE = ['meta', 'config', 'walls', 'rooms', 'columns', 'canopies', 'furniture', 'stairwells', 'levels', 'tourWaypoints'];
+  const EDITABLE = ['meta', 'config', 'walls', 'rooms', 'columns', 'canopies', 'furniture', 'stairwells', 'levels', 'tourWaypoints', 'estimate'];
 
   function loadProject(data, { keepExtras = false } = {}) {
     const src = JSON.parse(JSON.stringify(data));
     const p = emptyProject();
     p.meta = Object.assign(p.meta, src.meta || {});
+    if (!p.meta.architect && cabinetProfile.architect) p.meta.architect = cabinetProfile.architect;
+    if (typeof p.meta.clientVisible !== 'boolean') p.meta.clientVisible = false;
     p.config = Object.assign(p.config, { wallHeight: (src.config && src.config.wallHeight) || 2.8, floorHeight: (src.config && src.config.floorHeight) || 3, planImage: src.config && src.config.planImage || null });
     if (src.config && src.config.elevationEnd) p.config.elevationEnd = src.config.elevationEnd;
     p.walls = (src.walls || []).map(w => {
@@ -256,6 +266,7 @@
     });
 
     if (Array.isArray(src.tourWaypoints)) p.tourWaypoints = JSON.parse(JSON.stringify(src.tourWaypoints));
+    if (src.estimate && typeof src.estimate === 'object' && !Array.isArray(src.estimate)) p.estimate = src.estimate;
     const levelMetadata = Array.isArray(src.levels) ? src.levels : [];
     S.levelData = { 0: Object.fromEntries(LEVEL_ARRAYS.map(key => [key, []])), 1: Object.fromEntries(LEVEL_ARRAYS.map(key => [key, []])) };
     LEVEL_ARRAYS.forEach(key => (p[key] || []).forEach(item => {
@@ -272,7 +283,12 @@
     S.activeLevel = 0;
     LEVEL_ARRAYS.forEach(key => { S.p[key] = S.levelData[0][key]; });
     S.undo = []; S.redo = []; S.sel = null; S.draft = null; S.dirty = false;
-    document.querySelectorAll('.ed-level-tabs [data-level]').forEach(b => b.classList.toggle('active', Number(b.dataset.level) === 0));
+    setSaveState('');
+    document.querySelectorAll('.ed-level-tabs [data-level]').forEach(b => {
+      const active = Number(b.dataset.level) === 0;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-pressed', String(active));
+    });
     S.planDataUrl = null;
     loadPlanImage(p.config.planImage && p.config.planImage.url);
     fitView();
@@ -446,7 +462,7 @@
       ctx.save();
       ctx.globalAlpha = 0.24;
       ctx.setLineDash([5, 4]);
-      ctx.strokeStyle = '#17796e';
+      ctx.strokeStyle = '#9a6f2a';
       ctx.lineWidth = 1.5;
       (S.levelData[0].rooms || []).forEach(r => { roomPath(r); ctx.stroke(); });
       (S.levelData[0].walls || []).forEach(w => {
@@ -553,7 +569,7 @@
           const sgn = op.hinge === 'end' ? -1 : 1, side = op.side || 1;
           const hx = op.hinge === 'end' ? op.at + op.w / 2 : op.at - op.w / 2;
           const hX = w.from[0] + dx * hx, hZ = w.from[1] + dz * hx;
-          ctx.strokeStyle = opSel ? '#d97706' : (op.entry ? '#17796e' : '#2b3440');
+          ctx.strokeStyle = opSel ? '#d97706' : (op.entry ? '#9a6f2a' : '#2b3440');
           ctx.lineWidth = opSel || op.entry ? 2 : 1.2;
           ctx.beginPath();
           for (let i = 0; i <= 20; i++) {
@@ -601,17 +617,17 @@
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(bpt.x, bpt.y); ctx.stroke();
       if (S.draft.kind === 'wall') {
         const L = Math.hypot(h.snap.x - S.draft.from.x, h.snap.z - S.draft.from.z);
-        label(`${L.toFixed(2)} m`, (a.x + bpt.x) / 2, (a.y + bpt.y) / 2 - 14, 12, '#17796e');
+        label(`${L.toFixed(2)} m`, (a.x + bpt.x) / 2, (a.y + bpt.y) / 2 - 14, 12, '#9a6f2a');
       }
     }
     if (S.draft && S.draft.kind === 'poly' && S.draft.pts.length) {
-      ctx.strokeStyle = '#17796e'; ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#9a6f2a'; ctx.lineWidth = 1.5;
       ctx.fillStyle = 'rgba(23,121,110,0.12)';
       ctx.beginPath();
       S.draft.pts.forEach((p, i) => { const s = toScreen(p[0], p[1]); i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y); });
       if (h) { const last = S.draft.pts[S.draft.pts.length - 1]; const sp = snapPoint(h.world, { x: last[0], z: last[1] }, {}); const s = toScreen(sp.x, sp.z); ctx.lineTo(s.x, s.y); }
       ctx.fill(); ctx.stroke();
-      S.draft.pts.forEach(p => { const s = toScreen(p[0], p[1]); ctx.fillStyle = '#17796e'; ctx.fillRect(s.x - 3, s.y - 3, 6, 6); });
+      S.draft.pts.forEach(p => { const s = toScreen(p[0], p[1]); ctx.fillStyle = '#9a6f2a'; ctx.fillRect(s.x - 3, s.y - 3, 6, 6); });
     }
     if (h && S.tool === 'room-auto') {
       ctx.fillStyle = 'rgba(23,121,110,0.85)';
@@ -623,10 +639,10 @@
       const p2 = toScreen(Math.max(S.draft.from.x, h.snap.x), Math.max(S.draft.from.z, h.snap.z));
       ctx.fillStyle = 'rgba(23,121,110,0.12)';
       ctx.fillRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
-      ctx.strokeStyle = '#17796e'; ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#9a6f2a'; ctx.lineWidth = 1.5;
       ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
       const w = Math.abs(h.snap.x - S.draft.from.x), d = Math.abs(h.snap.z - S.draft.from.z);
-      label(`${w.toFixed(2)} × ${d.toFixed(2)} m · ${(w * d).toFixed(1)} m²`, (p1.x + p2.x) / 2, p1.y - 12, 11, '#17796e');
+      label(`${w.toFixed(2)} × ${d.toFixed(2)} m · ${(w * d).toFixed(1)} m²`, (p1.x + p2.x) / 2, p1.y - 12, 11, '#9a6f2a');
     }
     // Aperçu ouverture sur le mur survolé
     if (h && ['door', 'window', 'open'].includes(S.tool)) {
@@ -639,18 +655,18 @@
         ctx.fillStyle = 'rgba(23,121,110,0.55)';
         ctx.fill();
         const m = toScreen(nw.pr.x, nw.pr.z);
-        label(`${at.toFixed(2)} m depuis le début du mur`, m.x, m.y - 16, 10, '#17796e', 600);
+        label(`${at.toFixed(2)} m depuis le début du mur`, m.x, m.y - 16, 10, '#9a6f2a', 600);
       }
     }
     if (h && S.tool === 'furniture' && S.libItem) {
       const it = S.libItem, c = toScreen(h.snap.x, h.snap.z);
-      ctx.strokeStyle = '#17796e'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#9a6f2a'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
       ctx.strokeRect(c.x - it.w * k / 2, c.y - it.d * k / 2, it.w * k, it.d * k);
       ctx.setLineDash([]);
     }
     if (h && S.tool !== 'select') {
       const s = toScreen(h.snap.x, h.snap.z);
-      ctx.strokeStyle = '#17796e'; ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#9a6f2a'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(s.x, s.y, 4, 0, Math.PI * 2); ctx.stroke();
     }
   }
@@ -1192,12 +1208,13 @@
   const TOOL_KEYS = { KeyV: 'select', KeyK: 'calibrate', KeyM: 'wall-ext', KeyC: 'wall-int', KeyD: 'door', KeyF: 'window', KeyB: 'open', KeyA: 'room', KeyW: 'room-auto', KeyP: 'room-poly', KeyO: 'column', KeyU: 'slab', KeyG: 'pergola', KeyE: 'furniture', KeyT: 'camera' };
 
   window.addEventListener('keydown', e => {
-    const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+    if (e.defaultPrevented || document.querySelector('dialog[open]')) return;
+    const typing = e.target.closest?.('input, select, textarea, [contenteditable]');
     if ((e.ctrlKey || e.metaKey) && e.code === 'KeyS') { e.preventDefault(); save(); return; }
     if (typing) return;
     if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if ((e.ctrlKey || e.metaKey) && e.code === 'KeyY') { e.preventDefault(); redo(); return; }
-    if (e.code === 'Space') { S.space = true; canvas.style.cursor = 'grab'; e.preventDefault(); return; }
+    if (e.code === 'Space' && !e.target.closest?.('button, a, summary, label')) { S.space = true; canvas.style.cursor = 'grab'; e.preventDefault(); return; }
     if (e.code === 'Enter' && closePolyDraft()) return;
     if (e.code === 'Escape') { if (S.draft) S.draft = null; else select(null); draw(); return; }
     if (e.code === 'Delete' || e.code === 'Backspace') { deleteSelection(); return; }
@@ -1218,7 +1235,11 @@
   function setTool(t) {
     S.tool = t;
     S.draft = null;
-    document.querySelectorAll('#ed-tools button').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
+    document.querySelectorAll('#ed-tools button').forEach(b => {
+      const active = b.dataset.tool === t;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-pressed', String(active));
+    });
     $('ed-hint').textContent = HINTS[t] || '';
     $('ed-library').classList.toggle('hidden', t !== 'furniture');
     if (t === 'camera') { ensureCameras(); if (!S.sel || S.sel.kind !== 'camera') { S.sel = null; } refreshPanel(); }
@@ -1387,6 +1408,7 @@
     const slug = await save();
     if (slug && win) win.location = `index.html?project=${slug}#wp=${i}`;
     else if (win) win.close();
+    else if (slug) location.assign(`index.html?project=${slug}`);
   }
 
   // Ajuste une pièce aux faces intérieures des murs qui l'entourent (centre des murs)
@@ -1411,11 +1433,41 @@
     Object.assign(r.bounds, best);
   }
 
+  // Contrôles d'habitabilité (js/habitability.js) : un avertissement cliquable par point à vérifier.
+  function renderChecks() {
+    const list = $('ed-checks-list');
+    if (!list || typeof Habitability === 'undefined') return;
+    const warnings = Habitability.check({ config: S.p.config, walls: allLevelItems('walls'), rooms: allLevelItems('rooms') });
+    $('ed-checks-title').textContent = warnings.length ? `Vérifications (${warnings.length})` : 'Vérifications';
+    if (!warnings.length) {
+      const ok = document.createElement('li');
+      ok.className = 'is-ok';
+      ok.textContent = 'Aucun point à signaler sur les repères vérifiés.';
+      list.replaceChildren(ok);
+      return;
+    }
+    list.replaceChildren(...warnings.map(warning => {
+      const item = document.createElement('li');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = warning.message;
+      if (warning.level !== S.activeLevel) button.textContent += warning.level ? ` (étage ${warning.level})` : ' (rez-de-chaussée)';
+      button.disabled = !warning.target;
+      button.onclick = () => {
+        if (warning.level !== S.activeLevel) switchLevel(warning.level);
+        select(warning.target);
+      };
+      item.append(button);
+      return item;
+    }));
+  }
+
   function projectPanel() {
     const p = S.p;
     const hab = p.rooms.filter(r => r.habitable).reduce((s, r) => s + roomArea(r), 0);
     const nOps = p.walls.reduce((s, w) => s + w.openings.length, 0);
     const pi = p.config.planImage;
+    const sheet = p.meta.sheets?.[S.activeLevel] || {};
     const extrasNote = S.extras ? `<div class="ed-field"><label>Garder caméras & abords</label><input type="checkbox" id="chk-extras" ${S.keepExtras ? 'checked' : ''}></div>
       <p class="ed-note">Décochez pour régénérer automatiquement le parcours caméra, les vues de rendu, les lampes et le jardin après des modifications importantes.</p>` : '';
     const warn = !p.walls.some(w => w.openings.some(o => o.type === 'door' && w.type === 'ext')) && p.walls.length
@@ -1424,8 +1476,30 @@
       { key: 'name', label: 'Nom du projet', set: (o, v) => { o.name = String(v).toUpperCase(); if (!o.slugLocked) o.slug = slugify(v); } },
       { key: 'slug', label: 'Dossier', set: (o, v) => { o.slug = slugify(v); o.slugLocked = true; } },
       { key: 'subtitle', label: 'Sous-titre' },
-      { key: 'client', label: 'Client' }
+      { key: 'client', label: 'Client / maître d’ouvrage' },
+      { key: 'clientVisible', label: 'Afficher le client sur les couvertures partagées', type: 'checkbox' },
+      { key: 'reference', label: 'Référence projet', set: (o, v) => { o.reference = String(v).slice(0, 80); } },
+      // Cartouche du cahier de plans.
+      { key: 'architect', label: 'Architecte responsable', set: (o, v) => { o.architect = String(v).slice(0, 120); } },
+      { key: 'location', label: 'Lieu', set: (o, v) => { o.location = String(v).slice(0, 80); } },
+      { key: 'phase', label: 'Phase', type: 'select', options: { '': '—', ESQ: 'Esquisse', APS: 'Avant-projet sommaire', APD: 'Avant-projet définitif', PC: 'Permis de construire', DCE: 'Dossier de consultation', EXE: 'Exécution' } },
+      { key: 'revision', label: 'Indice du dossier', set: (o, v) => { o.revision = String(v).toUpperCase().slice(0, 4); } },
+      { key: 'issueDate', label: 'Date d’édition', type: 'date' },
+      { key: 'status', label: 'Statut du dossier', set: (o, v) => { o.status = String(v).slice(0, 80); } },
+      // Accueil et signature : parti architectural et contact de l'agence.
+      { key: 'concept', label: 'Parti architectural', set: (o, v) => { o.concept = String(v).slice(0, 600); } },
+      { key: 'contact', label: 'Contact agence', set: (o, v) => { o.contact = String(v).slice(0, 120); } }
     ], null, `
+      <fieldset class="ed-sheet-fields"><legend>Métadonnées manuelles — feuille ${S.activeLevel + 1}</legend>
+        <div class="ed-field"><label for="sheet-title">Titre du plan</label><input id="sheet-title" maxlength="160" value="${escapeHtml(sheet.title)}"></div>
+        <div class="ed-field"><label for="sheet-number">Numéro de feuille</label><input id="sheet-number" maxlength="80" value="${escapeHtml(sheet.number)}"></div>
+        <div class="ed-field"><label for="sheet-level">Niveau indiqué</label><input id="sheet-level" maxlength="80" value="${escapeHtml(sheet.level)}"></div>
+        <div class="ed-field"><label for="sheet-revision">Révision</label><input id="sheet-revision" maxlength="80" value="${escapeHtml(sheet.revision)}"></div>
+        <div class="ed-field"><label for="sheet-date">Date</label><input id="sheet-date" type="date" value="${escapeHtml(sheet.date)}"></div>
+        <div class="ed-field"><label for="sheet-status">Statut</label><input id="sheet-status" maxlength="80" value="${escapeHtml(sheet.status)}"></div>
+        <div class="ed-field"><label for="sheet-scale">Échelle connue (saisie manuelle)</label><input id="sheet-scale" maxlength="80" placeholder="Ex. 1:100" value="${escapeHtml(sheet.scale)}"></div>
+        <p class="ed-note">Aucune échelle n’est déduite du nom du fichier. Les champs laissés vides restent absents du cartouche.</p>
+      </fieldset>
       <div class="ed-field"><label>Opacité du plan</label><input type="range" id="rng-opacity" min="0" max="1" step="0.05" value="${S.planOpacity}"></div>
       <div class="ed-field"><label>Hauteur sous plafond</label><input type="number" id="num-height" step="0.05" value="${p.config.wallHeight}"></div>
       ${extrasNote}
@@ -1437,9 +1511,24 @@
         <div class="ed-stat"><strong>${p.rooms.length}</strong><span>pièces</span></div>
         <div class="ed-stat"><strong>${hab.toFixed(1).replace('.', ',')} m²</strong><span>habitables</span></div>
       </div>
-      <div class="ed-row"><button id="btn-fit">Cadrer la vue</button><button id="btn-center">Centrer sur l'origine</button></div>`);
+      <div class="ed-row"><button id="btn-fit">Cadrer la vue</button><button id="btn-center">Centrer sur l'origine</button></div>
+      <section class="ed-checks" aria-labelledby="ed-checks-title"><h4 id="ed-checks-title">Vérifications</h4><ul id="ed-checks-list"></ul>
+        <p class="ed-note">Repères d'habitabilité indicatifs, non réglementaires : ils signalent, ils ne bloquent pas.</p></section>`);
+    ['title', 'number', 'level', 'revision', 'date', 'status', 'scale'].forEach(key => {
+      const input = $(`sheet-${key}`);
+      input.onchange = () => {
+        commit();
+        const sheets = p.meta.sheets || (p.meta.sheets = []);
+        const current = Object.assign({}, sheets[S.activeLevel] || {});
+        if (input.value.trim()) current[key] = input.value.trim(); else delete current[key];
+        sheets[S.activeLevel] = current;
+        if (!Object.keys(current).length && sheets.every(value => !value || !Object.keys(value).length)) delete p.meta.sheets;
+        refreshPanel();
+      };
+    });
+    renderChecks();
     $('rng-opacity').oninput = e => { S.planOpacity = parseFloat(e.target.value); draw(); };
-    $('num-height').onchange = e => { const v = parseFloat(e.target.value); if (v > 2) { commit(); p.config.wallHeight = v; } };
+    $('num-height').onchange = e => { const v = parseFloat(e.target.value); if (v > 2) { commit(); p.config.wallHeight = v; refreshPanel(); } };
     const chk = $('chk-extras');
     if (chk) chk.onchange = e => { S.keepExtras = e.target.checked; };
     $('btn-fit').onclick = () => { fitView(); draw(); };
@@ -1488,7 +1577,7 @@
   // ---------------------------------------------------------------------------
   // EXPORT & ENREGISTREMENT
   // ---------------------------------------------------------------------------
-  function toProjectJson() {
+  function toProjectJson(updated = new Date().toISOString()) {
     const p = JSON.parse(JSON.stringify(S.p));
     const walls = JSON.parse(JSON.stringify(allLevelItems('walls')));
     const rooms = JSON.parse(JSON.stringify(allLevelItems('rooms')));
@@ -1497,7 +1586,9 @@
     const furniture = JSON.parse(JSON.stringify(allLevelItems('furniture')));
     const stairwells = JSON.parse(JSON.stringify(allLevelItems('stairwells')));
     const out = {
-      meta: { name: p.meta.name, slug: p.meta.slug, subtitle: p.meta.subtitle || '', client: p.meta.client || '', updated: new Date().toISOString() },
+      meta: { name: p.meta.name, slug: p.meta.slug, subtitle: p.meta.subtitle || '', client: p.meta.client || '', clientVisible: p.meta.clientVisible === true, updated,
+        ...Object.fromEntries(['architect', 'location', 'phase', 'revision', 'reference', 'issueDate', 'status', 'concept', 'contact'].filter(key => p.meta[key]).map(key => [key, String(p.meta[key])])),
+        ...(Array.isArray(p.meta.sheets) ? { sheets: p.meta.sheets.map(sheet => Object.fromEntries(['title', 'number', 'level', 'revision', 'date', 'status', 'scale'].filter(key => sheet?.[key]).map(key => [key, String(sheet[key])]))) } : {}) },
       config: { wallHeight: p.config.wallHeight, floorHeight: p.config.floorHeight || 3 },
       levels: [levelMeta(0), levelMeta(1)],
       walls: walls.map(w => ({ from: w.from, to: w.to, thick: w.thick, type: w.type, level: Number(w.level) || 0,
@@ -1522,6 +1613,7 @@
     };
     if (p.config.elevationEnd) out.config.elevationEnd = p.config.elevationEnd;
     if (Array.isArray(p.tourWaypoints) && p.tourWaypoints.length >= 2) out.tourWaypoints = p.tourWaypoints;
+    if (p.estimate && typeof CostEstimate !== 'undefined') out.estimate = CostEstimate.settings(p.estimate);
     const pi = p.config.planImage;
     if (pi && pi.url) out.config.planImage = { url: pi.url.startsWith('data:') ? '' : pi.url, pxPerMeter: pi.pxPerMeter, originPx: pi.originPx, calibrated: !!pi.calibrated };
     if (S.extras && S.keepExtras) Object.assign(out, JSON.parse(JSON.stringify(S.extras)));
@@ -1529,62 +1621,113 @@
     return out;
   }
 
+  let saving = false;
+  function setSaveState(message, error = false) {
+    const state = $('ed-save-state');
+    state.classList.toggle('is-error', error);
+    // Retour animé : coche à l'enregistrement, secousse en cas de refus (css/motion.css).
+    if (!message || !window.Motion) { state.textContent = message; return; }
+    if (error) Motion.error(state, message, $('btn-save'));
+    else if (/enregistr/i.test(message) && !/non enregistr/i.test(message)) Motion.success(state, message);
+    else Motion.swap(state, message);
+  }
+
+  function downloadProject() {
+    const blob = new Blob([JSON.stringify(toProjectJson(), null, 2)], { type: 'application/json' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = 'project.json';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('project.json exporté. Le fichier image du plan n’est pas inclus.');
+  }
+
   async function save() {
-    if (!S.p.walls.length) { toast('Rien à enregistrer : tracez au moins un mur', true); return null; }
+    if (saving) return null;
+    if (!allLevelItems('walls').length) { setSaveState('Tracez au moins un mur avant d’enregistrer.', true); return null; }
     const slug = slugify(S.p.meta.slug || S.p.meta.name);
     S.p.meta.slug = slug;
-    // Le moteur 3D attend une maison centrée sur l'origine (ombres, plan de présentation, caméras)
     const shift = centerProject();
     if (shift.dx || shift.dz) { S.keepExtras = false; draw(); }
+    const project = toProjectJson();
+    const submitted = JSON.stringify(project);
+    const planImage = S.planDataUrl;
+    saving = true;
+    const locks = ['btn-save', 'btn-preview', 'btn-new', 'btn-open', 'btn-import-villa'];
+    locks.forEach(id => { $(id).disabled = true; });
+    setSaveState('Enregistrement…');
     try {
       const res = await fetch('api/save-project', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, project: toProjectJson(), planImage: S.planDataUrl })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug, project, planImage })
       });
-      if (!res.ok) throw new Error(await res.text());
-      const r = await res.json();
-      if (r.planImage && r.planImage.url) { S.p.config.planImage.url = r.planImage.url; S.planDataUrl = null; }
-      localStorage.setItem('lastProject', slug);
-      S.dirty = false;
-      refreshPanel();
-      toast(`Enregistré dans projects/${slug}/project.json`);
+      const result = await res.json().catch(() => null);
+      if (!res.ok || !result?.ok) {
+        if (res.status === 401 || res.status === 403) throw new Error('Session non autorisée. Reconnectez-vous dans l’espace privé.');
+        if ([404, 405, 501].includes(res.status)) throw new Error('Enregistrement serveur indisponible. Utilisez « Exporter le JSON ».');
+        throw new Error(result?.error || `Impossible d’enregistrer le projet (${res.status}).`);
+      }
+      const newerEdits = submitted !== JSON.stringify(toProjectJson(project.meta.updated)) || planImage !== S.planDataUrl;
+      if (result.planImage?.url && planImage && planImage === S.planDataUrl && S.p.config.planImage) {
+        S.p.config.planImage.url = result.planImage.url;
+        S.planDataUrl = null;
+      }
+      try { localStorage.setItem('lastProject', slug); } catch { /* stockage facultatif */ }
+      S.dirty = newerEdits;
+      setSaveState(newerEdits ? 'Version enregistrée · nouvelles modifications en attente' : 'Projet enregistré');
       return slug;
-    } catch (e) {
-      // Serveur absent : téléchargement du fichier
-      const blob = new Blob([JSON.stringify(toProjectJson(), null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'project.json';
-      a.click();
-      toast('Serveur local indisponible : project.json téléchargé (à placer dans projects/' + slug + '/)', true);
+    } catch (error) {
+      setSaveState(error instanceof TypeError ? 'Connexion au serveur perdue. Réessayez ou exportez le JSON.' : error.message, true);
+      S.dirty = true;
       return null;
+    } finally {
+      saving = false;
+      locks.forEach(id => { $(id).disabled = false; });
+      $('ed-project-name').textContent = S.p.meta.name + (S.dirty ? ' •' : '');
     }
   }
 
   async function openDialog() {
+    if (saving) return;
     const dlg = $('dlg-open');
     const list = $('dlg-open-list');
-    list.innerHTML = '<p class="ed-note">Chargement…</p>';
+    const status = $('dlg-open-status');
+    list.replaceChildren();
+    status.textContent = 'Chargement des projets…';
     dlg.showModal();
     try {
-      const items = await (await fetch('api/projects')).json();
-      list.innerHTML = items.length ? '' : '<p class="ed-note">Aucun projet enregistré pour l\'instant.</p>';
+      const response = await fetch('api/projects', { cache: 'no-store' });
+      if (!response.ok) throw new Error();
+      const items = await response.json();
+      status.textContent = items.length ? '' : 'Aucun projet enregistré pour l’instant.';
       items.forEach(it => {
-        const b = document.createElement('button');
-        b.innerHTML = `<span>${it.name}</span><small>${it.slug} · ${new Date(it.updated).toLocaleDateString('fr-FR')}</small>`;
-        b.onclick = async () => {
-          const data = await (await fetch(`projects/${it.slug}/project.json?t=${Date.now()}`)).json();
-          data.meta = Object.assign({ slug: it.slug, slugLocked: true }, data.meta);
-          loadProject(data, { keepExtras: true });
-          localStorage.setItem('lastProject', it.slug);
-          dlg.close();
-          toast('Projet ouvert : ' + it.name);
+        const button = document.createElement('button');
+        const title = document.createElement('span');
+        title.textContent = it.name;
+        const details = document.createElement('small');
+        details.textContent = `${it.slug} · ${new Date(it.updated).toLocaleDateString('fr-FR')}`;
+        button.append(title, details);
+        button.onclick = async () => {
+          if (!confirmLose() || list.getAttribute('aria-busy') === 'true') return;
+          list.setAttribute('aria-busy', 'true');
+          status.textContent = 'Ouverture du projet…';
+          try {
+            const reply = await fetch(`projects/${encodeURIComponent(it.slug)}/project.json`, { cache: 'no-store' });
+            if (!reply.ok) throw new Error();
+            const data = await reply.json();
+            if (!dlg.open || !list.contains(button)) return;
+            data.meta = { ...data.meta, slug: it.slug, slugLocked: true };
+            loadProject(data, { keepExtras: true });
+            try { localStorage.setItem('lastProject', it.slug); } catch { /* stockage facultatif */ }
+            dlg.close();
+            toast('Projet ouvert : ' + it.name);
+          } catch { status.textContent = 'Impossible d’ouvrir ce projet. Réessayez ou importez un fichier.'; }
+          finally { list.removeAttribute('aria-busy'); }
         };
-        list.appendChild(b);
+        list.appendChild(button);
       });
-    } catch (e) {
-      list.innerHTML = '<p class="ed-note warn">Serveur local indisponible : lancez start.bat ou importez un fichier project.json.</p>';
+    } catch {
+      status.textContent = 'Liste indisponible. Réessayez ou importez un fichier project.json.';
     }
   }
 
@@ -1610,7 +1753,7 @@
   $('btn-import-villa').onclick = () => {
     if (!confirmLose()) return;
     const villa = JSON.parse(JSON.stringify(window.HOUSE_DATA));
-    villa.meta = { name: 'VILLA SERENA', slug: 'villa-serena', subtitle: 'Plan Eng Dollar — plain-pied 109 m²' };
+    villa.meta = { name: 'VILLA SERENA', slug: 'villa-serena', subtitle: 'Villa contemporaine de plain-pied — plan d’origine : Eng Dollar' };
     loadProject(villa, { keepExtras: true });
     toast('Villa Serena chargée depuis js/data.js');
   };
@@ -1640,24 +1783,93 @@
   });
   $('file-json').onchange = e => {
     const f = e.target.files[0];
-    if (!f) return;
-    f.text().then(t => { loadProject(JSON.parse(t), { keepExtras: true }); $('dlg-open').close(); toast('Projet importé'); });
     e.target.value = '';
+    if (!f || !confirmLose()) return;
+    f.text().then(t => {
+      const data = JSON.parse(t);
+      if (!data || !Array.isArray(data.walls) || !Array.isArray(data.rooms)) throw new Error();
+      loadProject(data, { keepExtras: true });
+      $('dlg-open').close();
+      toast('Projet importé');
+    }).catch(() => { $('dlg-open-status').textContent = 'Ce fichier ne contient pas un projet valide.'; });
   };
   $('btn-undo').onclick = undo;
   $('btn-redo').onclick = redo;
   $('btn-save').onclick = save;
+  $('btn-export-json').onclick = downloadProject;
   $('btn-preview').onclick = async () => {
     const win = window.open('about:blank', '_blank');
     const slug = await save();
     if (slug && win) win.location = `index.html?project=${slug}`;
     else if (win) win.close();
+    else if (slug) location.assign(`index.html?project=${slug}`);
   };
   window.addEventListener('beforeunload', e => { if (S.dirty) { e.preventDefault(); e.returnValue = ''; } });
 
   // ---------------------------------------------------------------------------
   // DÉMARRAGE
   // ---------------------------------------------------------------------------
+  async function fetchCabinetProfile() {
+    try {
+      const response = await fetch('api/cabinet/profile', { cache: 'no-store' });
+      if (!response.ok) return;
+      cabinetProfile = await response.json();
+      if (S.p && !S.p.meta.architect && cabinetProfile.architect) {
+        S.p.meta.architect = cabinetProfile.architect;
+        refreshPanel();
+      }
+    } catch { /* profil facultatif en mode hors ligne */ }
+  }
+  $('btn-cabinet').onclick = async () => {
+    await fetchCabinetProfile();
+    $('cabinet-name').value = cabinetProfile.name || '';
+    $('cabinet-architect').value = cabinetProfile.architect || '';
+    const preview = $('cabinet-logo-preview');
+    preview.hidden = !cabinetProfile.logoUrl;
+    if (cabinetProfile.logoUrl) preview.src = cabinetProfile.logoUrl;
+    pendingCabinetLogo = undefined;
+    $('cabinet-logo').value = '';
+    $('cabinet-status').textContent = '';
+    $('dlg-cabinet').showModal();
+  };
+  $('cabinet-logo').onchange = async event => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'image/png' || file.size > 2 * 1024 * 1024) {
+      $('cabinet-status').textContent = 'Choisissez un PNG transparent de moins de 2 Mo.';
+      event.target.value = '';
+      return;
+    }
+    pendingCabinetLogo = await new Promise(resolve => {
+      const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => resolve(null); reader.readAsDataURL(file);
+    });
+    if (pendingCabinetLogo) { $('cabinet-logo-preview').src = pendingCabinetLogo; $('cabinet-logo-preview').hidden = false; }
+  };
+  $('cabinet-remove-logo').onclick = () => {
+    pendingCabinetLogo = '';
+    $('cabinet-logo-preview').hidden = true;
+    $('cabinet-logo').value = '';
+    $('cabinet-status').textContent = 'Le nom du cabinet sera utilisé à la place du logo.';
+  };
+  $('cabinet-close').onclick = () => $('dlg-cabinet').close();
+  $('cabinet-save').onclick = async () => {
+    const button = $('cabinet-save'); button.disabled = true;
+    try {
+      const body = { name: $('cabinet-name').value, architect: $('cabinet-architect').value };
+      if (pendingCabinetLogo !== undefined) body.logo = pendingCabinetLogo;
+      const response = await fetch('api/cabinet/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Profil non enregistré.');
+      const previousArchitect = cabinetProfile.architect;
+      cabinetProfile = result;
+      if (!S.p.meta.architect || S.p.meta.architect === previousArchitect) {
+        commit(); S.p.meta.architect = cabinetProfile.architect; refreshPanel();
+      }
+      $('cabinet-status').textContent = 'Profil Cabinet enregistré.';
+    } catch (error) { $('cabinet-status').textContent = error.message; }
+    finally { button.disabled = false; }
+  };
+  $('dlg-cabinet').addEventListener('close', () => { pendingCabinetLogo = undefined; });
+  void fetchCabinetProfile();
   buildLibrary();
   window.addEventListener('resize', resize);
   loadProject(emptyProject());
@@ -1666,5 +1878,5 @@
   toast('Importez l\'image d\'un plan, ou ouvrez l\'exemple Villa Serena');
   window.__editor = S; // débogage
   // API interne pour les modules complémentaires (lecture IA, caméras…)
-  window.EditorAPI = { S, commit, refreshPanel, draw, toast, fitView, setTool, select, FURNITURE, OPENINGS, wallLen, projectOnWall, slugify, r2, round };
+  window.EditorAPI = { S, commit, refreshPanel, draw, toast, fitView, setTool, select, FURNITURE, OPENINGS, wallLen, projectOnWall, slugify, r2, round, allLevelItems };
 })();
