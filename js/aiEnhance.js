@@ -58,8 +58,15 @@ const AIEnhance = (() => {
     return [...exterior, ...interiors].slice(0, max).map(c => ({
       ...c,
       id: `photor-${c.name}`.slice(0, 76),
-      label: c.name.replace(/[-_]+/g, ' ').replace(/^\w/, ch => ch.toUpperCase())
+      label: prettyLabel(c.name)
     }));
+  }
+
+  /** « facade-sud » → « Façade sud » : noms de fichiers sans accents rendus lisibles. */
+  const ACCENTS = { facade: 'façade', sejour: 'séjour', aerienne: 'aérienne', aerien: 'aérien', entree: 'entrée', veranda: 'véranda', etage: 'étage', exterieur: 'extérieur' };
+  function prettyLabel(name) {
+    const text = String(name).split(/[-_]+/).map(word => ACCENTS[word.toLowerCase()] || word).join(' ');
+    return text.charAt(0).toUpperCase() + text.slice(1);
   }
 
   /**
@@ -168,10 +175,31 @@ const AIEnhance = (() => {
   // SUBLIMATION
   // =====================================================================
 
+  const slugify = text => String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+  /**
+   * Prompt d'une vue, piloté par le projet (js/aiPrompt.js, comme la visite 3D) : un prompt extérieur
+   * n'ajoute ni mobilier ni décor intérieur (essai réel : un prompt unique avait posé un lit sur la pelouse).
+   */
+  function promptFor(item, project) {
+    const AP = typeof AiPrompt !== 'undefined' ? AiPrompt
+      : (typeof module !== 'undefined' && typeof require === 'function' ? require('./aiPrompt.js') : null);
+    const room = item.exterior ? null
+      : (project?.rooms || []).find(r => r.id === item.name || slugify(r.name) === item.name) || null;
+    if (!AP) return { prompt: PHOTOREAL_PROMPT, tags: null, room };
+    const { prompt, tags } = AP.build({
+      kind: item.exterior ? 'exterior' : 'interior',
+      room,
+      city: project?.estimate?.city || 'douala',
+      planVersion: project ? AP.planVersion(project) : null
+    });
+    return { prompt, tags, room };
+  }
+
   /**
    * Photoréalise les captures 3D du projet qui ne le sont pas encore.
    * @param {string} slug — projet enregistré (projects/<slug>)
-   * @param {object} [options] — { model, fetch, confirm, onProgress }
+   * @param {object} [options] — { project, model, fetch, confirm, onProgress } ; project fournit pièces et ville au prompt
    * @returns {Promise<{created: object[], skipped: string}>}
    */
   async function sublimateWithAI(slug, options = {}) {
@@ -200,23 +228,27 @@ const AIEnhance = (() => {
     const created = [];
     for (const [index, item] of plan.entries()) {
       progress(`Sublimation ${index + 1}/${plan.length} : ${item.label}…`);
+      const { prompt, tags, room } = promptFor(item, options.project);
       const source = await dataUrl(item.file, fetchImpl);
       const result = await readJson(await fetchImpl('api/ai/images', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, prompt: PHOTOREAL_PROMPT, aspect_ratio: '16:9', input_references: [{ type: 'image_url', image_url: { url: source } }] })
+        body: JSON.stringify({ model, prompt, aspect_ratio: '16:9', input_references: [{ type: 'image_url', image_url: { url: source } }] })
       }), `Génération « ${item.label} »`);
       const generated = result.data?.[0];
       const output = generated?.b64_json ? `data:${generated.media_type || 'image/png'};base64,${generated.b64_json}` : generated?.url;
       if (!output) throw new Error(`Le modèle n'a pas renvoyé d'image pour « ${item.label} ».`);
       const image = await dataUrl(output, fetchImpl);
       const size = await dimensions(image);
+      // Contrôle géométrique local (lignes de l'architecture) quand le module est chargé, comme dans la visite 3D.
+      const fidelity = typeof FidelityCheck !== 'undefined' && typeof Image !== 'undefined'
+        ? await FidelityCheck.compareUrls(source, image).catch(() => null) : null;
       const saved = await readJson(await fetchImpl(api('api/save-generated', slug), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: item.id, data: image,
-          metadata: { reference: item.file, room: item.exterior ? null : item.name, label: `${item.label} — photoréaliste`, width: size.width, height: size.height, model, prompt: PHOTOREAL_PROMPT }
+          metadata: { reference: item.file, room: item.exterior ? null : (room?.id || item.name), label: `${item.label} — photoréaliste`, width: size.width, height: size.height, model, prompt, tags, fidelity }
         })
       }), `Enregistrement « ${item.label} »`);
       created.push(saved.item);
@@ -230,7 +262,7 @@ const AIEnhance = (() => {
     return !!(lastMedia?.images || []).length;
   }
 
-  return { sublimateWithAI, documentImages, loadMedia, isEnhanced, planSublimation, pickImages, estimateUSD, MODELS, DEFAULT_MODEL, PHOTOREAL_PROMPT };
+  return { sublimateWithAI, documentImages, loadMedia, isEnhanced, planSublimation, pickImages, promptFor, estimateUSD, MODELS, DEFAULT_MODEL, PHOTOREAL_PROMPT };
 })();
 
 if (typeof module !== 'undefined' && module.exports) {

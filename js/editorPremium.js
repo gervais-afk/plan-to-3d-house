@@ -131,6 +131,7 @@
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Sublimation…'; }
     try {
       const result = await AIEnhance.sublimateWithAI(slug, {
+        project: data, // pièces et ville : prompt intérieur ou extérieur piloté par le projet
         onProgress: message => { if (status) status.textContent = message; }
       });
       if (result.skipped) {
@@ -155,7 +156,9 @@
    * Slug du projet s'il est enregistré sur le serveur local (sinon null : rien à lire ni à créer).
    */
   async function savedSlug(data) {
-    const slug = (window.ACTIVE_PROJECT_SLUG || data?.meta?.slug || '').toLowerCase();
+    // Projet ouvert dans l'éditeur. Surtout pas window.ACTIVE_PROJECT_SLUG : projectLoader.js le fixe
+    // au projet par défaut au chargement de la page, quel que soit le projet ouvert ensuite.
+    const slug = (data?.meta?.slug || '').toLowerCase();
     if (!/^[a-z0-9-]{1,60}$/.test(slug)) return null;
     try {
       const response = await fetch('api/projects', { cache: 'no-store' });
