@@ -118,21 +118,18 @@ function verifyStructure() {
     // Tests
     'tests/integration.test.cjs',
     
-    // Documentation
-    'API_DOCUMENTATION.md',
-    'GUIDE_DESIGN_PDF.md',
-    'PDF_MODULE_README.md',
-    'GUIDE_COUVERTURE_PREMIUM.md',
-    'INTEGRATION_PREMIUM.md',
-    'INTEGRATION_COMPLETE.md',
-    'RECAPITULATIF_PDF_WAOUH.md',
-    'APS_PLAN_TO_3D_HOUSE.md',
-    'GUIDE_DOCUMENTS_MANQUANTS.md',
-    'RECAPITULATIF_APS_COMPLET.md',
-    'PROMPT_ASSISTANT_LOCAL.md',
-    'PROMPT_GITHUB_CLONE.md',
-    'PROMPT_VERIFICATION_COMPLETE.md',
-    
+    // Documentation (README + docs/ ; les anciens récapitulatifs sont dans docs/archive/)
+    'README.md',
+    'DESIGN.md',
+    'docs/architecture.md',
+    'docs/editeur.md',
+    'docs/visite-3d.md',
+    'docs/estimation.md',
+    'docs/portail-prive.md',
+    'docs/api-modules.md',
+    'docs/verification.md',
+    'docs/reprise-assistant.md',
+
     // UI
     'editor.html',
     'index.html',
@@ -292,34 +289,18 @@ function verifyIntegration() {
 function verifyDocumentation() {
   section('5. VÉRIFICATION DE LA DOCUMENTATION');
 
-  const docs = [
-    { file: 'API_DOCUMENTATION.md', minLines: 400, desc: 'Documentation API' },
-    { file: 'GUIDE_DESIGN_PDF.md', minLines: 500, desc: 'Guide design PDF' },
-    { file: 'PDF_MODULE_README.md', minLines: 400, desc: 'Documentation PDF' },
-    { file: 'GUIDE_COUVERTURE_PREMIUM.md', minLines: 400, desc: 'Guide couverture' },
-    { file: 'INTEGRATION_PREMIUM.md', minLines: 400, desc: 'Guide intégration' },
-    { file: 'INTEGRATION_COMPLETE.md', minLines: 300, desc: 'Récapitulatif intégration' },
-    { file: 'RECAPITULATIF_PDF_WAOUH.md', minLines: 400, desc: 'Récapitulatif PDF' },
-    { file: 'APS_PLAN_TO_3D_HOUSE.md', minLines: 500, desc: 'APS du projet' },
-    { file: 'GUIDE_DOCUMENTS_MANQUANTS.md', minLines: 250, desc: 'Guide documents manquants' },
-    { file: 'RECAPITULATIF_APS_COMPLET.md', minLines: 400, desc: 'Récapitulatif APS' },
-    { file: 'PROMPT_ASSISTANT_LOCAL.md', minLines: 600, desc: 'Prompt assistant local' },
-    { file: 'PROMPT_GITHUB_CLONE.md', minLines: 400, desc: 'Prompt GitHub clone' },
-    { file: 'PROMPT_VERIFICATION_COMPLETE.md', minLines: 400, desc: 'Prompt vérification' }
-  ];
-
+  // La longueur ne prouve rien : on vérifie que chaque lien interne mène à un fichier existant.
+  const pages = ['README.md', ...fs.readdirSync('docs').filter(f => f.endsWith('.md')).map(f => `docs/${f}`)];
   let allValid = true;
-  docs.forEach(doc => {
-    const lines = countLines(doc.file);
-    if (fileExists(doc.file)) {
-      if (lines >= doc.minLines) {
-        pass(`${doc.desc} - ${lines} lignes (min: ${doc.minLines})`);
-      } else {
-        warn(`${doc.desc} - ${lines} lignes (min recommandé: ${doc.minLines})`);
-      }
-    } else {
-      fail(`${doc.desc} MANQUANT`);
+  pages.forEach(page => {
+    const text = fs.readFileSync(page, 'utf8');
+    const links = [...text.matchAll(/\]\(([^)\s#]+)(?:#[^)]*)?\)/g)].map(m => m[1]).filter(href => !/^[a-z]+:/i.test(href));
+    const broken = links.filter(href => !fs.existsSync(path.join(path.dirname(page), decodeURIComponent(href))));
+    if (broken.length) {
+      fail(`${page} - lien(s) cassé(s) : ${broken.join(', ')}`);
       allValid = false;
+    } else {
+      pass(`${page} - ${links.length} lien(s) interne(s) valides`);
     }
   });
 

@@ -66,9 +66,11 @@ test('Sublimation : appelle le relais OpenRouter puis enregistre dans le projet'
   assert.match(question, /0,136 \$/);
   const generations = server.calls.filter(c => c.url === 'api/ai/images');
   assert.equal(generations.length, 2);
+  // Prompts pilotés par le projet (js/aiPrompt.js) : extérieur pour la façade, intérieur pour le séjour.
+  assert.match(generations[0].body.prompt, /exterior visualization/);
+  assert.match(generations[1].body.prompt, /interior visualization/);
   for (const { body } of generations) {
     assert.equal(body.model, AIEnhance.DEFAULT_MODEL);
-    assert.equal(body.prompt, AIEnhance.PHOTOREAL_PROMPT);
     assert.match(body.input_references[0].image_url.url, /^data:image\/jpeg;base64,/);
   }
   const saves = server.calls.filter(c => c.url.startsWith('api/save-generated'));
@@ -92,4 +94,21 @@ test('Sublimation : messages clairs sans clé, sans capture 3D ou sans projet en
   const empty = await AIEnhance.sublimateWithAI('demo', { fetch: fakeServer().fetch, confirm: () => true });
   assert.match(empty.skipped, /Aucune capture 3D/);
   await assert.rejects(AIEnhance.sublimateWithAI('', { fetch: fakeServer().fetch }), /Enregistrez le projet/);
+});
+
+test('Prompt extérieur : aucun mobilier ni décor intérieur (essai réel : un lit était apparu sur la pelouse)', () => {
+  const project = require('../projects/maison-croquis/project.json');
+  const exterior = AIEnhance.promptFor({ name: 'facade', exterior: true }, project);
+  assert.match(exterior.prompt, /exterior visualization/);
+  assert.doesNotMatch(exterior.prompt, /bed|curtain|rug|bedside|cushion|furniture/i);
+  assert.equal(exterior.tags.kind, 'exterior');
+  const interior = AIEnhance.promptFor({ name: 'chambre-1', exterior: false }, project);
+  assert.equal(interior.room.name, 'CHAMBRE 1');
+  assert.equal(interior.tags.use, 'bedroom');
+});
+
+test('Libellés lisibles : accents rétablis à partir des noms de fichiers', () => {
+  const [facade, sejour] = AIEnhance.planSublimation({ images: [], renders: [`${R}facade-sud.jpg`, `${R}sejour.jpg`] });
+  assert.equal(facade.label, 'Façade sud');
+  assert.equal(sejour.label, 'Séjour');
 });

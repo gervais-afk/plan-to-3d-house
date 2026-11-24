@@ -451,8 +451,9 @@ const ClientBrochurePremium = (() => {
       doc.addPage();
       drawPlanPage(doc, data, studio, variant, options);
       if (options.save !== false) {
+        // Le slug du projet passé prime : dans l'éditeur, ACTIVE_PROJECT_SLUG reste celui du projet par défaut.
         const active = typeof window !== 'undefined' ? window.ACTIVE_PROJECT_SLUG : null;
-        const slug = (active || data.meta?.slug || 'projet').replace(/[^a-z0-9-]/gi, '-');
+        const slug = (data.meta?.slug || active || 'projet').replace(/[^a-z0-9-]/gi, '-');
         const suffix = (variant?.name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
         doc.save(`${slug}${suffix ? '-' + suffix : ''}-premium-${currentStyle}.pdf`);
       }

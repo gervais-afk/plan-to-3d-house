@@ -1,0 +1,72 @@
+# Éditeur de plan
+
+Dessiner ou importer un plan dans `editor.html`, puis produire les documents client.
+
+## 📐 Comment Personnaliser Vos Plans
+
+Toutes les dimensions sont centralisées dans `js/data.js` :
+- Pour ajouter une pièce : ajoutez une entrée dans `HOUSE_DATA.rooms` avec ses coordonnées `xMin`, `xMax`, `zMin`, `zMax`.
+- Pour tracer de nouveaux murs ou changer l'emplacement d'une porte ou d'une fenêtre : modifiez le tableau `HOUSE_DATA.walls`.
+- Pour modifier le parcours de la visite automatique : ajustez les points de passage dans `HOUSE_DATA.tourWaypoints`.
+
+## Nouveau projet avec l'éditeur de plan (sans toucher au code)
+
+1. Lancez `start.bat`, puis ouvrez `http://localhost:8000/editor.html`.
+2. **Plan PDF / image…** : importez un PDF, JPG ou PNG, ou déposez le fichier sur la zone de dessin. Pour un PDF, seule la première page est utilisée ; PDF.js la rasterise en PNG haute résolution (jusqu'à 3600 px sur le grand côté). Le rendu devient le calque de référence et sert aussi à la calibration et à la lecture automatique du plan par IA.
+3. **Échelle (K)** : cliquez les deux extrémités d'une cote connue, puis saisissez sa longueur en mètres. Les mêmes pixels rasterisés sont conservés pour éviter tout décalage de calibration.
+4. **Mur ext. (M)** puis **Cloison (C)** : tracez point après point (aimantation et murs droits automatiques ; Échap pour finir, Alt pour un mur en biais).
+5. **Porte (D)**, **Fenêtre (F)**, **Passage (B)** : cliquez sur un mur. La première porte extérieure devient l'entrée de la visite. Pour une porte sélectionnée, H inverse les gonds et J le sens d'ouverture.
+6. **Pièce (A)** : glissez un rectangle, puis renseignez son nom et son sol dans le panneau de droite (« Ajuster aux murs » recale les bords).
+7. Facultatif : **Colonne (O)**, **Auvent (U)**, **Pergola (G)**, **Mobilier (E)** (R pour pivoter un meuble). Les onglets **RDC / Étage 1** séparent les éléments par niveau ; l'outil **Trémie** dessine l'ouverture d'escalier dans la dalle.
+8. **Enregistrer** écrit `projects/<dossier>/project.json` et l'image du plan.
+9. **Visite 3D ↗** ouvre `index.html?project=<dossier>`. Les projets à étage utilisent `level` et `config.floorHeight` pour placer les pièces et murs du R+1 au-dessus du RDC.
+
+Tout ce que vous ne dessinez pas est généré automatiquement : parcours caméra, vues de rendu HD, lampes, allée et jardin, cotes générales, départ de la visite libre.
+
+Sans paramètre, `index.html` ouvre le projet par défaut `residence-verandas` (repli sur `villa-serena` s'il est absent).
+
+## Projet de démonstration `maison-croquis`
+
+Ouvrez `http://127.0.0.1:8000/index.html?project=maison-croquis` pour voir le relevé indicatif du croquis coté. Les deux références papier sont conservées dans `assets/plans/` (`croquis-cote.jpg` et `croquis-technique.jpg`). Le calque de fond utilise la copie du dessin coté dans le dossier du projet, calibré à environ **35,2 px/m** sur la cote manuscrite **15,50 m**, avec l'origine au centre de l'emprise. Les murs, pièces, ouvertures et surfaces sont une interprétation de démonstration à confirmer sur site ; le dessin ne spécifiant aucun étage, le projet reste un RDC. Une toiture plate de démonstration est présente uniquement pour tester la vue éclatée X, pas comme relevé d'une toiture existante.
+
+Au chargement, l'image du plan est posée à plat sous la maison ; elle s'estompe à mesure que les murs se dressent. Le raccourci P permet de la réafficher/masquer.
+
+## Documents pour le client
+
+Ces boutons de la barre d'outils travaillent sur le projet **ouvert dans l'éditeur** (tous niveaux). Pour utiliser les images d'un projet, enregistrez-le d'abord : elles sont lues dans `projects/<dossier>/generated/`.
+
+### 📋 APS Auto — avant-projet sommaire
+
+Produit un PDF de 6 pages à partir des données réelles du projet (`js/apsGenerator.js`) :
+
+1. **Couverture** : nom, sous-titre, maître d'ouvrage, ville, programme, date. Si le projet a une façade photoréaliste, elle illustre la couverture avec la mention « générée par IA, à titre d'illustration ».
+2. **Présentation** : nature (plain-pied ou R+n), surfaces habitables brute et nette, annexes, surface de référence, hauteur sous plafond, menuiseries.
+3. **Programme** : chaque pièce, son usage et sa surface, par niveau (pagination automatique).
+4. **Estimation** : lots et total en FCFA calculés par `CostEstimate`, comme le panneau **Estimation FCFA** (voir [estimation.md](estimation.md)).
+5. **Calendrier** : phases ESQ, APS, APD, permis, PRO/DCE, consultation ; durée des travaux selon la surface et le nombre de niveaux.
+6. **Vigilance** : remarques de `Habitability` (passages, éclairement…), suites à donner, encadré « Bon pour accord ».
+
+Pour un APS personnalisable à la main, ouvrez `aps-template.html` (montants en FCFA, export par l'impression du navigateur).
+
+### 🎨 Catalogue Premium
+
+Brochure client de 2 pages (`js/clientBrochurePremium.js`), en 3 styles : **Moderne**, **Luxe**, **Industriel** (`setStyle()`).
+
+- **Couverture** : façade photoréaliste du projet si elle existe ; sinon vue 3D (dans la visite) ; sinon plan du rez-de-chaussée avec le nom des pièces. Statistiques : surface habitable, surface totale, nombre de pièces.
+- **Page 2** : plan de masse, puis deux vues intérieures photoréalistes si elles existent, sinon le programme des espaces.
+- Les cases du dialogue (statistiques, plan, vues intérieures) sont prises en compte.
+
+### ✨ Sublimer avec l'IA
+
+Photoréalise les **vues enregistrées dans la visite 3D** (`projects/<dossier>/generated/renders/`) avec OpenRouter, via le serveur local (`js/aiEnhance.js`) :
+
+1. Le projet doit être enregistré et avoir au moins une vue enregistrée dans la visite 3D (l'éditeur ne calcule pas de vue 3D lui-même).
+2. Seules les vues **manquantes** pour les documents sont traitées : au total une vue extérieure et deux vues intérieures.
+3. Une confirmation affiche les vues et le **coût estimé** (Gemini 3.1 Flash Image : environ 0,068 $ par image) avant tout appel facturé.
+4. Le serveur relaie l'appel (`POST api/ai/images`) avec le même prompt que la visite 3D, qui interdit de modifier murs, ouvertures et volumes ; l'image est enregistrée dans le projet (`api/save-generated`) et apparaît dans la galerie, le catalogue et l'APS.
+
+La clé OpenRouter est lue par `serve.js` dans `openrouter.key` (ignoré par Git) ou `OPENROUTER_API_KEY`. Le contrôle de fidélité de la galerie (`js/fidelityCheck.js`) signale les rendus qui s'écartent de la vue d'origine.
+
+### Outils avancés
+
+Le bouton **Outils avancés** regroupe les modules d'analyse et d'export : vectorisation et export DXF/SVG, analyse structurelle, analyse bioclimatique, export BIM (IFC, gbXML), vérification réglementaire, générateur de variantes, copilote. Leur API est décrite dans [api-modules.md](api-modules.md).
