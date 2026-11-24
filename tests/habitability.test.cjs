@@ -41,3 +41,11 @@ test('Les circulations ne sont pas soumises à la règle d’éclairage et un pr
   assert.deepEqual(Habitability.check({}), []);
   assert.deepEqual(Habitability.check({ walls: [{ from: [0, 0], to: [0, 0] }], rooms: [{ name: 'x' }] }), []);
 });
+
+test('Paliers et escaliers sont des circulations : pas d’exigence d’éclairement de pièce de vie', () => {
+  const H = require('../js/habitability.js');
+  const verandas = require('../projects/residence-verandas/project.json');
+  const lighting = H.check(verandas).filter(w => w.code === 'lumiere').map(w => w.message);
+  assert.ok(lighting.length > 0, 'les vraies pièces de vie restent contrôlées');
+  assert.ok(!lighting.some(m => /^Palier|^Escalier/.test(m)), lighting.join(' | '));
+});

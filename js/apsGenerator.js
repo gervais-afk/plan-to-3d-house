@@ -70,6 +70,16 @@ const APSGenerator = (() => {
     return count > 1 ? `R+${count - 1} (${count} niveaux)` : 'Plain-pied';
   }
 
+  // « R+1 (2 niveaux) » garde son R majuscule ; seul « Plain-pied » passe en minuscule dans une phrase.
+  const lowerFirst = text => /^R\+/.test(text) ? text : text.charAt(0).toLowerCase() + text.slice(1);
+
+  /** Pièce principale au sens immobilier : séjours et chambres (ni cuisine, ni pièce d'eau, ni circulation, ni annexe). */
+  const NOT_MAIN = /cuisine|kitchen|salle d.?eau|salle de bains?|bains?|douche|\bwc\b|toilette|palier|escalier|degagement|hall|couloir|circulation|entree|dressing|placard|cellier|magasin|buanderie|rangement|garage|veranda|terrasse|porche/;
+  function isMainRoom(room) {
+    const name = String(room.name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    return room.habitable !== false && !NOT_MAIN.test(name);
+  }
+
   function areaOf(room, CE) {
     if (Number.isFinite(room.area)) return room.area;
     return CE ? CE.roomArea(room) : 0;
@@ -93,7 +103,7 @@ const APSGenerator = (() => {
     let start = 0;
     for (const phase of phases) { phase.start = start; start += phase.weeks; }
     const months = worksMonths(reference, levels);
-    return { phases, studyWeeks: start, works: { label: 'Travaux', months, note: `Durée indicative pour ${Math.round(reference)} m² de référence, ${levelsSummary(levels).toLowerCase()}` } };
+    return { phases, studyWeeks: start, works: { label: 'Travaux', months, note: `Durée indicative pour ${Math.round(reference)} m² de référence, ${lowerFirst(levelsSummary(levels))}` } };
   }
 
   /**
@@ -151,7 +161,7 @@ const APSGenerator = (() => {
     const cautions = [...(sanity.errors || []), ...(sanity.warnings || [])].map(String);
 
     const openings = q ? { doors: q.doors, windows: q.windows, bays: q.bays } : null;
-    const nature = meta.nature || `Construction neuve — ${levelsSummary(levelCount).toLowerCase()}`;
+    const nature = meta.nature || `Construction neuve — ${lowerFirst(levelsSummary(levelCount))}`;
     const date = options.date || new Date();
 
     return {
@@ -173,6 +183,7 @@ const APSGenerator = (() => {
       },
       roomCount: rooms.length,
       habitableRoomCount: rooms.filter(r => r.habitable).length,
+      mainRoomCount: rooms.filter(isMainRoom).length,
       openings,
       levels,
       finance,
@@ -374,7 +385,7 @@ const APSGenerator = (() => {
     const info = [
       ['Maître d\'ouvrage', content.client],
       ['Localisation', content.location],
-      ['Programme', `${content.levelsSummary} · ${content.surfaces.habitable} habitables · ${content.habitableRoomCount} pièces`],
+      ['Programme', `${content.levelsSummary} · ${content.surfaces.habitable} habitables · ${content.mainRoomCount} pièces principales`],
       ['Date', content.date]
     ];
     let infoY = 252;
@@ -413,7 +424,7 @@ const APSGenerator = (() => {
 
     ctx.heading('1.3 Caractéristiques');
     const items = [
-      `${content.levelsSummary}, ${content.roomCount} espaces dont ${content.habitableRoomCount} pièces habitables.`
+      `${content.levelsSummary}, ${content.roomCount} espaces dont ${content.mainRoomCount} pièces principales (séjours et chambres).`
     ];
     if (content.wallHeight) items.push(`Hauteur sous plafond : ${String(content.wallHeight).replace('.', ',')} m.`);
     if (content.openings) items.push(`Menuiseries : ${content.openings.doors} portes, ${content.openings.windows} fenêtres, ${content.openings.bays} baies.`);
@@ -433,8 +444,8 @@ const APSGenerator = (() => {
       ctx.y = tableHeader(doc, ctx.y, columns);
       level.rooms.forEach((room, i) => {
         if (ctx.need(7)) ctx.y = tableHeader(doc, ctx.y, columns);
-        const usage = room.desc || (room.habitable ? 'Pièce habitable' : 'Annexe');
-        ctx.y = tableRow(doc, ctx.y, columns, [room.name, room.habitable ? usage : `${usage} (annexe)`, m2(room.area)], { shaded: i % 2 === 1 });
+        const usage = room.desc ? (room.habitable ? room.desc : `${room.desc} (annexe)`) : (room.habitable ? 'Pièce habitable' : 'Annexe');
+        ctx.y = tableRow(doc, ctx.y, columns, [room.name, usage, m2(room.area)], { shaded: i % 2 === 1 });
       });
       ctx.need(8);
       ctx.y = tableRow(doc, ctx.y, columns, ['Total du niveau', `${level.rooms.length} espaces · annexes ${m2(level.annexes)}`, m2(level.habitable + level.annexes)], { bold: true });
