@@ -1878,5 +1878,5 @@
   toast('Importez l\'image d\'un plan, ou ouvrez l\'exemple Villa Serena');
   window.__editor = S; // débogage
   // API interne pour les modules complémentaires (lecture IA, caméras…)
-  window.EditorAPI = { S, commit, refreshPanel, draw, toast, fitView, setTool, select, FURNITURE, OPENINGS, wallLen, projectOnWall, slugify, r2, round, allLevelItems };
+  window.EditorAPI = { S, commit, refreshPanel, draw, toast, fitView, setTool, select, FURNITURE, OPENINGS, wallLen, projectOnWall, slugify, r2, round, allLevelItems, toProjectJson };
 })();
