@@ -19,17 +19,17 @@ const ClientBrochurePremium = (() => {
   // =====================================================================
 
   const STYLES = {
-    modern: { label: 'Moderne', primary: '#1a1a2e', secondary: '#16213e', accent: '#e94560', paper: '#f8f9fa', light: '#a8a8c0', medium: '#4a4a5e' },
-    luxury: { label: 'Luxe', primary: '#064e3b', secondary: '#065f46', accent: '#d4af37', paper: '#fefdf8', light: '#b9c9bf', medium: '#3f5148' },
-    industrial: { label: 'Industriel', primary: '#1e293b', secondary: '#334155', accent: '#b87333', paper: '#f8fafc', light: '#a7b0bd', medium: '#475569' }
+    agence: { label: 'Agence', primary: '#1d2620', secondary: '#202a23', accent: '#b78a3c', paper: '#f4f2eb', light: '#d8c7a0', medium: '#5f6a63', ink: '#1b2320', ruleDark: '#3d4a3f', wood: '#2c382f' },
+    luxury: { label: 'Luxe', primary: '#064e3b', secondary: '#065f46', accent: '#d4af37', paper: '#fefdf8', light: '#b9c9bf', medium: '#3f5148', ink: '#0f2920', ruleDark: '#1c6b53', wood: '#0c5c46' },
+    industrial: { label: 'Industriel', primary: '#1e293b', secondary: '#334155', accent: '#b87333', paper: '#f8fafc', light: '#a7b0bd', medium: '#475569', ink: '#1e293b', ruleDark: '#3e4e63', wood: '#2a394e' }
   };
 
-  let currentStyle = 'modern';
-  let COLORS = { ...STYLES.modern };
+  let currentStyle = 'agence';
+  let COLORS = { ...STYLES.agence };
 
-  /** Choisit le style du catalogue ; renvoie le style retenu (Moderne si inconnu). */
+  /** Choisit le style du catalogue ; renvoie le style retenu (Agence par défaut). */
   function setStyle(name) {
-    currentStyle = Object.prototype.hasOwnProperty.call(STYLES, name) ? name : 'modern';
+    currentStyle = Object.prototype.hasOwnProperty.call(STYLES, name) ? name : 'agence';
     COLORS = { ...STYLES[currentStyle] };
     return currentStyle;
   }
@@ -178,21 +178,26 @@ const ClientBrochurePremium = (() => {
   }
 
   function premiumText(doc, value, x, y, size, options = {}) {
-    const { bold = false, color = COLORS.primary, maxWidth, align = 'left' } = options;
+    const { bold = false, serif = false, color = COLORS.primary, maxWidth, align = 'left', space = 0 } = options;
     let label = pdfSafe(value);
-    doc.setFont('helvetica', bold ? 'bold' : 'normal').setFontSize(size).setTextColor(color);
-    if (maxWidth && doc.getTextWidth(label) > maxWidth) {
-      while (label.length && doc.getTextWidth(`${label}...`) > maxWidth) label = label.slice(0, -1);
+    doc.setFont(serif ? 'times' : 'helvetica', bold ? 'bold' : 'normal').setFontSize(size).setTextColor(color);
+    if (typeof doc.setCharSpace === 'function') doc.setCharSpace(space);
+    const widthOf = str => doc.getTextWidth(str) + (space && str.length > 1 ? space * (str.length - 1) : 0);
+    if (maxWidth && widthOf(label) > maxWidth) {
+      while (label.length && widthOf(`${label}...`) > maxWidth) label = label.slice(0, -1);
       label += '...';
     }
-    doc.text(label, x, y, { align });
+    const extra = space && label.length > 1 ? space * (label.length - 1) : 0;
+    const drawX = align === 'right' ? x - extra : (align === 'center' ? x - extra / 2 : x);
+    doc.text(label, drawX, y, { align });
+    if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0);
   }
 
   function drawDivider(doc, x, y, w) {
-    doc.setDrawColor(COLORS.accent).setLineWidth(2);
-    doc.line(x, y, x + 30, y);
-    doc.setDrawColor(COLORS.light).setLineWidth(0.5);
-    doc.line(x + 35, y, x + w, y);
+    doc.setDrawColor(COLORS.accent).setLineWidth(0.9);
+    doc.line(x, y, x + 26, y);
+    doc.setDrawColor(COLORS.light).setLineWidth(0.35);
+    doc.line(x + 30, y, x + w, y);
   }
 
   function drawStatCard(doc, x, y, w, h, label, value, unit) {
@@ -245,6 +250,15 @@ const ClientBrochurePremium = (() => {
     return null;
   }
 
+  function identityModule() {
+    if (typeof PdfIdentity !== 'undefined') return PdfIdentity;
+    if (typeof globalThis !== 'undefined' && globalThis.PdfIdentity) return globalThis.PdfIdentity;
+    if (typeof module !== 'undefined' && typeof require === 'function') {
+      try { return require('./pdfIdentity.js'); } catch (_) { return null; }
+    }
+    return null;
+  }
+
   function resolveImageSize(doc, image) {
     const w = Number(image?.width), h = Number(image?.height);
     if (Number.isFinite(w) && w > 0 && Number.isFinite(h) && h > 0) return { width: w, height: h };
@@ -259,26 +273,29 @@ const ClientBrochurePremium = (() => {
     return null;
   }
 
+  function imagesCaption(images, data, variant) {
+    const G = gateModule();
+    const list = (images || []).filter(image => image?.data);
+    if (!list.length) return '';
+    const kinds = list.map(image => (G ? G.imageSourceKind(image, data) : (image.ai === true ? 'ai' : 'unknown')));
+    const plural = list.length > 1;
+    if (kinds.includes('ai') || variant?.aiEnhanced) {
+      return G ? G.imageCaption('ai', { plural }) : (plural ? 'Images générées par IA — non contractuelles' : 'Image générée par IA — non contractuelle');
+    }
+    const unique = [...new Set(kinds)];
+    const kind = unique.length === 1 ? unique[0] : 'unknown';
+    return G ? G.imageCaption(kind, { plural }) : (plural ? 'Illustrations du projet' : 'Illustration du projet');
+  }
+
   function coverSourceCaption(data, studio, variant, options) {
     const G = gateModule();
-    const usedImages = [
-      options.images?.facade?.data ? options.images.facade : null,
-      ...(options.includeInterior !== false ? (options.images?.interiors || []).filter(image => image?.data).slice(0, 2) : [])
-    ].filter(Boolean);
-    if (usedImages.length) {
-      const kinds = usedImages.map(image => (G ? G.imageSourceKind(image, data) : (image.ai === true ? 'ai' : 'unknown')));
-      const plural = usedImages.length > 1;
-      if (kinds.includes('ai') || variant?.aiEnhanced) {
-        return G ? G.imageCaption('ai', { plural }) : (plural ? 'Images générées par IA — non contractuelles' : 'Image générée par IA — non contractuelle');
-      }
-      const unique = [...new Set(kinds)];
-      const kind = unique.length === 1 ? unique[0] : 'unknown';
-      return G ? G.imageCaption(kind, { plural }) : (plural ? 'Illustrations du projet' : 'Illustration du projet');
-    }
-    if (variant?.aiEnhanced) {
-      return G ? G.imageCaption('ai', { plural: true }) : 'Images générées par IA — non contractuelles';
+    if (options.images?.facade?.data) {
+      return imagesCaption([options.images.facade], data, variant);
     }
     if (hasStudio(studio)) {
+      if (variant?.aiEnhanced) {
+        return G ? G.imageCaption('ai', { plural: false }) : 'Image générée par IA — non contractuelle';
+      }
       return G ? G.imageCaption('render3d') : 'Capture de la maquette 3D';
     }
     return '';
@@ -367,55 +384,120 @@ const ClientBrochurePremium = (() => {
 
   function drawCoverPage(doc, data, studio, variant, options) {
     const info = summary(data);
-    drawGradient(doc, 0, 0, 210, 297, COLORS.primary, COLORS.secondary, 20);
-    premiumText(doc, variant?.name ? `VARIANTE · ${variant.name}` : 'DOSSIER DE PRÉSENTATION', margin, 25, 10, { bold: true, color: COLORS.accent });
-    premiumText(doc, data.meta?.name || 'Projet architectural', margin, 45, 34, { bold: true, color: '#ffffff', maxWidth: width });
-    if (data.meta?.subtitle) premiumText(doc, data.meta.subtitle, margin, 58, 12, { color: COLORS.light, maxWidth: width });
-    doc.setDrawColor(COLORS.accent).setLineWidth(3);
-    doc.line(margin, 68, margin + 60, 68);
+    const ID = identityModule();
+    const meta = ID ? ID.extractMeta(data, { cabinet: options.cabinet, date: options.date }) : {
+      project: data.meta?.name || 'Projet architectural',
+      subtitle: data.meta?.subtitle || '',
+      client: data.meta?.client || '',
+      location: data.meta?.location || data.meta?.address || '',
+      phase: data.meta?.phase || '',
+      revision: data.meta?.revision || '',
+      date: '',
+      agency: data.meta?.architect || data.meta?.agency || '',
+      brand: 'ARCHICAM STUDIO'
+    };
+    const stylePalette = {
+      panel: COLORS.secondary,
+      gold: COLORS.accent,
+      accent: COLORS.accent,
+      sand: COLORS.light,
+      light: COLORS.light,
+      ruleDark: COLORS.ruleDark,
+      white: '#ffffff'
+    };
 
-    const imgY = 82, imgH = 120;
-    drawShadow(doc, margin, imgY, width, imgH, 5);
+    doc.setFillColor(COLORS.primary).rect(0, 0, 210, 297, 'F');
+    if (ID) {
+      ID.drawWoodGrain(doc, { x: 0, y: 0, w: 210, h: 297 }, { color: COLORS.wood, seed: 11, knots: 2, spacing: 5.8 });
+      ID.cropMarks(doc, 10, 10, 190, 277, COLORS.accent);
+      ID.drawCoverHeader(doc, {
+        x: margin, y: 21, w: width,
+        brand: meta.brand || 'ARCHICAM STUDIO',
+        documentType: variant?.name ? `VARIANTE · ${variant.name}` : 'DOSSIER DE PRÉSENTATION',
+        palette: stylePalette
+      });
+    }
+
+    const kicker = [
+      variant?.name ? `VARIANTE · ${variant.name}` : 'BROCHURE DE PRÉSENTATION',
+      meta.phase,
+      meta.revision && `INDICE ${meta.revision}`
+    ].filter(Boolean).join(' · ');
+    premiumText(doc, kicker.toUpperCase(), margin, 36, 7.2, { bold: true, color: COLORS.light, space: 0.8, maxWidth: width });
+
+    doc.setFont('times', 'bold').setFontSize(28).setTextColor('#ffffff');
+    const titleLines = doc.splitTextToSize(pdfSafe(data.meta?.name || 'Projet architectural'), width).slice(0, 2);
+    doc.text(titleLines, margin, 49);
+    let y = 49 + (titleLines.length - 1) * 11 + 5;
+    doc.setDrawColor(COLORS.accent).setLineWidth(0.8);
+    doc.line(margin, y, margin + 26, y);
+    y += 7;
+    if (data.meta?.subtitle) {
+      doc.setFont('helvetica', 'normal').setFontSize(9.5).setTextColor('#d5dbd1');
+      const subLines = doc.splitTextToSize(pdfSafe(data.meta.subtitle), width).slice(0, 2);
+      doc.text(subLines, margin, y);
+      y += subLines.length * 4.5;
+    }
+
+    const imgY = Math.max(y + 6, 86), imgH = 85;
     const facadeImage = options.images?.facade;
     if (facadeImage?.data) {
       drawFitted(doc, facadeImage, margin, imgY, width, imgH);
-      withOpacity(doc, 0.45, () => {
+      withOpacity(doc, 0.48, () => {
         doc.setFillColor('#000000');
-        doc.rect(margin, imgY + imgH - 11, width, 11, 'F');
+        doc.rect(margin, imgY + imgH - 10, width, 10, 'F');
       });
-      premiumText(doc, facadeImage.label || 'Vue extérieure', margin + 4, imgY + imgH - 4, 8.5, { color: '#ffffff', maxWidth: width - 8 });
+      premiumText(doc, facadeImage.label || 'Vue extérieure', margin + 4, imgY + imgH - 3.6, 8, { color: '#ffffff', maxWidth: width - 8 });
+      doc.setDrawColor(COLORS.accent).setLineWidth(0.35).rect(margin, imgY, width, imgH);
     } else if (hasStudio(studio)) {
       const shots = selectShots(data, studio.hs);
       drawFitted(doc, { data: studio.capture(shots.facade, 1600, 800, 1, { clean: true, solar: variant }), width: 1600, height: 800 }, margin, imgY, width, imgH);
-      withOpacity(doc, 0.3, () => {
-        doc.setFillColor('#000000');
-        doc.rect(margin, imgY + imgH - 30, width, 30, 'F');
-      });
+      doc.setDrawColor(COLORS.accent).setLineWidth(0.35).rect(margin, imgY, width, imgH);
     } else {
       doc.setFillColor('#ffffff');
-      doc.roundedRect(margin, imgY, width, imgH, 2, 2, 'F');
-      sitePlan(doc, data, margin + 4, imgY + 4, width - 8, imgH - 14, { labels: true });
-      premiumText(doc, 'Plan du rez-de-chaussée', margin + 6, imgY + imgH - 4, 8, { color: COLORS.medium });
+      doc.rect(margin, imgY, width, imgH, 'F');
+      sitePlan(doc, data, margin + 4, imgY + 4, width - 8, imgH - 13, { labels: true });
+      premiumText(doc, 'Plan du rez-de-chaussée', margin + 5, imgY + imgH - 3.5, 7.5, { color: COLORS.medium });
+      doc.setDrawColor(COLORS.accent).setLineWidth(0.35).rect(margin, imgY, width, imgH);
+    }
+
+    const sourceNote = coverSourceCaption(data, studio, variant, options);
+    if (sourceNote) {
+      premiumText(doc, sourceNote, margin, imgY + imgH + 5, 6.8, { color: COLORS.light, maxWidth: width });
     }
 
     if (options.includeStats !== false) {
-      const statsY = 218, statW = 50, statH = 52;
-      drawStatCard(doc, margin, statsY, statW, statH, 'Surface habitable', Math.round(info.habitable), 'm²');
-      drawStatCard(doc, margin + statW + 10, statsY, statW, statH, 'Surface totale', Math.round(info.total), 'm²');
-      drawStatCard(doc, margin + (statW + 10) * 2, statsY, statW, statH, 'Pièces principales', info.mainRooms, '');
+      const factsY = Math.max(imgY + imgH + 14, 192);
+      const facts = [
+        { value: String(Math.round(info.habitable)), unit: 'm²', label: 'Surface habitable' },
+        { value: String(Math.round(info.total)), unit: 'm²', label: 'Surface totale' },
+        { value: String(info.mainRooms), unit: '', label: 'Pièces principales' }
+      ];
+      if (ID) {
+        ID.drawFactsBand(doc, facts, { x: margin, y: factsY, w: width, h: 24, palette: stylePalette });
+      } else {
+        drawStatCard(doc, margin, factsY, 50, 30, 'Surface habitable', Math.round(info.habitable), 'm²');
+        drawStatCard(doc, margin + 60, factsY, 50, 30, 'Surface totale', Math.round(info.total), 'm²');
+        drawStatCard(doc, margin + 120, factsY, 50, 30, 'Pièces principales', info.mainRooms, '');
+      }
     }
-    premiumText(doc, `Style ${STYLES[currentStyle].label}`, margin, 287, 7, { color: COLORS.light });
-    const sourceNote = coverSourceCaption(data, studio, variant, options);
-    if (sourceNote) {
-      premiumText(doc, sourceNote, margin + width, 287, 7, { color: COLORS.light, align: 'right' });
+
+    if (ID) {
+      ID.drawCartouche(doc, meta, { x: margin, y: 230, w: width, h: 42 }, {
+        theme: 'dark',
+        documentLabel: variant?.name ? `Brochure · ${variant.name}` : 'Brochure de présentation',
+        code: ID.documentCode('brochure', 0),
+        palette: stylePalette
+      });
     }
+    premiumText(doc, `Style ${STYLES[currentStyle].label}`, margin, 285, 7, { color: COLORS.light });
   }
 
   function drawProgram(doc, data, top) {
     const rooms = summary(data).rooms.slice().sort((a, b) => a.level - b.level || Number(b.habitable !== false) - Number(a.habitable !== false) || b.area - a.area);
-    premiumText(doc, 'Programme des espaces', margin, top, 20, { bold: true });
-    let y = top + 8;
-    const rowH = 6.2, bottom = 276;
+    premiumText(doc, 'Programme des espaces', margin, top, 18, { serif: true, bold: true });
+    let y = top + 7.5;
+    const rowH = 6.2, bottom = 274;
     const maxRows = Math.floor((bottom - y) / rowH);
     const shown = rooms.length > maxRows ? rooms.slice(0, maxRows - 1) : rooms;
     shown.forEach((room, i) => {
@@ -434,57 +516,70 @@ const ClientBrochurePremium = (() => {
   }
 
   function drawPlanPage(doc, data, studio, variant, options) {
+    const ID = identityModule();
     doc.setFillColor(COLORS.paper);
     doc.rect(0, 0, 210, 297, 'F');
-    premiumText(doc, 'PLAN & ESPACES', margin, 25, 12, { bold: true, color: COLORS.medium });
-    drawDivider(doc, margin, 30, width);
+    doc.setFillColor(COLORS.primary).rect(0, 0, 210, 32, 'F');
+    if (ID) ID.drawWoodGrain(doc, { x: 0, y: 0, w: 210, h: 32 }, { color: COLORS.wood, seed: 9, knots: 1, spacing: 6.4 });
+    doc.setFillColor(COLORS.accent).rect(0, 32, 210, 0.8, 'F');
+    premiumText(doc, 'ARCHICAM STUDIO · PLAN & ESPACES', margin, 12, 6.2, { bold: true, color: COLORS.light, space: 1.0 });
+    premiumText(doc, data.meta?.name || 'Projet architectural', margin, 23.5, 16, { serif: true, bold: true, color: '#ffffff', maxWidth: width - 22 });
+    premiumText(doc, '02', margin + width, 23.5, 15, { serif: true, bold: true, color: COLORS.accent, align: 'right' });
 
-    let next = 45;
+    let next = 48;
     if (options.includePlan !== false) {
-      premiumText(doc, 'Plan de masse', margin, 45, 26, { bold: true });
-      premiumText(doc, 'Rez-de-chaussée · cotes indicatives', margin, 54, 10, { color: COLORS.medium });
-      const planY = 62, planH = 100;
-      drawShadow(doc, margin, planY, width, planH, 4);
+      premiumText(doc, 'Plan de masse', margin, 47, 19, { serif: true, bold: true });
+      premiumText(doc, 'Rez-de-chaussée · cotes indicatives', margin, 54, 9, { color: COLORS.medium });
+      const planY = 60, planH = 100;
       doc.setFillColor('#ffffff');
-      doc.roundedRect(margin, planY, width, planH, 2, 2, 'F');
+      doc.rect(margin, planY, width, planH, 'F');
+      doc.setDrawColor('#c9cbbf').setLineWidth(0.3).rect(margin, planY, width, planH);
       sitePlan(doc, data, margin + 5, planY + 5, width - 10, planH - 10, { labels: true });
-      next = 180;
+      next = 176;
     }
 
     const shots = hasStudio(studio) && options.includeInterior !== false ? selectShots(data, studio.hs).interior.slice(0, 2) : [];
     const photos = options.includeInterior !== false ? (options.images?.interiors || []).filter(image => image?.data).slice(0, 2) : [];
     if (photos.length) {
-      premiumText(doc, 'Vues intérieures', margin, next, 22, { bold: true });
-      const photoW = (width - 10) / 2, photoH = 65, y = next + 10;
+      premiumText(doc, 'Vues intérieures', margin, next, 18, { serif: true, bold: true });
+      const photoW = (width - 8) / 2, photoH = 66, y = next + 8;
       photos.forEach((photo, i) => {
-        const x = margin + i * (photoW + 10);
-        drawShadow(doc, x, y, photoW, photoH, 4);
+        const x = margin + i * (photoW + 8);
         drawFitted(doc, photo, x, y, photoW, photoH);
-        withOpacity(doc, 0.7, () => {
-          doc.setFillColor('#000000');
-          doc.rect(x, y + photoH - 12, photoW, 12, 'F');
+        withOpacity(doc, 0.65, () => {
+          doc.setFillColor(COLORS.primary);
+          doc.rect(x, y + photoH - 10, photoW, 10, 'F');
         });
-        premiumText(doc, photo.label || 'Vue intérieure', x + 3, y + photoH - 4, 10, { bold: true, color: '#ffffff', maxWidth: photoW - 6 });
+        doc.setDrawColor(COLORS.accent).setLineWidth(0.3).rect(x, y, photoW, photoH);
+        premiumText(doc, photo.label || 'Vue intérieure', x + 3, y + photoH - 3.4, 8.5, { bold: true, color: '#ffffff', maxWidth: photoW - 6 });
       });
+      const interiorNote = imagesCaption(photos, data, variant);
+      if (interiorNote) {
+        premiumText(doc, interiorNote, margin, y + photoH + 5.5, 7, { color: COLORS.medium, maxWidth: width });
+      }
     } else if (shots.length) {
-      premiumText(doc, 'Vues intérieures', margin, next, 22, { bold: true });
-      const photoW = (width - 10) / 2, photoH = 65, y = next + 10;
+      premiumText(doc, 'Vues intérieures', margin, next, 18, { serif: true, bold: true });
+      const photoW = (width - 8) / 2, photoH = 66, y = next + 8;
       shots.forEach((shot, i) => {
-        const x = margin + i * (photoW + 10);
-        drawShadow(doc, x, y, photoW, photoH, 4);
+        const x = margin + i * (photoW + 8);
         drawFitted(doc, { data: studio.capture(shot, 1200, 750, 1, { clean: true, solar: variant }), width: 1200, height: 750 }, x, y, photoW, photoH);
-        withOpacity(doc, 0.7, () => {
-          doc.setFillColor('#000000');
-          doc.rect(x, y + photoH - 12, photoW, 12, 'F');
+        withOpacity(doc, 0.65, () => {
+          doc.setFillColor(COLORS.primary);
+          doc.rect(x, y + photoH - 10, photoW, 10, 'F');
         });
-        premiumText(doc, shot.label, x + 3, y + photoH - 4, 10, { bold: true, color: '#ffffff', maxWidth: photoW - 6 });
+        doc.setDrawColor(COLORS.accent).setLineWidth(0.3).rect(x, y, photoW, photoH);
+        premiumText(doc, shot.label, x + 3, y + photoH - 3.4, 8.5, { bold: true, color: '#ffffff', maxWidth: photoW - 6 });
       });
+      const G = gateModule();
+      const note = G ? G.imageCaption('render3d', { plural: shots.length > 1 }) : (shots.length > 1 ? 'Captures de la maquette 3D' : 'Capture de la maquette 3D');
+      premiumText(doc, note, margin, y + photoH + 5.5, 7, { color: COLORS.medium, maxWidth: width });
     } else {
       drawProgram(doc, data, next);
     }
 
-    premiumText(doc, data.meta?.name || 'Projet', margin, 287, 8, { color: COLORS.medium, maxWidth: 140 });
-    premiumText(doc, '02 / 02', margin + width, 287, 8, { bold: true, color: COLORS.medium, align: 'right' });
+    doc.setDrawColor('#c9cbbf').setLineWidth(0.3).line(margin, 280, margin + width, 280);
+    premiumText(doc, data.meta?.name || 'Projet', margin, 286, 8, { color: COLORS.medium, maxWidth: 140 });
+    premiumText(doc, '02 / 02', margin + width, 286, 8, { bold: true, color: COLORS.medium, align: 'right' });
   }
 
   // =====================================================================
@@ -504,15 +599,18 @@ const ClientBrochurePremium = (() => {
   async function exportPDF(data, studio = null, variant = null, prepare = () => {}, options = {}) {
     if (!data || !Array.isArray(data.rooms) || !data.rooms.length) throw new Error('Projet sans pièces : impossible de composer le catalogue');
     if (options.style) setStyle(options.style);
-    const JsPDF = options.JsPDF || await loadJsPDF();
+    const ID = identityModule();
+    const cabinet = options.cabinet !== undefined ? options.cabinet : (ID ? await ID.loadCabinetProfile() : null);
+    const resolvedOptions = cabinet ? { ...options, cabinet } : options;
+    const JsPDF = resolvedOptions.JsPDF || await loadJsPDF();
     const restore = prepare();
     try {
-      const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: options.compress !== false });
+      const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: resolvedOptions.compress !== false });
       doc.setProperties({ title: pdfSafe(data.meta?.name || 'Projet architectural'), subject: `Brochure premium — style ${STYLES[currentStyle].label}`, creator: 'ArchiCam Studio' });
-      drawCoverPage(doc, data, studio, variant, options);
+      drawCoverPage(doc, data, studio, variant, resolvedOptions);
       doc.addPage();
-      drawPlanPage(doc, data, studio, variant, options);
-      if (options.save !== false) {
+      drawPlanPage(doc, data, studio, variant, resolvedOptions);
+      if (resolvedOptions.save !== false) {
         // Le slug du projet passé prime : dans l'éditeur, ACTIVE_PROJECT_SLUG reste celui du projet par défaut.
         const active = typeof window !== 'undefined' ? window.ACTIVE_PROJECT_SLUG : null;
         const slug = (data.meta?.slug || active || 'projet').replace(/[^a-z0-9-]/gi, '-');

@@ -19,6 +19,31 @@ const PlanBook = (() => {
   const fr2 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const pending = new Map();
 
+  function identityModule() {
+    if (typeof PdfIdentity !== 'undefined') return PdfIdentity;
+    if (typeof globalThis !== 'undefined' && globalThis.PdfIdentity) return globalThis.PdfIdentity;
+    if (typeof module !== 'undefined' && typeof require === 'function') {
+      try { return require('./pdfIdentity.js'); } catch (_) { return null; }
+    }
+    return null;
+  }
+  function woodGrainModule() {
+    if (typeof WoodGrain !== 'undefined') return WoodGrain;
+    if (typeof globalThis !== 'undefined' && globalThis.WoodGrain) return globalThis.WoodGrain;
+    if (typeof module !== 'undefined' && typeof require === 'function') {
+      try { return require('./woodGrain.js'); } catch (_) { return null; }
+    }
+    return null;
+  }
+  function gateModule() {
+    if (typeof DeliverableGate !== 'undefined') return DeliverableGate;
+    if (typeof globalThis !== 'undefined' && globalThis.DeliverableGate) return globalThis.DeliverableGate;
+    if (typeof module !== 'undefined' && typeof require === 'function') {
+      try { return require('./deliverableGate.js'); } catch (_) { return null; }
+    }
+    return null;
+  }
+
   // ---------- Bibliothèques chargées à la demande ----------
   function script(src, ready, integrity) {
     if (ready()) return Promise.resolve();
@@ -48,14 +73,26 @@ const PlanBook = (() => {
   // ---------- Texte et formes ----------
   // Les polices intégrées de jsPDF couvrent Windows-1252 : on remplace les rares signes hors de cette table.
   const clean = value => String(value ?? '').replace(/[  ]/g, ' ').replace(/−/g, '-').replace(/≈/g, 'env.').replace(/[→⟶]/g, '->').replace(/[★☆]/g, '*');
+  function roomArea(room) {
+    const ID = identityModule();
+    if (ID && typeof ID.roomArea === 'function') return ID.roomArea(room);
+    if (Number.isFinite(room?.area)) return room.area;
+    const b = room?.bounds;
+    return b ? Math.max(0, b.xMax - b.xMin) * Math.max(0, b.zMax - b.zMin) : 0;
+  }
+  function textWidth(doc, label, space = 0) {
+    return doc.getTextWidth(label) + (space && label.length > 1 ? space * (label.length - 1) : 0);
+  }
   function text(doc, value, x, y, size = 9, { bold = false, serif = false, color = C.ink, align, maxWidth, space = 0 } = {}) {
     let label = clean(value);
     doc.setFont(serif ? 'times' : 'helvetica', bold ? 'bold' : 'normal').setFontSize(size).setTextColor(color).setCharSpace(space);
-    if (maxWidth && doc.getTextWidth(label) > maxWidth) {
-      while (label.length > 1 && doc.getTextWidth(`${label}…`) > maxWidth) label = label.slice(0, -1);
+    if (maxWidth && textWidth(doc, label, space) > maxWidth) {
+      while (label.length > 1 && textWidth(doc, `${label}…`, space) > maxWidth) label = label.slice(0, -1);
       label += '…';
     }
-    doc.text(label, x, y, { align });
+    const extra = space && label.length > 1 ? space * (label.length - 1) : 0;
+    const drawX = align === 'right' ? x - extra : (align === 'center' ? x - extra / 2 : x);
+    doc.text(label, drawX, y, align ? { align } : undefined);
     doc.setCharSpace(0);
   }
   function paragraph(doc, value, x, y, width, size = 9, lineHeight = 1.45, color = C.ink, maxLines = 99) {
@@ -245,12 +282,35 @@ const PlanBook = (() => {
   }
 
   // ---------- Cartouche et habillage ----------
-  function info(data, sheet) {
-    const meta = data.meta || {};
+  function info(data, sheet, options = {}) {
+    const ID = identityModule();
+    const meta = ID ? ID.extractMeta(data, { cabinet: options.cabinet, date: options.date }) : (() => {
+      const m = data?.meta || {};
+      const rawPhase = String(m.phase || '').trim();
+      return {
+        project: String(m.name || '').trim() || 'Projet architectural',
+        displayProject: nameForDisplay(m.name || 'Projet'),
+        subtitle: String(m.subtitle || '').trim(),
+        client: String(m.client || '').trim(),
+        location: String(m.location || m.address || '').trim(),
+        phase: PHASES[rawPhase] || rawPhase,
+        revision: String(m.revision || '').trim(),
+        date: '',
+        year: '',
+        agency: String(m.architect || m.agency || '').trim(),
+        brand: String(m.agency || '').trim() || 'ARCHICAM STUDIO'
+      };
+    })();
     return {
-      project: nameForDisplay(meta.name || 'Projet'), client: meta.client || '—', architect: meta.architect || '—', location: meta.location || '—',
-      phase: PHASES[meta.phase] || meta.phase || 'Présentation', revision: meta.revision || 'A',
-      date: new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date()),
+      project: meta.displayProject || nameForDisplay(meta.project),
+      client: meta.client,
+      architect: meta.agency,
+      location: meta.location,
+      phase: meta.phase,
+      revision: meta.revision,
+      date: meta.date,
+      year: meta.year,
+      meta,
       sheet
     };
   }
@@ -276,7 +336,7 @@ const PlanBook = (() => {
     const cells = [
       [46, 'PLAN / 3D', 'Cahier de plans', true],
       [82, 'Projet', i.project], [70, 'Planche', sheet.title], [56, 'Maître d’œuvre', i.architect],
-      [36, 'Phase', i.phase], [28, 'Échelle', sheet.scale || '—'], [26, 'Date', i.date], [16, 'Indice', i.revision]
+      [36, 'Phase', i.phase], [28, 'Échelle', sheet.scale || ''], [26, 'Date', i.date], [16, 'Indice', i.revision]
     ];
     const fixed = cells.reduce((sum, cell) => sum + cell[0], 0);
     let x = x0;
@@ -288,7 +348,7 @@ const PlanBook = (() => {
         text(doc, value.toUpperCase(), x + 4, y + 12.6, 5.6, { color: C.sand, space: 0.7 });
       } else {
         text(doc, label.toUpperCase(), x + 3, y + 6, 5.4, { bold: true, color: C.muted, space: 0.6 });
-        text(doc, value, x + 3, y + 12.2, 8.4, { bold: index === 2, maxWidth: w - 5 });
+        if (value) text(doc, value, x + 3, y + 12.2, 8.4, { bold: index === 2, maxWidth: w - 5 });
       }
       x += w;
     });
@@ -462,8 +522,9 @@ const PlanBook = (() => {
   }
 
   function viewSourceCaption(view, data, { fallbackKind = 'unknown', plural = false } = {}) {
-    if (typeof DeliverableGate !== 'undefined' && typeof DeliverableGate.imageCaption === 'function') {
-      return view ? DeliverableGate.imageCaption(view, { project: data, plural }) : DeliverableGate.imageCaption(fallbackKind, { plural });
+    const G = gateModule();
+    if (G && typeof G.imageCaption === 'function') {
+      return view ? G.imageCaption(view, { project: data, plural }) : G.imageCaption(fallbackKind, { plural });
     }
     if (view?.ai === true) return plural ? 'Images générées par IA — non contractuelles' : 'Image générée par IA — non contractuelle';
     return plural ? 'Illustrations du projet' : 'Illustration du projet';
@@ -675,8 +736,11 @@ const PlanBook = (() => {
    * @param {object} options { data, studio, files (PDF d’annexe, facultatif), sections ({ axo: true, … }), onStatus }
    * Les images d’ambiance sont celles explicitement ajoutées au cahier ; aucune n’est incluse par défaut.
    */
-  async function exportBook({ data, studio, files = null, annexes: prepared = null, sections = {}, includeEstimate, screen = null, onStatus = () => {} }) {
+  async function exportBook({ data, studio, files = null, annexes: prepared = null, sections = {}, includeEstimate, cabinet: explicitCabinet, screen = null, onStatus = () => {} }) {
     const JsPDF = await loadJsPDF();
+    const ID = identityModule();
+    const cabinet = explicitCabinet !== undefined ? explicitCabinet : (ID ? await ID.loadCabinetProfile() : null);
+    const bookData = cabinet ? { ...data, cabinet } : data;
     const hs = studio.hs;
     const on = id => (id === 'estimate' && includeEstimate !== undefined ? includeEstimate : sections[id] ?? !SECTIONS.find(s => s.id === id)?.off);
     // Planches de l'architecte : déjà lues et vérifiées dans la fenêtre de composition, sinon lues ici.
@@ -757,10 +821,10 @@ const PlanBook = (() => {
     for (const [index, sheet] of sheets.entries()) {
       if (index) doc.addPage('a3', 'landscape');
       onStatus(`Composition — ${sheet.code} ${sheet.title}…`);
-      if (sheet.id === 'cover') cover(doc, data, sheet, hero, sheets, heroView, coverPlan);
-      else if (sheet.id === 'synth') await drawSynthesisBoard(doc, data, sheet, studio, views);
+      if (sheet.id === 'cover') cover(doc, bookData, sheet, hero, sheets, heroView, coverPlan, { cabinet });
+      else if (sheet.id === 'synth') await drawSynthesisBoard(doc, bookData, sheet, studio, views);
       else if (sheet.id === 'axo') {
-        sheetFrame(doc, data, sheet);
+        sheetFrame(doc, bookData, sheet);
         const w = content.w - 96, h = content.h;
         doc.addImage(render(hs, axonometric(data, hs), 2400, Math.round(2400 * h / w)), 'JPEG', content.x, content.y, w, h);
         sideNote(doc, content.x + w + 8, content.y, 88, 'Volumétrie d’ensemble',
@@ -768,32 +832,33 @@ const PlanBook = (() => {
           [['Hauteur sous plafond', `${fr2.format(data.config.wallHeight)} m`], ['Niveaux', levels.length === 1 ? 'Plain-pied' : `R+${levels.length - 1}`],
             ['Emprise', `${fr.format(HouseAuto.bbox(data).w)} × ${fr.format(HouseAuto.bbox(data).d)} m`]]);
       } else if (sheet.id === 'cut') {
-        sheetFrame(doc, data, sheet);
+        sheetFrame(doc, bookData, sheet);
         const w = content.w - 96, h = content.h;
         doc.addImage(render(hs, axonometric(data, hs, -Math.PI / 2), 2400, Math.round(2400 * h / w), { section: true }), 'JPEG', content.x, content.y, w, h);
         sideNote(doc, content.x + w + 8, content.y, 88, 'La maison ouverte',
           `Coupe horizontale à ${fr2.format(sceneHeight(data, hs) * 0.5)} m du sol : l’organisation des pièces, les circulations et l’ameublement se lisent d’un seul regard.`,
           data.rooms.filter(r => r.habitable).slice(0, 8).map(r => [roomName(r.name), `${fr.format(r.area || 0)} m²`]));
       } else if (sheet.id === 'art') {
-        sheetFrame(doc, data, sheet);
+        sheetFrame(doc, bookData, sheet);
         const image = await loadImage(sheet.source);
         const ratio = Math.min(content.w / image.naturalWidth, content.h / image.naturalHeight);
         const w = image.naturalWidth * ratio, h = image.naturalHeight * ratio;
         doc.setFillColor(C.paper).rect(content.x + (content.w - w) / 2, content.y + (content.h - h) / 2, w, h, 'F');
         doc.addImage(jpeg(image, image.naturalWidth, image.naturalHeight, { quality: 0.98, background: C.paper }), 'JPEG', content.x + (content.w - w) / 2, content.y + (content.h - h) / 2, w, h);
       } else if (sheet.id === 'plan') {
-        sheetFrame(doc, data, sheet);
+        sheetFrame(doc, bookData, sheet);
         drawPlan(doc, data, sheet.level, planBox, sheet.denominator);
         roomTable(doc, data.rooms.filter(r => (Number(r.level) || 0) === sheet.level), planBox.x + planBox.w + 12, content.y + 2, 80);
-      } else if (sheet.id === 'views') await viewsSheet(doc, data, sheet, views, studio);
-      else if (sheet.id === 'spec') specification(doc, data, sheet);
-      else if (sheet.id === 'estimate') estimateSheet(doc, data, sheet, estimate);
-      else if (sheet.id === 'annex') architectSheet(doc, data, sheet);
-      else if (sheet.id === 'diptych') await diptychSheet(doc, data, sheet);
+      } else if (sheet.id === 'views') await viewsSheet(doc, bookData, sheet, views, studio);
+      else if (sheet.id === 'spec') specification(doc, bookData, sheet);
+      else if (sheet.id === 'estimate') estimateSheet(doc, bookData, sheet, estimate);
+      else if (sheet.id === 'annex') architectSheet(doc, bookData, sheet);
+      else if (sheet.id === 'diptych') await diptychSheet(doc, bookData, sheet);
     }
     const slug = (window.ACTIVE_PROJECT_SLUG || data.meta?.slug || 'projet').replace(/[^a-z0-9-]/gi, '-');
     doc.save(`${slug}-cahier-de-plans.pdf`);
-    return { pages: sheets.length, annexes: annexes.length, excluded: excluded.map(e => ({ label: e.view.label, reason: e.reason })) };
+    const missing = ID ? ID.missingFields(bookData, { cabinet }) : { missing: [], message: '' };
+    return { pages: sheets.length, annexes: annexes.length, excluded: excluded.map(e => ({ label: e.view.label, reason: e.reason })), missingFields: missing };
   }
 
   /**
@@ -834,8 +899,9 @@ const PlanBook = (() => {
     doc.setDrawColor(C.rule).setLineWidth(0.2).line(cx, cy + 8, cx + cw, cy + 8);
     text(doc, 'PLANCHE DE SYNTHÈSE DU PROJET', cx + cw / 2, cy + 12.8, 7.2, { align: 'center', bold: true, color: C.ink, space: 0.4 });
     doc.setDrawColor(C.rule).setLineWidth(0.2).line(cx, cy + 15.5, cx + cw, cy + 15.5);
-    text(doc, `Échelle indicative · Phase ${i.phase} · Indice ${i.revision}`, cx + 4, cy + 20, 6, { color: C.muted });
-    text(doc, i.date, cx + cw - 4, cy + 20, 6, { align: 'right', color: C.muted });
+    const metaLine = ['Échelle indicative', i.phase && `Phase ${i.phase}`, i.revision && `Indice ${i.revision}`].filter(Boolean).join(' · ');
+    text(doc, metaLine, cx + 4, cy + 20, 6, { color: C.muted, maxWidth: cw - 24 });
+    if (i.date) text(doc, i.date, cx + cw - 4, cy + 20, 6, { align: 'right', color: C.muted });
 
     // Boussole Nord
     const nx = cx - 12, ny = cy + ch / 2;
@@ -987,8 +1053,10 @@ const PlanBook = (() => {
   /** Définition d'impression (dpi) d'une image posée sur `widthMm`. */
   const printDpi = (img, widthMm) => Math.round(img.naturalWidth / (widthMm / 25.4));
 
-  async function exportCatalog({ data, screen = null, onStatus = () => {} }) {
+  async function exportCatalog({ data, cabinet: explicitCabinet, screen = null, onStatus = () => {} }) {
     const JsPDF = await loadJsPDF();
+    const ID = identityModule();
+    const cabinet = explicitCabinet !== undefined ? explicitCabinet : (ID ? await ID.loadCabinetProfile() : null);
     onStatus('Lecture du catalogue…');
     const listed = (await publishedViews(data, { keepDuplicates: true, includePlans: true })).filter(view => view.catalog);
     if (!listed.length) throw new Error('Le catalogue est vide : ajoutez-y des rendus depuis la galerie.');
@@ -1007,36 +1075,8 @@ const PlanBook = (() => {
     const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape', compress: true });
     doc.setProperties({ title: `${title} — Catalogue des intérieurs`, subject: 'Catalogue d’images', creator: 'ArchiCam Studio' });
 
-    // Couverture « prestige » (A4 paysage) : vue d'ouverture à fond perdu, cartel lin façon musée.
-    doc.setFillColor(C.dark).rect(0, 0, PW, PH, 'F');
-    doc.addImage(jpeg(images[0].img, 2600, Math.round(2600 * PH / PW)), 'JPEG', 0, 0, PW, PH);
-    // Voile haut (lisibilité de la signature) et voile bas-gauche (assise du cartel).
-    veil(doc, 0, 0, PW, 34, C.dark, 0.62, 0, { vertical: true });
-    veil(doc, 0, PH - 92, PW, 92, C.dark, 0, 0.5, { vertical: true });
-    cropMarks(doc, 8, 8, PW - 16, PH - 16, C.sand, 5, 1.5);
-    text(doc, 'ARCHICAM STUDIO', 16, 19, 8.6, { bold: true, color: C.white, space: 1.6 });
-    text(doc, `CATALOGUE · ${new Date().getFullYear()}`, PW - 16, 19, 6.4, { bold: true, color: C.sand, align: 'right', space: 1.2 });
-
-    // Cartel : papier lin, fil de bois, filet d'or, ombre portée discrète.
-    const card = { x: 16, y: PH - 86, w: 138, h: 70 };
-    doc.setFillColor('#0f1411'); alpha(doc, 0.35); doc.rect(card.x + 1.6, card.y + 1.8, card.w, card.h, 'F'); alpha(doc, 1);
-    doc.setFillColor(C.paper).rect(card.x, card.y, card.w, card.h, 'F');
-    if (typeof WoodGrain !== 'undefined') WoodGrain.drawPdf(doc, { x: card.x, y: card.y, w: card.w, h: card.h, color: '#e7dfcf', lineWidth: 0.14, seed: 5, knots: 1, spacing: 5.5 });
-    doc.setFillColor(C.gold).rect(card.x, card.y, card.w, 1.1, 'F');
-    const cx = card.x + 9;
-    text(doc, 'CATALOGUE DES ESPACES INTÉRIEURS', cx, card.y + 11, 6.2, { bold: true, color: C.gold, space: 1 });
-    doc.setFont('times', 'bold').setFontSize(25).setTextColor(C.ink);
-    const lines = doc.splitTextToSize(title, card.w - 18).slice(0, 2);
-    lines.forEach((line, n) => doc.text(line, cx, card.y + 24 + n * 9.5));
-    let cy = card.y + 24 + (lines.length - 1) * 9.5 + 6;
-    doc.setDrawColor(C.gold).setLineWidth(0.6).line(cx, cy, cx + 18, cy);
-    cy += 6.5;
-    text(doc, 'Ambiances de vie, matières et lumière', cx, cy, 8.4, { serif: true, color: C.muted });
-    text(doc, `${images.length} PLANCHES  ·  ÉDITION MONOGRAPHE PRIVÉE`, cx, card.y + card.h - 8, 5.6, { bold: true, color: C.ink, space: 0.7 });
-
-    // Légende de la vue d'ouverture, à droite, sur l'image.
-    text(doc, `FIG. 01  ·  ${roomName(images[0].view.label).toUpperCase()}`, PW - 16, PH - 19, 6.2, { bold: true, color: C.white, align: 'right', space: 0.6 });
-    text(doc, viewSourceCaption(images[0].view, data), PW - 16, PH - 14, 5.8, { color: C.sand, align: 'right' });
+    const coverJpeg = jpeg(images[0].img, 2600, Math.round(2600 * PH / PW));
+    drawCatalogCover(doc, data, coverJpeg, images[0].view, images.length, { cabinet });
 
     // Une planche par image.
     images.forEach(({ view, img }, n) => {
@@ -1063,7 +1103,8 @@ const PlanBook = (() => {
     });
     const slug = (window.ACTIVE_PROJECT_SLUG || data.meta?.slug || 'projet').replace(/[^a-z0-9-]/gi, '-');
     doc.save(`${slug}-catalogue-interieurs.pdf`);
-    return { images: images.length, excluded: excluded.map(e => ({ label: e.view.label, reason: e.reason })), lowRes };
+    const missing = ID ? ID.missingFields(data, { cabinet }) : { missing: [], message: '' };
+    return { images: images.length, excluded: excluded.map(e => ({ label: e.view.label, reason: e.reason })), lowRes, missingFields: missing };
   }
 
   function sideNote(doc, x, y, w, heading, body, rows) {
@@ -1079,12 +1120,67 @@ const PlanBook = (() => {
   }
 
   /**
+   * Couverture du Catalogue des intérieurs (A4 paysage) : vue d'ouverture pleine page,
+   * cartel lin façon musée à gauche, cartouche agence commun à droite et mention de source véridique.
+   */
+  function drawCatalogCover(doc, data, coverJpeg, coverView, plateCount = 1, options = {}) {
+    const PW = 297, PH = 210;
+    const i = info(data, { code: 'CAT-00', title: 'Catalogue des intérieurs' }, options);
+    const WG = woodGrainModule();
+    const ID = identityModule();
+    const title = i.project;
+
+    doc.setFillColor(C.dark).rect(0, 0, PW, PH, 'F');
+    if (coverJpeg) doc.addImage(coverJpeg, 'JPEG', 0, 0, PW, PH);
+    veil(doc, 0, 0, PW, 34, C.dark, 0.72, 0, { vertical: true });
+    veil(doc, 0, PH - 96, PW, 96, C.dark, 0, 0.72, { vertical: true });
+    cropMarks(doc, 8, 8, PW - 16, PH - 16, C.sand, 5, 1.5);
+    text(doc, (i.meta?.brand || 'ARCHICAM STUDIO').toUpperCase(), 16, 19, 8.6, { bold: true, color: C.white, space: 1.6 });
+    const topRight = ['CATALOGUE DES INTÉRIEURS', i.year].filter(Boolean).join(' · ');
+    text(doc, topRight, PW - 16, 19, 6.4, { bold: true, color: C.sand, align: 'right', space: 1.2 });
+
+    // Cartel gauche : papier lin, fil de bois, filet d'or, ombre portée discrète.
+    const card = { x: 16, y: PH - 82, w: 134, h: 66 };
+    doc.setFillColor('#0f1411'); alpha(doc, 0.35); doc.rect(card.x + 1.6, card.y + 1.8, card.w, card.h, 'F'); alpha(doc, 1);
+    doc.setFillColor(C.paper).rect(card.x, card.y, card.w, card.h, 'F');
+    if (WG) WG.drawPdf(doc, { x: card.x, y: card.y, w: card.w, h: card.h, color: '#e7dfcf', lineWidth: 0.14, seed: 5, knots: 1, spacing: 5.5 });
+    doc.setFillColor(C.gold).rect(card.x, card.y, card.w, 1.1, 'F');
+    const cx = card.x + 9;
+    const catKicker = ['CATALOGUE DES ESPACES INTÉRIEURS', i.revision && `INDICE ${i.revision}`].filter(Boolean).join(' · ');
+    text(doc, catKicker, cx, card.y + 10.5, 6.0, { bold: true, color: C.gold, space: 0.9, maxWidth: card.w - 18 });
+    doc.setFont('times', 'bold').setFontSize(24).setTextColor(C.ink);
+    const lines = doc.splitTextToSize(title, card.w - 18).slice(0, 2);
+    lines.forEach((line, n) => doc.text(line, cx, card.y + 23 + n * 9));
+    let cy = card.y + 23 + (lines.length - 1) * 9 + 5.5;
+    doc.setDrawColor(C.gold).setLineWidth(0.6).line(cx, cy, cx + 18, cy);
+    cy += 6;
+    text(doc, data.meta?.subtitle || 'Ambiances de vie, matières et lumière', cx, cy, 8.2, { serif: true, color: C.muted, maxWidth: card.w - 18 });
+    text(doc, `${plateCount} PLANCHE${plateCount > 1 ? 'S' : ''}  ·  ÉDITION ARCHITECTURALE`, cx, card.y + card.h - 7, 5.5, { bold: true, color: C.ink, space: 0.7 });
+
+    // Cartouche agence commun resserré à droite + légende véridique calée juste au-dessus.
+    const cartW = 121, cartH = 42, cartX = PW - 16 - cartW, cartY = PH - 16 - cartH;
+    const drawnCart = ID ? ID.drawCartouche(doc, i.meta, { x: cartX, y: cartY, w: cartW, h: cartH }, {
+      theme: 'dark',
+      documentLabel: 'Catalogue des intérieurs',
+      code: ID.documentCode('catalog', 0),
+      useDisplayName: true
+    }) : { y: cartY };
+    const capH = 12.5, capY = drawnCart.y - capH - 2.5;
+    doc.setFillColor(C.dark); alpha(doc, 0.78); doc.rect(cartX, capY, cartW, capH, 'F'); alpha(doc, 1);
+    doc.setFillColor(C.gold).rect(cartX, capY, 1.0, capH, 'F');
+    text(doc, `FIG. 01  ·  ${roomName(coverView?.label || 'Vue du projet').toUpperCase()}`, cartX + 4, capY + 5.0, 6.0, { bold: true, color: C.white, space: 0.55, maxWidth: cartW - 8 });
+    text(doc, viewSourceCaption(coverView, data), cartX + 4, capY + 9.8, 5.8, { color: C.sand, maxWidth: cartW - 8 });
+  }
+
+  /**
    * Couverture A3 « prestige » : image d'ouverture pleine page, voile vert nuit en dégradé, fil de bois,
    * titre en grand, chiffres clés, sommaire à points de conduite, emblème du plan en filets d'or,
-   * repères de coupe et tranche titrée — un tirage d'agence, pas une page de garde.
+   * repères de coupe, tranche titrée et cartouche agence commun.
    */
-  function cover(doc, data, sheet, hero, sheets, view, coverPlan = null) {
-    const i = info(data, sheet);
+  function cover(doc, data, sheet, hero, sheets, view, coverPlan = null, options = {}) {
+    const i = info(data, sheet, options);
+    const WG = woodGrainModule();
+    const ID = identityModule();
     const panelX = 262, x = 280, w = W - x - 16;
     doc.setFillColor(C.dark).rect(0, 0, W, H, 'F');
     doc.addImage(hero, 'JPEG', 0, 0, W, H);
@@ -1092,12 +1188,13 @@ const PlanBook = (() => {
     veil(doc, 150, 0, panelX - 150, H, C.dark, 0, 0.9);
     doc.setFillColor(C.dark); alpha(doc, 0.9); doc.rect(panelX, 0, W - panelX, H, 'F'); alpha(doc, 1);
     veil(doc, 0, H - 70, panelX, 70, C.dark, 0, 0.55, { vertical: true });
-    if (typeof WoodGrain !== 'undefined') WoodGrain.drawPdf(doc, { x: panelX, y: 0, w: W - panelX, h: H, color: '#2c382f', lineWidth: 0.2, seed: 11, knots: 2, spacing: 5.4 });
+    if (WG) WG.drawPdf(doc, { x: panelX, y: 0, w: W - panelX, h: H, color: '#2c382f', lineWidth: 0.2, seed: 11, knots: 2, spacing: 5.4 });
     cropMarks(doc, 10, 10, W - 20, H - 20, C.gold);
 
     // Tranche : la signature court le long du bord gauche, comme le dos d'un portfolio.
     doc.setFont('helvetica', 'bold').setFontSize(6.2).setTextColor(C.sand);
-    doc.text(`ARCHICAM STUDIO   ·   CAHIER DE PLANS   ·   ${i.project.toUpperCase()}   ·   ${new Date().getFullYear()}`, 6.2, H - 22, { angle: 90, charSpace: 1.1 });
+    const spine = ['ARCHICAM STUDIO', 'CAHIER DE PLANS', i.project.toUpperCase(), i.year].filter(Boolean).join('   ·   ');
+    doc.text(spine, 6.2, H - 22, { angle: 90, charSpace: 1.1 });
 
     // Emblème du plan : le rez-de-chaussée en filets d'or, sur un cartel translucide.
     if (coverPlan) {
@@ -1127,10 +1224,11 @@ const PlanBook = (() => {
     text(doc, viewSourceCaption(view, data, { fallbackKind: 'render3d' }), 22, H - 13.5, 5.6, { color: C.sand });
 
     // En-tête du panneau.
-    text(doc, 'ARCHICAM STUDIO', x, 24, 9.5, { bold: true, color: C.gold, space: 1.6 });
+    text(doc, (i.meta?.brand || 'ARCHICAM STUDIO').toUpperCase(), x, 24, 9.5, { bold: true, color: C.gold, space: 1.6 });
     text(doc, 'CAHIER DE PLANS', x + w, 24, 6.8, { bold: true, color: C.sand, align: 'right', space: 1.2 });
     doc.setDrawColor(C.sand).setLineWidth(0.3).line(x, 28.5, x + w, 28.5);
-    kicker(doc, `${i.phase} · indice ${i.revision}`, x, 50, C.sand);
+    const coverKicker = [i.phase, i.revision && `indice ${i.revision}`].filter(Boolean).join(' · ') || 'Cahier de plans';
+    kicker(doc, coverKicker, x, 50, C.sand);
 
     // Titre : grand, serif, sur deux ou trois lignes.
     doc.setFont('times', 'bold').setFontSize(44).setTextColor(C.white);
@@ -1142,9 +1240,11 @@ const PlanBook = (() => {
     if (data.meta?.subtitle) y = paragraph(doc, data.meta.subtitle, x, y, w, 9.5, 1.45, '#d5dbd1', 3) + 3;
 
     // Chiffres clés : grands numéros, filets d'or entre les colonnes.
-    const habitable = data.totals?.habitable || data.rooms.filter(r => r.habitable).reduce((s, r) => s + (r.area || 0), 0);
-    const levels = new Set(data.walls.map(wall => Number(wall.level) || 0)).size;
-    const facts = [[`${fr.format(habitable)}`, 'm² habitables'], [String(data.rooms.filter(r => r.habitable).length), 'pièces de vie'], [levels === 1 ? 'Plain-pied' : `R+${levels - 1}`, 'niveaux']];
+    const habitable = Number.isFinite(data.totals?.habitable)
+      ? data.totals.habitable
+      : (data.rooms || []).filter(r => r.habitable !== false).reduce((s, r) => s + roomArea(r), 0);
+    const levels = new Set((data.walls || []).map(wall => Number(wall.level) || 0)).size || 1;
+    const facts = [[`${fr.format(habitable)}`, 'm² habitables'], [String((data.rooms || []).filter(r => r.habitable !== false).length), 'pièces de vie'], [levels === 1 ? 'Plain-pied' : `R+${levels - 1}`, 'niveaux']];
     const factW = w / 3;
     facts.forEach(([value, label], n) => {
       const fx = x + n * factW;
@@ -1153,34 +1253,35 @@ const PlanBook = (() => {
       text(doc, label.toUpperCase(), fx, y + 19.5, 5.6, { bold: true, color: C.gold, space: 0.7 });
     });
 
-    // Sommaire à points de conduite.
-    const rows = [['Projet', i.project], ['Maître d’ouvrage', i.client], ['Maître d’œuvre', i.architect], ['Lieu', i.location], ['Date', i.date], ['Planche', `${sheet.code} — ${sheet.title}`]];
-    const rowH = 6.6, boxH = rows.length * rowH + 10, top = H - 16 - boxH;
+    // Cartouche commun resserré en bas de panneau, puis sommaire à points de conduite au-dessus.
+    const boxH = 42, topBox = H - 16 - boxH;
+    const drawnCart = ID ? ID.drawCartouche(doc, i.meta, { x: x - 4, y: topBox, w: w + 8, h: boxH }, {
+      theme: 'dark',
+      documentLabel: sheet.title || 'Cahier de plans',
+      code: sheet.code || ID.documentCode('book', 0),
+      useDisplayName: true
+    }) : { y: topBox };
+
     let row = y + 32;
     kicker(doc, 'Sommaire', x, row, C.sand);
     row += 6.5;
-    const maxRows = Math.max(3, Math.floor((top - 6 - row) / 4.8));
+    const maxRows = Math.max(3, Math.floor((drawnCart.y - 8 - row) / 4.8));
     sheets.slice(1, 1 + maxRows).forEach(s => {
       text(doc, s.code, x, row, 6.8, { bold: true, color: C.gold });
-      const label = s.title.length > 46 ? s.title.slice(0, 45) + '…' : s.title;
+      const label = s.title.length > 44 ? s.title.slice(0, 43) + '…' : s.title;
       text(doc, label, x + 14, row, 6.8, { color: '#e7ebe3' });
       const labelEnd = x + 14 + doc.getTextWidth(label) + 2;
-      doc.setDrawColor('#5d6a5f').setLineDashPattern([0.3, 1.2], 0).setLineWidth(0.25).line(labelEnd, row - 0.6, x + w - 12, row - 0.6).setLineDashPattern([], 0);
-      text(doc, s.section.split(' · ')[0].toUpperCase().slice(0, 14), x + w, row, 4.8, { color: C.sand, align: 'right', space: 0.3 });
+      const tag = s.section.split(' · ')[0].toUpperCase();
+      doc.setFont('helvetica', 'normal').setFontSize(4.8);
+      const tagW = Math.min(44, textWidth(doc, tag, 0.3));
+      const dotEnd = x + w - tagW - 2.5;
+      if (dotEnd > labelEnd + 3) {
+        doc.setDrawColor('#5d6a5f').setLineDashPattern([0.3, 1.2], 0).setLineWidth(0.25).line(labelEnd, row - 0.6, dotEnd, row - 0.6).setLineDashPattern([], 0);
+      }
+      text(doc, tag, x + w, row, 4.8, { color: C.sand, align: 'right', space: 0.3, maxWidth: 44 });
       row += 4.8;
     });
     if (sheets.length > 1 + maxRows) text(doc, `… et ${sheets.length - 1 - maxRows} autres planches`, x + 14, row, 6.4, { color: C.sand });
-
-    // Cartouche.
-    doc.setFillColor('#202a23').rect(x - 4, top, w + 8, boxH, 'F');
-    doc.setDrawColor(C.gold).setLineWidth(0.35).rect(x - 4, top, w + 8, boxH);
-    text(doc, 'CARTOUCHE', x, top + 6.2, 6, { bold: true, color: C.gold, space: 1 });
-    rows.forEach(([label, value], n) => {
-      const ry = top + 9.5 + n * rowH;
-      doc.setDrawColor('#3d4a3f').setLineWidth(0.2).line(x - 4, ry, x + w + 4, ry);
-      text(doc, label.toUpperCase(), x, ry + 4.4, 5.2, { bold: true, color: C.sand, space: 0.5 });
-      text(doc, value, x + 32, ry + 4.4, 7.6, { color: C.white, maxWidth: w - 32, bold: n === 0 });
-    });
   }
 
   async function viewsSheet(doc, data, sheet, views, studio) {
@@ -1300,5 +1401,9 @@ const PlanBook = (() => {
     block('Bordereau d’achats (chutes comprises)', e.materials.map(m => [m.label, `${fr.format(m.quantity)} ${m.unit === 'u' ? 'u' : m.unit} · ${fmt(m.cost)}`]), next);
   }
 
-  return { exportBook, exportCatalog, readSheets, printedScale, exportSynthesisBoard, drawSynthesisBoard, publishedViews, SECTIONS, axonometric, planScale, levelBounds };
+  return { exportBook, exportCatalog, readSheets, printedScale, exportSynthesisBoard, drawSynthesisBoard, publishedViews, SECTIONS, axonometric, planScale, levelBounds, info, cover, drawCatalogCover };
 })();
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = PlanBook;
+}

@@ -16,7 +16,7 @@
   // ÉTAT
   // =====================================================================
 
-  let currentStyle = 'modern';
+  let currentStyle = 'agence';
   let pdfOptions = {
     includeCover: true,
     includeStats: true,
@@ -87,7 +87,7 @@
 
     // Charger le style sauvegardé
     const savedStyle = localStorage.getItem('pdf-style');
-    if (savedStyle && ['modern', 'luxury', 'industrial'].includes(savedStyle)) {
+    if (savedStyle && ['agence', 'luxury', 'industrial'].includes(savedStyle)) {
       currentStyle = savedStyle;
       const radio = document.querySelector(`input[name="pdf-style"][value="${savedStyle}"]`);
       if (radio) radio.checked = true;
@@ -183,6 +183,24 @@
     }
   }
 
+  async function loadCabinet() {
+    if (typeof PdfIdentity === 'undefined' || typeof PdfIdentity.loadCabinetProfile !== 'function') return null;
+    try { return await PdfIdentity.loadCabinetProfile(); } catch (_) { return null; }
+  }
+
+  function missingNotice(data, cabinet) {
+    if (typeof PdfIdentity === 'undefined' || typeof PdfIdentity.missingFields !== 'function') return { missing: [], message: '' };
+    return PdfIdentity.missingFields(data, { cabinet });
+  }
+
+  function updateMetaWarning(data, cabinet) {
+    const el = document.getElementById('premium-meta-warning');
+    if (!el) return;
+    const { message } = missingNotice(data, cabinet);
+    el.hidden = !message;
+    el.textContent = message ? `Champs non renseignés (${message}) : ces lignes seront masquées du cartouche.` : '';
+  }
+
   /**
    * Ouvrir le dialogue d'export premium
    */
@@ -191,8 +209,11 @@
     if (dlgPremium) {
       dlgPremium.showModal();
     }
+    const data = getProjectData();
+    updateMetaWarning(data, null);
+    loadCabinet().then(cabinet => updateMetaWarning(data, cabinet)).catch(() => null);
     // Statut IA à jour pour le projet ouvert (images réellement présentes dans le projet).
-    savedSlug(getProjectData()).then(slug => slug && typeof AIEnhance !== 'undefined' ? AIEnhance.loadMedia(slug) : null)
+    savedSlug(data).then(slug => slug && typeof AIEnhance !== 'undefined' ? AIEnhance.loadMedia(slug) : null)
       .catch(() => null)
       .finally(updateAIStatus);
   }
@@ -214,9 +235,12 @@
 
     try {
       // Couverture : façade photoréaliste du projet si elle existe, sinon vue 3D du studio, sinon rien.
-      const images = await projectImages(data);
-      await APSGenerator.generateAPS(data, window.studio || window.RENDER_STUDIO || null, null, { coverImage: images.facade });
-      showToast('✅ APS généré avec succès !', 'success');
+      const [images, cabinet] = await Promise.all([projectImages(data), loadCabinet()]);
+      const missing = missingNotice(data, cabinet);
+      await APSGenerator.generateAPS(data, window.studio || window.RENDER_STUDIO || null, null, { coverImage: images.facade, cabinet });
+      showToast(missing.message
+        ? `✅ APS généré — ${missing.message} (masqués du cartouche).`
+        : '✅ APS généré avec succès !', 'success');
     } catch (error) {
       console.error('Erreur génération APS:', error);
       showToast('Erreur lors de la génération de l\'APS : ' + error.message, 'error');
@@ -248,10 +272,12 @@
     try {
       const variant = window.currentVariant ? { ...window.currentVariant } : null;
       // Images photoréalistes du projet : elles priment sur le studio 3D et sur le plan.
-      const images = await projectImages(data);
+      const [images, cabinet] = await Promise.all([projectImages(data), loadCabinet()]);
+      const missing = missingNotice(data, cabinet);
 
       await ClientBrochurePremium.exportPDF(data, studio, variant, () => {}, {
         images,
+        cabinet,
         style: currentStyle,
         includeStats: pdfOptions.includeStats,
         includePlan: pdfOptions.includePlan,
@@ -261,7 +287,9 @@
       // Sauvegarder le style
       localStorage.setItem('pdf-style', currentStyle);
 
-      showToast('🎨 Catalogue premium généré avec succès !', 'success');
+      showToast(missing.message
+        ? `🎨 Catalogue premium généré — ${missing.message} (masqués du cartouche).`
+        : '🎨 Catalogue premium généré avec succès !', 'success');
 
     } catch (error) {
       console.error('Erreur export premium:', error);
@@ -281,7 +309,7 @@
     if (!preview) return;
 
     // Retirer toutes les classes de style
-    preview.classList.remove('modern', 'luxury', 'industrial');
+    preview.classList.remove('agence', 'modern', 'luxury', 'industrial');
     
     // Ajouter la classe du style actuel
     preview.classList.add(currentStyle);
@@ -320,10 +348,10 @@
    */
   function getStyleColors(style) {
     const styles = {
-      modern: {
-        primary: '#1a1a2e',
-        secondary: '#16213e',
-        accent: '#e94560'
+      agence: {
+        primary: '#1d2620',
+        secondary: '#202a23',
+        accent: '#b78a3c'
       },
       luxury: {
         primary: '#064e3b',
@@ -337,7 +365,7 @@
       }
     };
 
-    return styles[style] || styles.modern;
+    return styles[style] || styles.agence;
   }
 
   /**

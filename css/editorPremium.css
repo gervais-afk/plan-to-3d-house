@@ -125,8 +125,9 @@
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
+.ed-style-preview.agence,
 .ed-style-preview.modern {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  background: linear-gradient(135deg, #1d2620 0%, #202a23 70%, #b78a3c 100%);
 }
 
 .ed-style-preview.luxury {

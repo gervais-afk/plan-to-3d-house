@@ -23,11 +23,12 @@ async function render(project, options = {}, studio = null) {
   return { doc, all: written.join('\n'), fills, placedImages, properties };
 }
 
-test('Catalogue premium : setStyle choisit le style, Moderne par défaut', () => {
-  assert.deepEqual(Object.keys(Premium.STYLES), ['modern', 'luxury', 'industrial']);
+test('Catalogue premium : setStyle choisit le style, Agence par défaut', () => {
+  assert.deepEqual(Object.keys(Premium.STYLES), ['agence', 'luxury', 'industrial']);
   assert.equal(Premium.setStyle('luxury'), 'luxury');
   assert.equal(Premium.getStyle(), 'luxury');
-  assert.equal(Premium.setStyle('inconnu'), 'modern');
+  assert.equal(Premium.setStyle('inconnu'), 'agence');
+  assert.equal(Premium.setStyle('modern'), 'agence');
 });
 
 for (const [style, palette] of Object.entries(Premium.STYLES)) {
@@ -44,7 +45,7 @@ for (const [style, palette] of Object.entries(Premium.STYLES)) {
 }
 
 test('Catalogue premium : sans studio 3D, le plan et le programme remplacent les vues', async () => {
-  const { all } = await render(villa, { style: 'modern' });
+  const { all } = await render(villa, { style: 'agence' });
   // La plus grande pièce habitable du rez-de-chaussée ouvre le programme (dérivé du projet, qui évolue).
   const first = Premium.summary(villa).rooms.filter(r => !r.level && r.habitable !== false).sort((a, b) => b.area - a.area)[0].name;
   for (const expected of ['VILLA SERENA', 'Plan du rez-de-chaussée', 'Programme des espaces', first, 'SURFACE HABITABLE']) {

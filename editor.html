@@ -269,11 +269,11 @@
       <div class="ed-premium-section">
         <h4>Style du catalogue</h4>
         <div class="ed-style-selector">
-          <label class="ed-style-option modern">
-            <input type="radio" name="pdf-style" value="modern" checked>
-            <span class="ed-style-preview modern"></span>
-            <span class="ed-style-name">Moderne</span>
-            <span class="ed-style-desc">Bleu nuit & corail</span>
+          <label class="ed-style-option agence">
+            <input type="radio" name="pdf-style" value="agence" checked>
+            <span class="ed-style-preview agence"></span>
+            <span class="ed-style-name">Agence</span>
+            <span class="ed-style-desc">Vert nuit &amp; or</span>
           </label>
           
           <label class="ed-style-option luxury">
@@ -337,11 +337,13 @@
       <div class="ed-premium-section">
         <h4>Aperçu</h4>
         <div class="ed-premium-preview">
-          <div class="ed-preview-cover modern" id="premium-preview">
+          <div class="ed-preview-cover agence" id="premium-preview">
             <div class="ed-preview-label">Couverture</div>
           </div>
         </div>
       </div>
+
+      <p id="premium-meta-warning" class="ed-note warn" hidden></p>
     </div>
 
     <div class="ed-dialog-actions">
@@ -373,6 +375,8 @@
   <script src="js/codeCompliance.js"></script>
   <script src="js/architectCopilot.js"></script>
   <!-- Modules PDF Premium -->
+  <script src="js/woodGrain.js"></script>
+  <script src="js/pdfIdentity.js"></script>
   <script src="js/clientBrochurePremium.js"></script>
   <script src="js/aiPrompt.js"></script>
   <script src="js/fidelityCheck.js"></script>
