@@ -435,14 +435,30 @@ const PlanBook = (() => {
     }
   }
 
-  async function publishedViews(data, options = {}) {
+  async function projectMedia(data) {
     const slug = window.ACTIVE_PROJECT_SLUG || data.meta?.slug;
-    if (!slug || typeof ViewOrder === 'undefined') return [];
+    if (!slug) return { images: [], renders: [] };
     try {
       const response = await fetch(`api/gallery/media?project=${encodeURIComponent(slug)}`, { cache: 'no-store' });
-      if (!response.ok) return [];
-      return ViewOrder.views(await response.json(), slug, Infinity, options).filter(view => view.published && (options.includePlans || view.category !== 'plan'));
-    } catch { return []; }
+      return response.ok ? await response.json() : { images: [], renders: [] };
+    } catch { return { images: [], renders: [] }; }
+  }
+
+  async function publishedViews(data, options = {}, preloadedMedia = null) {
+    const slug = window.ACTIVE_PROJECT_SLUG || data.meta?.slug;
+    if (!slug || typeof ViewOrder === 'undefined') return [];
+    const media = preloadedMedia || await projectMedia(data);
+    return ViewOrder.views(media, slug, Infinity, options).filter(view =>
+      view.published
+      && (options.includePlans || view.category !== 'plan')
+      && (typeof DeliverableGate === 'undefined' || DeliverableGate.isEligible(view))
+    );
+  }
+
+  function defaultDeliverableScreen(view) {
+    if (typeof DeliverableGate === 'undefined') return null;
+    const verdict = DeliverableGate.evaluate(view);
+    return verdict.eligible ? null : { exclude: true, reason: verdict.reason };
   }
 
   /**
@@ -578,7 +594,7 @@ const PlanBook = (() => {
    * Plan du rez-de-chaussée à montrer en couverture : d'abord la planche de distribution fournie avec le
    * cahier, sinon la planche de référence du projet (edition.sheets), sinon rien (trait de la maquette).
    */
-  async function coverPlanSource(data, annexes = []) {
+  async function coverPlanSource(data, annexes = [], manifestImages = []) {
     const toTile = async (src, title, source) => {
       const img = await loadImage(src);
       const ratio = img.naturalHeight / img.naturalWidth;
@@ -589,7 +605,9 @@ const PlanBook = (() => {
         || annexes.find(p => p.type === 'distribution' && p.include !== false);
       if (page) return await toTile(page.data, page.level ? `Plan — ${SheetClassifier?.levelName?.(page.level) || 'étage'}` : 'Plan du rez-de-chaussée', 'planche de l’architecte');
       const ref = (data.edition?.sheets || []).find(s => /rez|rdc/i.test(s.title || ''));
-      if (ref && (ref.preview || ref.art)) return await toTile(ref.preview || ref.art, 'Plan du rez-de-chaussée', 'planche du projet');
+      const resolvedArt = ref && typeof DeliverableGate !== 'undefined' ? DeliverableGate.resolveSheetSource(ref, manifestImages).source : (ref?.preview || ref?.art);
+      const src = ref?.preview || resolvedArt;
+      if (src) return await toTile(src, 'Plan du rez-de-chaussée', 'planche du projet');
     } catch { /* image illisible : repli sur le trait de la maquette */ }
     return null;
   }
@@ -661,8 +679,10 @@ const PlanBook = (() => {
       const info = TYPES[page.type] || { discipline: 'annexe', order: 900 };
       const sheet = { id: 'annex', annex: page, title: architectTitle(page), type: page.type, level: page.level, order: info.order,
         section: page.type === 'autre' || !TYPES[page.type] ? 'Annexe architecte' : `${DISCIPLINES[info.discipline]} · planche de l’architecte` };
-      // Version d'ambiance IA retenue : planche diptyque juste après la planche technique (tri stable).
-      const diptych = page.sublimed?.data && page.sublimedInclude
+      // Version d'ambiance IA retenue : soumise à la Porte E (fidèle v2 ou forçage tracé).
+      const sublimedAllowed = page.sublimed?.data && page.sublimedInclude && (typeof DeliverableGate === 'undefined'
+        || DeliverableGate.isEligible({ id: page.sublimed.id || 'photor-planche', ai: true, fidelity: page.sublimed.fidelity, fidelityOverride: page.sublimed.fidelityOverride }));
+      const diptych = sublimedAllowed
         ? [{ ...sheet, id: 'diptych', title: `${sheet.title} — technique et ambiance`, section: `${DISCIPLINES[info.discipline] || 'Architecture'} · version d’ambiance` }] : [];
       return [sheet, ...diptych];
     }).sort((a, b) => a.order - b.order || (a.level ?? 0) - (b.level ?? 0));
@@ -670,15 +690,24 @@ const PlanBook = (() => {
     const replacedLevels = new Set(annexes.filter(p => p.type === 'distribution' && p.replaceGenerated !== false && Number.isInteger(p.level)).map(p => p.level));
     const byOrder = (min, max) => architect.filter(s => s.order >= min && s.order < max);
     onStatus('Prises de vue de la maquette…');
-    const allViews = await publishedViews(data);
-    const { kept: views, excluded } = await screenViews(allViews.filter(view => view.book), screen, onStatus);
+    const media = await projectMedia(data);
+    const allViews = await publishedViews(data, {}, media);
+    const gateScreen = typeof screen === 'function' ? screen : defaultDeliverableScreen;
+    const { kept: views, excluded } = await screenViews(allViews.filter(view => view.book), gateScreen, onStatus);
+    const eligibleEditionSheets = (data.edition?.sheets || []).map(s => {
+      const resolved = typeof DeliverableGate !== 'undefined'
+        ? DeliverableGate.resolveSheetSource(s, media.images || [])
+        : { source: s.art || s.preview, fallback: false, reason: '' };
+      if (resolved.fallback && s.art) excluded.push({ view: { label: `${s.title} (version IA)` }, reason: resolved.reason || 'écart géométrique' });
+      return { id: 'art', title: s.title, section: 'Planches de référence', source: resolved.source };
+    }).filter(s => Boolean(s.source));
     const levels = [...new Set(data.walls.map(w => Number(w.level) || 0))].sort((a, b) => a - b).filter(level => levelBounds(data, level).valid);
     const levelName = level => level === 0 ? 'Rez-de-chaussée' : `Étage ${level}`;
     const estimate = on('estimate') && typeof CostEstimate !== 'undefined' ? CostEstimate.estimate(data, data.estimate) : null;
 
     // Sommaire établi d’avance : les numéros de planche figurent dans les cartouches.
     // Plans : ceux de l'architecte et ceux tirés de la maquette, rangés ensemble par niveau.
-    const generatedPlans = on('plans') && !data.edition?.sheets?.some(s => s.art)
+    const generatedPlans = on('plans') && !eligibleEditionSheets.length
       ? levels.filter(level => !replacedLevels.has(level)).map(level => ({ id: 'plan', level, title: `Plan - ${levelName(level)}`, section: 'Plans · tirés de la maquette', order: 30 }))
       : [];
     const plans = [...generatedPlans, ...architect.filter(s => s.type === 'distribution')].sort((a, b) => (a.level ?? 99) - (b.level ?? 99));
@@ -687,8 +716,7 @@ const PlanBook = (() => {
     const sheets = [{ id: 'cover', title: 'Couverture', section: 'Présentation' },
       ...(on('synth') ? [{ id: 'synth', title: 'Planche de synthèse', section: 'Synthèse du projet' }] : []),
       ...byOrder(0, 30),
-      ...(on('plans') && data.edition?.sheets?.some(s => s.art)
-        ? data.edition.sheets.map(s => ({ id: 'art', title: s.title, section: 'Planches de référence', source: s.art || s.preview })) : []),
+      ...(on('plans') && eligibleEditionSheets.length ? eligibleEditionSheets : []),
       ...plans,
       ...byOrder(31, 100),
       ...(on('axo') ? [{ id: 'axo', title: 'Axonométrie', section: 'Volumétrie' }] : []),
@@ -706,12 +734,13 @@ const PlanBook = (() => {
     const title = nameForDisplay(data.meta?.name || 'Projet');
     doc.setProperties({ title: `${title} — Cahier de plans`, subject: 'Cahier de plans et présentation du projet', creator: 'ArchiCam Studio' });
 
-    // Couverture : la meilleure vue publiée (façade d’abord), sinon l’axonométrie de la maquette.
+    // Couverture : meilleure vue éligible (façade/cover d’abord), sinon capture éligible, sinon axonométrie 3D.
     const heroW = 2600, heroH = Math.round(heroW * H / W); // image d'ouverture pleine page
-    const heroSource = views[0]?.source;
+    const fallbackCover = typeof DeliverableGate !== 'undefined' ? DeliverableGate.pickCover(media)?.file : null;
+    const heroSource = views[0]?.source || fallbackCover;
     const hero = heroSource ? jpeg(await loadImage(heroSource), heroW, heroH) : render(hs, axonometric(data, hs), heroW, heroH);
     // Plan de distribution réel du projet pour la couverture : planche de l'architecte si elle existe.
-    const coverPlan = await coverPlanSource(data, annexes);
+    const coverPlan = await coverPlanSource(data, annexes, media.images || []);
 
     for (const [index, sheet] of sheets.entries()) {
       if (index) doc.addPage('a3', 'landscape');
@@ -901,11 +930,13 @@ const PlanBook = (() => {
     text(doc, 'Édition Monographe Privée · Rendu illustratif d’ambiance non contractuel', W - 14, 291.5, 6.2, { align: 'right', color: C.muted });
   }
 
-  async function exportSynthesisBoard({ data, studio, onStatus = () => {} }) {
+  async function exportSynthesisBoard({ data, studio, screen = null, onStatus = () => {} }) {
     const JsPDF = await loadJsPDF();
     const doc = new JsPDF({ unit: 'mm', format: 'a3', orientation: 'landscape', compress: true });
     onStatus('Composition de la planche de synthèse…');
-    const views = await publishedViews(data, { keepDuplicates: true, includePlans: true });
+    const rawViews = await publishedViews(data, { keepDuplicates: true, includePlans: true });
+    const gateScreen = typeof screen === 'function' ? screen : defaultDeliverableScreen;
+    const { kept: views } = await screenViews(rawViews, gateScreen, onStatus);
     await drawSynthesisBoard(doc, data, { code: 'PL-01', title: 'Planche de synthèse architecturale' }, studio, views);
     const slug = (window.ACTIVE_PROJECT_SLUG || data.meta?.slug || 'projet').replace(/[^a-z0-9-]/gi, '-');
     doc.save(`${slug}-planche-de-synthese.pdf`);
@@ -917,12 +948,12 @@ const PlanBook = (() => {
    * renvoie { exclude, reason } ; les vues écartées sont rendues pour être annoncées à l'architecte.
    */
   async function screenViews(views, screen, onStatus = () => {}) {
-    if (typeof screen !== 'function') return { kept: views, excluded: [] };
+    const activeScreen = typeof screen === 'function' ? screen : defaultDeliverableScreen;
     const kept = [], excluded = [];
     for (const [n, view] of views.entries()) {
       onStatus(`Contrôle géométrique ${n + 1}/${views.length}…`);
       let verdict = null;
-      try { verdict = await screen(view); } catch { verdict = null; }
+      try { verdict = await activeScreen(view); } catch { verdict = null; }
       if (verdict?.exclude) excluded.push({ view, reason: verdict.reason || 'écart géométrique' });
       else kept.push(view);
     }
@@ -936,7 +967,7 @@ const PlanBook = (() => {
     onStatus('Lecture du catalogue…');
     const listed = (await publishedViews(data, { keepDuplicates: true, includePlans: true })).filter(view => view.catalog);
     if (!listed.length) throw new Error('Le catalogue est vide : ajoutez-y des rendus depuis la galerie.');
-    // Un rendu IA qui s'écarte de la géométrie du projet n'entre pas dans un document remis au client.
+    // Porte E : aucun rendu IA non fidèle n'entre dans un document remis au client sans forçage tracé.
     const { kept: items, excluded } = await screenViews(listed, screen, onStatus);
     if (!items.length) throw new Error('Toutes les images du catalogue s’écartent de la géométrie du projet : régénérez-les avant d’exporter.');
     const images = [];

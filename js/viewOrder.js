@@ -40,6 +40,14 @@ const ViewOrder = (() => {
     return value.startsWith(prefix) && /^(?:images|renders)\/[a-z0-9_-]+\.(?:jpe?g|png|webp)$/i.test(value.slice(prefix.length)) ? value : null;
   }
 
+  function referenceInProject(value, slug) {
+    const generated = pathInProject(value, slug);
+    if (generated) return generated;
+    if (typeof value !== 'string') return null;
+    const planches = `projects/${slug}/planches/`;
+    return value.startsWith(planches) && /^[a-z0-9_-]+\.(?:jpe?g|png|webp)$/i.test(value.slice(planches.length)) ? value : null;
+  }
+
   /** Trois emplacements explicites, les autres restant en sélection automatique. */
   function selectSlots(candidates, slots, catalog = candidates) {
     const automatic = (Array.isArray(candidates) ? candidates : []).slice();
@@ -65,10 +73,13 @@ const ViewOrder = (() => {
       const label = String(item.label || 'Rendu du projet').replace(/\s+[—-]\s+photoréaliste$/i, '');
       const notes = typeof item.notes === 'string' && !/^Image issue du rendu/i.test(item.notes) ? item.notes.trim() : '';
       const kind = category(item, `${item.id || ''} ${label} ${source.split('/').pop()}`);
-      return [{ id: String(item.id || ''), label, source, preview: pathInProject(item.preview, slug), reference: pathInProject(item.reference, slug), notes,
+      return [{ id: String(item.id || ''), label, source, preview: pathInProject(item.preview, slug), reference: referenceInProject(item.reference, slug), notes,
         category: kind, rank: item.cover === true ? RANK.cover : RANK[kind], kind: KIND[kind], alt: notes ? `${label} : ${notes}` : label, published: true,
         catalog: item.catalog === true || item.catalog === undefined, book: item.book === true, room: item.room || null,
-        fidelity: item.fidelity && typeof item.fidelity === 'object' ? item.fidelity : null, fidelityAccepted: item.fidelityAccepted === true }];
+        ai: item.ai === true || /^photor-/i.test(String(item.id || '')) || /openrouter/i.test(String(item.generator || '')),
+        fidelity: item.fidelity && typeof item.fidelity === 'object' ? item.fidelity : null,
+        fidelityOverride: item.fidelityOverride && typeof item.fidelityOverride === 'object' ? item.fidelityOverride : null,
+        fidelityAccepted: item.fidelityAccepted === true }];
     });
     const captures = (media?.renders || []).flatMap(value => {
       const source = pathInProject(value, slug);

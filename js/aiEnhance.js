@@ -69,14 +69,27 @@ const AIEnhance = (() => {
     return text.charAt(0).toUpperCase() + text.slice(1);
   }
 
+  function gate() {
+    if (typeof DeliverableGate !== 'undefined') return DeliverableGate;
+    if (typeof module !== 'undefined' && typeof require === 'function') {
+      try { return require('./deliverableGate.js'); } catch { return null; }
+    }
+    return null;
+  }
+
+  function isEligibleForDocument(image) {
+    const G = gate();
+    return G ? G.isEligible(image) : true;
+  }
+
   /**
-   * Images IA du projet pour les documents : une vue extérieure et jusqu'à deux intérieures.
-   * Les images générées priment ; à défaut, rien (les documents gardent le plan).
+   * Images du projet pour les documents (brochures, APS) : une vue extérieure et jusqu'à deux intérieures.
+   * Porte E : seuls les rendus validés « Catalogue » ET éligibles au garde-fou (fidèles v2 ou forçage tracé) passent.
    */
   function pickImages(media, interiorsWanted = 2) {
-    // Seules les images que l'architecte a validées pour le catalogue (case « Catalogue » de la galerie)
-    // vont dans un document client : un rendu IA peut inventer ou retirer des éléments (arbres, ouvertures…).
-    const images = (media?.images || []).filter(image => image.catalog === true && /\.(?:jpe?g|png)$/i.test(image.file || ''));
+    const images = (media?.images || []).filter(image => image.catalog === true
+      && /\.(?:jpe?g|png)$/i.test(image.file || '')
+      && isEligibleForDocument(image));
     const nameOf = image => baseName(image.reference || image.file);
     const facade = images.find(image => image.cover) || images.find(image => !image.room && isExterior(nameOf(image)))
       || images.find(image => !image.room && !isPlan(nameOf(image)));
@@ -259,9 +272,9 @@ const AIEnhance = (() => {
     return { created, skipped: '' };
   }
 
-  /** Vrai si le projet chargé en dernier a au moins une image validée « Catalogue » par l'architecte. */
+  /** Vrai si le projet chargé en dernier a au moins une image validée « Catalogue » et éligible Porte E. */
   function isEnhanced() {
-    return (lastMedia?.images || []).some(image => image.catalog === true);
+    return (lastMedia?.images || []).some(image => image.catalog === true && isEligibleForDocument(image));
   }
 
   return { sublimateWithAI, documentImages, loadMedia, isEnhanced, planSublimation, pickImages, promptFor, estimateUSD, MODELS, DEFAULT_MODEL, PHOTOREAL_PROMPT };
