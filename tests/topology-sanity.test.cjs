@@ -48,23 +48,64 @@ test('Topologie : plan valide (polygones fermés, murs sans doublon) — score 1
   assert.equal(r.cleanedGeometry.walls.length, 5);
 });
 
-test('Topologie : pièce ouverte (> 10 cm) → erreur bloquante, fuite de surface', () => {
+test('Topologie : rectangle 4×3 m en 4 sommets (sans répéter le premier) → valide par convention', () => {
   const ppm = 100;
   const plan = {
     scale: { px_per_meter: ppm },
     walls: [
-      wallAI(0, 0, 1000, 0), wallAI(1000, 0, 1000, 800),
-      wallAI(1000, 800, 0, 800), wallAI(0, 800, 0, 0)
+      wallAI(0, 0, 400, 0, 'exterior'),
+      wallAI(400, 0, 400, 300, 'exterior'),
+      wallAI(400, 300, 0, 300, 'exterior'),
+      wallAI(0, 300, 0, 0, 'exterior')
     ],
-    // Dernier sommet décalé de 850 px = 8,5 m → bien > 10 cm
-    rooms: [roomClosed('Séjour', [[50, 50], [950, 50], [950, 750], [50, 900]])],
+    // 4 sommets seulement (sans répéter [0, 0]) : dist(premier, dernier) = 3,00 m
+    rooms: [roomClosed('Chambre', [[0, 0], [400, 0], [400, 300], [0, 300]])],
+    openings: [], columns: []
+  };
+  const r = AITopology.validate(plan);
+  assert.equal(r.valid, true, 'Un rectangle en 4 sommets est fermé par convention');
+  assert.equal(r.errors.length, 0);
+  assert.equal(r.warnings.length, 0);
+  assert.equal(r.score, 100);
+  assert.equal(r.cleanedGeometry.rooms.length, 1);
+  assert.equal(r.cleanedGeometry.rooms[0].pts.length, 4);
+});
+
+test('Topologie : polygone auto-intersectant (papillon) → erreur bloquante et pièce rejetée', () => {
+  const ppm = 100;
+  const plan = {
+    scale: { px_per_meter: ppm },
+    walls: [
+      wallAI(0, 0, 400, 0), wallAI(400, 0, 400, 300),
+      wallAI(400, 300, 0, 300), wallAI(0, 300, 0, 0)
+    ],
+    // Les arêtes [0,0]→[400,300] et [400,0]→[0,300] se croisent au centre
+    rooms: [roomClosed('Séjour', [[0, 0], [400, 300], [400, 0], [0, 300]])],
     openings: [], columns: []
   };
   const r = AITopology.validate(plan);
   assert.equal(r.valid, false);
-  assert.ok(r.errors.some(e => /ouvert|fuite/i.test(e)), 'Doit signaler un polygone ouvert');
-  assert.ok(r.score < 80, `Score ${r.score} trop élevé pour un plan avec fuite de surface`);
-  assert.equal(r.cleanedGeometry.rooms.length, 0, 'Pièce rejetée : absente du cleanedGeometry');
+  assert.ok(r.errors.some(e => /auto-intersect/i.test(e)), 'Doit signaler une auto-intersection');
+  assert.equal(r.cleanedGeometry.rooms.length, 0, 'Pièce auto-intersectante rejetée');
+  assert.equal(r.rejectedRooms.length, 1);
+  assert.equal(r.rejectedRooms[0].sourceIndex, 0);
+});
+
+test('Topologie : polygone de surface nulle (sommets colinéaires) → erreur bloquante', () => {
+  const ppm = 100;
+  const plan = {
+    scale: { px_per_meter: ppm },
+    walls: [
+      wallAI(0, 0, 400, 0), wallAI(400, 0, 400, 300),
+      wallAI(400, 300, 0, 300), wallAI(0, 300, 0, 0)
+    ],
+    rooms: [roomClosed('Couloir plat', [[0, 0], [200, 0], [400, 0]])],
+    openings: [], columns: []
+  };
+  const r = AITopology.validate(plan);
+  assert.equal(r.valid, false);
+  assert.ok(r.errors.some(e => /surface nulle|dégénérée/i.test(e)), 'Doit signaler une surface nulle');
+  assert.equal(r.cleanedGeometry.rooms.length, 0);
 });
 
 test('Topologie : auto-fermeture tolérable (2 cm < écart < 10 cm) → warning', () => {
