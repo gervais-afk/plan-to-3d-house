@@ -201,6 +201,12 @@ kbd {
 .ed-dialog-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 14px; }
 .ed-ai-review { max-height: 30vh; overflow: auto; margin: 10px 0; padding: 10px 12px; border-left: 3px solid var(--warn); background: var(--accent-soft); color: var(--ink-2); font-size: 12px; line-height: 1.55; white-space: normal; }
 .ed-ai-review:empty { display: none; }
+.ed-ai-review p { margin: 0 0 6px; }
+.ed-ai-review h4 { margin: 8px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink); }
+.ed-ai-review ul { margin: 0 0 6px; padding-left: 16px; }
+.ed-ai-review li { margin: 2px 0; }
+.ed-ai-review .ed-ai-err { color: var(--danger); font-weight: 600; }
+.ed-ai-review .ed-ai-pos { color: var(--muted); font-variant-numeric: tabular-nums; }
 .ed-ai-actions { justify-content: flex-end; flex-wrap: wrap; }
 .ed-ai-actions #ai-apply { order: 2; }
 .ed-ai-actions #ai-run { order: 1; }

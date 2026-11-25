@@ -104,10 +104,10 @@
     <div class="ed-field"><label for="ai-mode">Tracé existant</label>
       <select id="ai-mode"><option value="replace">Remplacer</option><option value="merge">Ajouter</option></select></div>
     <div class="ed-field"><label for="ai-scale">Échelle</label>
-      <select id="ai-scale"><option value="ai">Détectée par l'IA (cotes du plan)</option><option value="calibrated">Celle que j'ai calibrée (K)</option></select></div>
+      <output id="ai-scale" class="ed-note">Calibrage obligatoire sur une cote réelle (touche K)</output></div>
     <div class="ed-field"><label for="ai-furniture">Mobilier</label><input type="checkbox" id="ai-furniture" checked></div>
     <p id="ai-status" class="ed-note" role="status"></p>
-    <p id="ai-review" class="ed-ai-review" aria-live="polite">La proposition sera vérifiable ici avant son application au projet.</p>
+    <div id="ai-review" class="ed-ai-review" aria-live="polite">La proposition sera vérifiable ici avant son application au projet.</div>
     <div class="ed-dialog-actions ed-ai-actions">
       <button id="ai-cancel">Fermer</button>
       <button id="ai-apply" type="button" class="ed-primary" disabled>Valider et appliquer</button>
@@ -385,6 +385,7 @@
   <script src="js/apsGenerator.js"></script>
   <script src="js/editor.js"></script>
   <script src="js/planCleanup.js"></script>
+  <script src="js/aiTopology.js"></script>
   <script src="js/planProposalReview.js"></script>
   <script src="js/editorAI.js"></script>
   <script src="js/editorEstimate.js"></script>
