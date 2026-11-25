@@ -145,12 +145,99 @@ const AIEnhance = (() => {
     });
   }
 
+  /** Lit les dimensions réelles (PNG, JPEG, WebP) depuis un tampon binaire, ou null si illisible. */
+  function parseBinaryDimensions(bytes) {
+    if (!bytes || bytes.length < 12) return null;
+    const u16be = o => (bytes[o] << 8) | bytes[o + 1];
+    const u16le = o => bytes[o] | (bytes[o + 1] << 8);
+    const u32be = o => ((bytes[o] << 24) | (bytes[o + 1] << 16) | (bytes[o + 2] << 8) | bytes[o + 3]) >>> 0;
+    // PNG : signature 89 50 4E 47 0D 0A 1A 0A + chunk IHDR (width @16, height @20)
+    if (bytes.length >= 24 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+      && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) {
+      const width = u32be(16), height = u32be(20);
+      return width > 0 && height > 0 ? { width, height } : null;
+    }
+    // JPEG : marqueurs SOF0..SOF15 (hors DHT C4, JPG C8, DAC CC)
+    if (bytes[0] === 0xff && bytes[1] === 0xd8) {
+      let offset = 2;
+      while (offset + 4 <= bytes.length) {
+        while (offset < bytes.length && bytes[offset] !== 0xff) offset++;
+        while (offset < bytes.length && bytes[offset] === 0xff) offset++;
+        if (offset >= bytes.length) break;
+        const marker = bytes[offset++];
+        if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+        if (marker === 0xd9 || marker === 0xda) break;
+        if (offset + 2 > bytes.length) break;
+        const length = u16be(offset);
+        if (length < 2 || offset + length > bytes.length) break;
+        if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+          if (offset + 7 <= bytes.length) {
+            const height = u16be(offset + 3), width = u16be(offset + 5);
+            return width > 0 && height > 0 ? { width, height } : null;
+          }
+          break;
+        }
+        offset += length;
+      }
+      return null;
+    }
+    // WebP : RIFF....WEBP (VP8X / VP8L / VP8 )
+    if (bytes.length >= 30 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+      && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) {
+      const chunk = String.fromCharCode(bytes[12], bytes[13], bytes[14], bytes[15]);
+      if (chunk === 'VP8X' && bytes.length >= 30) {
+        const width = 1 + (bytes[24] | (bytes[25] << 8) | (bytes[26] << 16));
+        const height = 1 + (bytes[27] | (bytes[28] << 8) | (bytes[29] << 16));
+        return width > 0 && height > 0 ? { width, height } : null;
+      }
+      if (chunk === 'VP8L' && bytes.length >= 25 && bytes[20] === 0x2f) {
+        const bits = bytes[21] | (bytes[22] << 8) | (bytes[23] << 16) | (bytes[24] << 24);
+        const width = (bits & 0x3fff) + 1;
+        const height = ((bits >>> 14) & 0x3fff) + 1;
+        return width > 0 && height > 0 ? { width, height } : null;
+      }
+      if (chunk === 'VP8 ' && bytes.length >= 30 && bytes[23] === 0x9d && bytes[24] === 0x01 && bytes[25] === 0x2a) {
+        const width = u16le(26) & 0x3fff;
+        const height = u16le(28) & 0x3fff;
+        return width > 0 && height > 0 ? { width, height } : null;
+      }
+    }
+    return null;
+  }
+
+  function decodeBase64(b64) {
+    if (typeof Buffer !== 'undefined') return Buffer.from(b64, 'base64');
+    if (typeof atob === 'function') {
+      const raw = atob(b64);
+      const out = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+      return out;
+    }
+    return null;
+  }
+
+  function dimensionsFromDataUrl(source) {
+    if (typeof source !== 'string') return null;
+    const match = /^data:image\/[a-z0-9.+-]+;base64,([A-Za-z0-9+/=\s]+)$/i.exec(source);
+    if (!match) return null;
+    try {
+      const bytes = decodeBase64(match[1].replace(/\s+/g, ''));
+      return parseBinaryDimensions(bytes);
+    } catch (_) {
+      return null;
+    }
+  }
+
   function dimensions(source) {
-    if (typeof Image === 'undefined') return Promise.resolve({ width: 1920, height: 1080 }); // Node (tests)
+    if (typeof source !== 'string' || !source) return Promise.resolve(null);
+    const parsed = dimensionsFromDataUrl(source);
+    if (parsed) return Promise.resolve(parsed);
+    if (typeof Image === 'undefined') return Promise.resolve(null);
     return new Promise(resolve => {
       const img = new Image();
-      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-      img.onerror = () => resolve({ width: 1920, height: 1080 });
+      img.onload = () => resolve(img.naturalWidth > 0 && img.naturalHeight > 0
+        ? { width: img.naturalWidth, height: img.naturalHeight } : null);
+      img.onerror = () => resolve(null);
       img.src = source;
     });
   }
@@ -172,17 +259,37 @@ const AIEnhance = (() => {
     return canvas.toDataURL('image/jpeg', 0.85);
   }
 
-  /** Charge les images choisies par pickImages en data URL, prêtes pour jsPDF. */
+  const positiveInt = value => {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+  };
+
+  /** Charge les images choisies par pickImages en data URL, avec dimensions réelles et provenance véridique. */
   async function documentImages(slug, options = {}) {
     if (!slug) return { facade: null, interiors: [] };
     const media = await loadMedia(slug, options);
     const picked = pickImages(media);
-    const load = async image => image && ({
-      data: await toJpeg(await dataUrl(image.file, options.fetch || fetch)),
-      label: String(image.label || '').replace(/\s+[—-]\s+photor[ée]aliste$/i, ''),
-      width: image.width || 1920,
-      height: image.height || 1080
-    });
+    const G = gate();
+    const load = async image => {
+      if (!image) return null;
+      const data = await toJpeg(await dataUrl(image.file, options.fetch || fetch));
+      const declaredW = positiveInt(image.width);
+      const declaredH = positiveInt(image.height);
+      const measured = (declaredW && declaredH) ? { width: declaredW, height: declaredH } : await dimensions(data);
+      return {
+        id: image.id || '',
+        file: image.file || '',
+        data,
+        label: String(image.label || '').replace(/\s+[—-]\s+photor[ée]aliste$/i, ''),
+        width: measured?.width ?? null,
+        height: measured?.height ?? null,
+        ai: G ? G.isAiRender(image) : Boolean(image.ai),
+        generator: image.generator || '',
+        notes: image.notes || '',
+        source: typeof image.source === 'string' ? image.source : null,
+        sourceKind: G ? G.imageSourceKind(image, options.project || null) : null
+      };
+    };
     return { facade: await load(picked.facade), interiors: await Promise.all(picked.interiors.map(load)) };
   }
 
@@ -263,7 +370,7 @@ const AIEnhance = (() => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: item.id, data: image,
-          metadata: { reference: item.file, room: item.exterior ? null : (room?.id || item.name), label: `${item.label} — photoréaliste`, width: size.width, height: size.height, model, prompt, tags, fidelity }
+          metadata: { reference: item.file, room: item.exterior ? null : (room?.id || item.name), label: `${item.label} — photoréaliste`, width: size?.width ?? null, height: size?.height ?? null, model, prompt, tags, fidelity }
         })
       }), `Enregistrement « ${item.label} »`);
       created.push(saved.item);
@@ -277,7 +384,7 @@ const AIEnhance = (() => {
     return (lastMedia?.images || []).some(image => image.catalog === true && isEligibleForDocument(image));
   }
 
-  return { sublimateWithAI, documentImages, loadMedia, isEnhanced, planSublimation, pickImages, promptFor, estimateUSD, MODELS, DEFAULT_MODEL, PHOTOREAL_PROMPT };
+  return { sublimateWithAI, documentImages, dimensions, loadMedia, isEnhanced, planSublimation, pickImages, promptFor, estimateUSD, MODELS, DEFAULT_MODEL, PHOTOREAL_PROMPT };
 })();
 
 if (typeof module !== 'undefined' && module.exports) {

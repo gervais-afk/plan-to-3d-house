@@ -237,22 +237,76 @@ const ClientBrochurePremium = (() => {
     return { facade, interior };
   }
 
+  function gateModule() {
+    if (typeof DeliverableGate !== 'undefined') return DeliverableGate;
+    if (typeof module !== 'undefined' && typeof require === 'function') {
+      try { return require('./deliverableGate.js'); } catch (_) { return null; }
+    }
+    return null;
+  }
+
+  function resolveImageSize(doc, image) {
+    const w = Number(image?.width), h = Number(image?.height);
+    if (Number.isFinite(w) && w > 0 && Number.isFinite(h) && h > 0) return { width: w, height: h };
+    if (image?.data && typeof doc?.getImageProperties === 'function') {
+      try {
+        const props = doc.getImageProperties(image.data);
+        if (Number.isFinite(props?.width) && props.width > 0 && Number.isFinite(props?.height) && props.height > 0) {
+          return { width: props.width, height: props.height };
+        }
+      } catch (_) { /* propriétés indisponibles */ }
+    }
+    return null;
+  }
+
+  function coverSourceCaption(data, studio, variant, options) {
+    const G = gateModule();
+    const usedImages = [
+      options.images?.facade?.data ? options.images.facade : null,
+      ...(options.includeInterior !== false ? (options.images?.interiors || []).filter(image => image?.data).slice(0, 2) : [])
+    ].filter(Boolean);
+    if (usedImages.length) {
+      const kinds = usedImages.map(image => (G ? G.imageSourceKind(image, data) : (image.ai === true ? 'ai' : 'unknown')));
+      const plural = usedImages.length > 1;
+      if (kinds.includes('ai') || variant?.aiEnhanced) {
+        return G ? G.imageCaption('ai', { plural }) : (plural ? 'Images générées par IA — non contractuelles' : 'Image générée par IA — non contractuelle');
+      }
+      const unique = [...new Set(kinds)];
+      const kind = unique.length === 1 ? unique[0] : 'unknown';
+      return G ? G.imageCaption(kind, { plural }) : (plural ? 'Illustrations du projet' : 'Illustration du projet');
+    }
+    if (variant?.aiEnhanced) {
+      return G ? G.imageCaption('ai', { plural: true }) : 'Images générées par IA — non contractuelles';
+    }
+    if (hasStudio(studio)) {
+      return G ? G.imageCaption('render3d') : 'Capture de la maquette 3D';
+    }
+    return '';
+  }
+
   /** Format jsPDF d'une image data URL (JPEG ou PNG). */
   function imageFormat(data) {
     return /^data:image\/png/i.test(data) ? 'PNG' : 'JPEG';
   }
 
-  /** Place une image en la rognant au cadre (sans déformation). */
+  /** Place une image au ratio réel (sans déformation) ; repli « contain » si dimensions introuvables. */
   function drawFitted(doc, image, x, y, w, h) {
-    const ratio = (image.width || 16) / (image.height || 9);
-    let iw = w, ih = w / ratio;
-    if (ih < h) { ih = h; iw = h * ratio; }
-    const ix = x + (w - iw) / 2, iy = y + (h - ih) / 2;
+    const size = resolveImageSize(doc, image);
+    const fmt = imageFormat(image.data);
     doc.saveGraphicsState();
     doc.rect(x, y, w, h, null);
     doc.clip();
     doc.discardPath();
-    doc.addImage(image.data, imageFormat(image.data), ix, iy, iw, ih);
+    if (size) {
+      const ratio = size.width / size.height;
+      let iw = w, ih = w / ratio;
+      if (ih < h) { ih = h; iw = h * ratio; }
+      const ix = x + (w - iw) / 2, iy = y + (h - ih) / 2;
+      doc.addImage(image.data, fmt, ix, iy, iw, ih);
+    } else {
+      const [dw, dh] = w >= h ? [0, h] : [w, 0];
+      doc.addImage(image.data, fmt, x, y, dw, dh);
+    }
     doc.restoreGraphicsState();
   }
 
@@ -332,7 +386,7 @@ const ClientBrochurePremium = (() => {
       premiumText(doc, facadeImage.label || 'Vue extérieure', margin + 4, imgY + imgH - 4, 8.5, { color: '#ffffff', maxWidth: width - 8 });
     } else if (hasStudio(studio)) {
       const shots = selectShots(data, studio.hs);
-      doc.addImage(studio.capture(shots.facade, 1600, 800, 1, { clean: true, solar: variant }), 'JPEG', margin, imgY, width, imgH);
+      drawFitted(doc, { data: studio.capture(shots.facade, 1600, 800, 1, { clean: true, solar: variant }), width: 1600, height: 800 }, margin, imgY, width, imgH);
       withOpacity(doc, 0.3, () => {
         doc.setFillColor('#000000');
         doc.rect(margin, imgY + imgH - 30, width, 30, 'F');
@@ -351,9 +405,9 @@ const ClientBrochurePremium = (() => {
       drawStatCard(doc, margin + (statW + 10) * 2, statsY, statW, statH, 'Pièces principales', info.mainRooms, '');
     }
     premiumText(doc, `Style ${STYLES[currentStyle].label}`, margin, 287, 7, { color: COLORS.light });
-    const aiImages = !!(options.images?.facade?.data || options.images?.interiors?.some(image => image?.data));
-    if (aiImages || variant?.aiEnhanced) {
-      premiumText(doc, 'Images photoréalistes générées par IA, à titre d\'illustration', margin + width, 287, 7, { color: COLORS.light, align: 'right' });
+    const sourceNote = coverSourceCaption(data, studio, variant, options);
+    if (sourceNote) {
+      premiumText(doc, sourceNote, margin + width, 287, 7, { color: COLORS.light, align: 'right' });
     }
   }
 
@@ -418,7 +472,7 @@ const ClientBrochurePremium = (() => {
       shots.forEach((shot, i) => {
         const x = margin + i * (photoW + 10);
         drawShadow(doc, x, y, photoW, photoH, 4);
-        doc.addImage(studio.capture(shot, 1200, 750, 1, { clean: true, solar: variant }), 'JPEG', x, y, photoW, photoH);
+        drawFitted(doc, { data: studio.capture(shot, 1200, 750, 1, { clean: true, solar: variant }), width: 1200, height: 750 }, x, y, photoW, photoH);
         withOpacity(doc, 0.7, () => {
           doc.setFillColor('#000000');
           doc.rect(x, y + photoH - 12, photoW, 12, 'F');
@@ -454,7 +508,7 @@ const ClientBrochurePremium = (() => {
     const restore = prepare();
     try {
       const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: options.compress !== false });
-      doc.setProperties({ title: pdfSafe(data.meta?.name || 'Projet architectural'), subject: `Brochure premium — style ${STYLES[currentStyle].label}`, creator: 'Plan to 3D House' });
+      doc.setProperties({ title: pdfSafe(data.meta?.name || 'Projet architectural'), subject: `Brochure premium — style ${STYLES[currentStyle].label}`, creator: 'ArchiCam Studio' });
       drawCoverPage(doc, data, studio, variant, options);
       doc.addPage();
       drawPlanPage(doc, data, studio, variant, options);

@@ -51,8 +51,29 @@ const APSGenerator = (() => {
   function dependencies(overrides = {}) {
     return {
       CostEstimate: overrides.CostEstimate ?? (typeof CostEstimate !== 'undefined' ? CostEstimate : dependency('CostEstimate', './costEstimate.js')),
-      Habitability: overrides.Habitability ?? (typeof Habitability !== 'undefined' ? Habitability : dependency('Habitability', './habitability.js'))
+      Habitability: overrides.Habitability ?? (typeof Habitability !== 'undefined' ? Habitability : dependency('Habitability', './habitability.js')),
+      DeliverableGate: overrides.DeliverableGate ?? (typeof DeliverableGate !== 'undefined' ? DeliverableGate : dependency('DeliverableGate', './deliverableGate.js'))
     };
+  }
+
+  function resolveImageSize(doc, image) {
+    const w = Number(image?.width), h = Number(image?.height);
+    if (Number.isFinite(w) && w > 0 && Number.isFinite(h) && h > 0) return { width: w, height: h };
+    if (image?.data && typeof doc?.getImageProperties === 'function') {
+      try {
+        const props = doc.getImageProperties(image.data);
+        if (Number.isFinite(props?.width) && props.width > 0 && Number.isFinite(props?.height) && props.height > 0) {
+          return { width: props.width, height: props.height };
+        }
+      } catch (_) { /* propriétés indisponibles */ }
+    }
+    return null;
+  }
+
+  function captionForImage(image, project) {
+    const { DeliverableGate: gate } = dependencies();
+    if (gate && typeof gate.imageCaption === 'function') return gate.imageCaption(image, { project });
+    return image?.ai === true ? 'Image générée par IA — non contractuelle' : 'Illustration du projet';
   }
 
   // =====================================================================
@@ -360,23 +381,30 @@ const APSGenerator = (() => {
     const imageTop = Math.max(y + 14, 150);
     const cover = options.coverImage;
     if (cover?.data) {
-      // Image IA du projet (façade sublimée) rognée au cadre, sans déformation.
-      const frameH = 85, ratio = (cover.width || 16) / (cover.height || 9);
-      let iw = WIDTH, ih = WIDTH / ratio;
-      if (ih < frameH) { ih = frameH; iw = frameH * ratio; }
+      // Cadrage au ratio réel de l'image décodée ; si introuvable, cadrage « contain » sans déformation.
+      const frameH = 85;
+      const fmt = /^data:image\/png/i.test(cover.data) ? 'PNG' : 'JPEG';
+      const size = resolveImageSize(doc, cover);
       doc.saveGraphicsState();
       doc.rect(CONFIG.margin, imageTop, WIDTH, frameH, null);
       doc.clip();
       doc.discardPath();
-      doc.addImage(cover.data, /^data:image\/png/i.test(cover.data) ? 'PNG' : 'JPEG',
-        CONFIG.margin + (WIDTH - iw) / 2, imageTop + (frameH - ih) / 2, iw, ih);
+      if (size) {
+        const ratio = size.width / size.height;
+        let iw = WIDTH, ih = WIDTH / ratio;
+        if (ih < frameH) { ih = frameH; iw = frameH * ratio; }
+        doc.addImage(cover.data, fmt, CONFIG.margin + (WIDTH - iw) / 2, imageTop + (frameH - ih) / 2, iw, ih);
+      } else {
+        doc.addImage(cover.data, fmt, CONFIG.margin, imageTop, 0, frameH);
+      }
       doc.restoreGraphicsState();
-      text(doc, 'Image photoréaliste générée par IA, à titre d\'illustration', CONFIG.margin, imageTop + frameH + 5, 7, { color: CONFIG.colors.mediumGray });
+      text(doc, captionForImage(cover, project), CONFIG.margin, imageTop + frameH + 5, 7, { color: CONFIG.colors.mediumGray });
     } else if (studio?.hs && typeof studio.capture === 'function' && project.walls?.length) {
       try {
         const shots = selectShots(project);
         const image = studio.capture(shots.facade, 1600, 800, 1, { clean: true, solar: variant });
         doc.addImage(image, 'JPEG', CONFIG.margin, imageTop, WIDTH, 85);
+        text(doc, captionForImage('render3d', project), CONFIG.margin, imageTop + 90, 7, { color: CONFIG.colors.mediumGray });
       } catch (error) {
         console.warn('[APS] Vue 3D indisponible :', error);
       }
@@ -583,7 +611,7 @@ const APSGenerator = (() => {
     const JsPDF = options.JsPDF || await loadJsPDF();
     const content = buildContent(project, options);
     const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: options.compress !== false });
-    doc.setProperties({ title: pdfSafe(`APS - ${content.name}`), subject: 'Avant-projet sommaire', creator: 'Plan to 3D House' });
+    doc.setProperties({ title: pdfSafe(`APS - ${content.name}`), subject: 'Avant-projet sommaire', creator: 'ArchiCam Studio' });
 
     drawCover(doc, content, project, studio, variant, options);
     const ctx = pageContext(doc, content);

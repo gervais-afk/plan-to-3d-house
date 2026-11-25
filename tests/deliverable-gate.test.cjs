@@ -340,4 +340,55 @@ test('serve.js (porte E) : couverture filtrée, dérogation tracée validée et 
   assert.equal(updated.catalog, false, 'une régénération non fidèle ne reste pas affectée au catalogue');
   assert.equal(updated.book, false, 'une régénération non fidèle ne reste pas affectée au cahier');
   assert.ok(!updated.cover, 'une régénération non fidèle ne reste pas en couverture');
+  // Dimensions lues depuis l'en-tête réel du PNG 1×1, jamais 1920×1080 par défaut.
+  assert.equal(updated.width, 1);
+  assert.equal(updated.height, 1);
+
+  // Enregistrement d'une image aux octets illisibles sans métadonnées width/height → null (jamais 1920×1080).
+  const unreadable = await httpJson(port, 'POST', '/api/save-generated?project=demo', {
+    type: 'image',
+    id: 'photor-invalide-header',
+    data: 'data:image/jpeg;base64,AAAA',
+    metadata: { label: 'En-tête tronqué' }
+  });
+  assert.equal(unreadable.status, 200);
+  assert.equal(unreadable.json.item.width, null);
+  assert.equal(unreadable.json.item.height, null);
+});
+
+test('Provenance : règles strictes sans déduction abusive (IA, maquette 3D, architecte déclaré, inconnu)', () => {
+  const project = JSON.parse(fs.readFileSync(path.join(ROOT, 'projects/residence-verandas/project.json'), 'utf8'));
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'projects/residence-verandas/generated/manifest.json'), 'utf8'));
+
+  // 1. IA uniquement → « non contractuelle »
+  const aiItem = manifest.items.find(i => i.id === 'photor-cuisine');
+  assert.equal(DeliverableGate.imageSourceKind(aiItem, project), 'ai');
+  assert.match(DeliverableGate.imageCaption(aiItem, { project }), /non contractuelle/);
+
+  // 2. Capture 3D rangée dans generated/images/ (même listée dans edition.photos) → « Capture de la maquette 3D »
+  const ref3d = manifest.items.find(i => i.id === 'sejour-veranda-reference');
+  assert.equal(ref3d.source, undefined, 'la capture 3D ne doit pas porter source: architect');
+  assert.equal(DeliverableGate.imageSourceKind(ref3d, project), 'render3d');
+  assert.equal(DeliverableGate.imageCaption(ref3d, { project }), 'Capture de la maquette 3D');
+  assert.doesNotMatch(DeliverableGate.imageCaption(ref3d, { project }), /non contractuelle/);
+
+  // Capture 3D par dossier generated/renders/ ou generator Three.js
+  assert.equal(DeliverableGate.imageSourceKind({ file: 'projects/p/generated/renders/facade.jpg' }), 'render3d');
+  assert.equal(DeliverableGate.imageSourceKind({ file: 'projects/p/generated/images/vue.jpg', generator: 'Three.js' }), 'render3d');
+
+  // 3. Architecte UNIQUEMENT si déclaré (source: 'architect' ou listé dans project.edition.photos)
+  const declaredIds = manifest.items.filter(i => i.source === 'architect').map(i => i.id).sort();
+  assert.deepEqual(declaredIds, ['perspective-01', 'perspective-02', 'perspective-03', 'perspective-04', 'perspective-05']);
+  const p1 = manifest.items.find(i => i.id === 'perspective-01');
+  assert.equal(DeliverableGate.imageSourceKind(p1), 'architect');
+  assert.equal(DeliverableGate.imageCaption(p1), 'Perspective de l\'architecte');
+  assert.doesNotMatch(DeliverableGate.imageCaption(p1), /non contractuelle/);
+
+  // Via project.edition.photos sans champ source dans le manifeste
+  const undeclaredP1 = { id: 'perspective-01', file: 'projects/residence-verandas/generated/images/perspective-01.jpg' };
+  assert.equal(DeliverableGate.imageSourceKind(undeclaredP1, project), 'architect');
+  // Sans source ET sans project.edition.photos : jamais déduit « architect »
+  assert.equal(DeliverableGate.imageSourceKind(undeclaredP1), 'unknown');
+  assert.equal(DeliverableGate.imageCaption(undeclaredP1), 'Illustration du projet');
+  assert.doesNotMatch(DeliverableGate.imageCaption(undeclaredP1), /architecte|non contractuelle|IA/i);
 });

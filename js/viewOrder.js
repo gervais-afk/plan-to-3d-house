@@ -77,6 +77,9 @@ const ViewOrder = (() => {
         category: kind, rank: item.cover === true ? RANK.cover : RANK[kind], kind: KIND[kind], alt: notes ? `${label} : ${notes}` : label, published: true,
         catalog: item.catalog === true || item.catalog === undefined, book: item.book === true, room: item.room || null,
         ai: item.ai === true || /^photor-/i.test(String(item.id || '')) || /openrouter/i.test(String(item.generator || '')),
+        generator: typeof item.generator === 'string' ? item.generator : '',
+        declaredSource: typeof item.source === 'string' && !item.source.includes('/') ? item.source : '',
+        sourceKind: typeof item.sourceKind === 'string' ? item.sourceKind : '',
         fidelity: item.fidelity && typeof item.fidelity === 'object' ? item.fidelity : null,
         fidelityOverride: item.fidelityOverride && typeof item.fidelityOverride === 'object' ? item.fidelityOverride : null,
         fidelityAccepted: item.fidelityAccepted === true }];

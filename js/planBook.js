@@ -461,6 +461,14 @@ const PlanBook = (() => {
     return verdict.eligible ? null : { exclude: true, reason: verdict.reason };
   }
 
+  function viewSourceCaption(view, data, { fallbackKind = 'unknown', plural = false } = {}) {
+    if (typeof DeliverableGate !== 'undefined' && typeof DeliverableGate.imageCaption === 'function') {
+      return view ? DeliverableGate.imageCaption(view, { project: data, plural }) : DeliverableGate.imageCaption(fallbackKind, { plural });
+    }
+    if (view?.ai === true) return plural ? 'Images générées par IA — non contractuelles' : 'Image générée par IA — non contractuelle';
+    return plural ? 'Illustrations du projet' : 'Illustration du projet';
+  }
+
   /**
    * Lit les PDF de l'architecte : chaque page est rendue en haute définition, son texte vectoriel est extrait
    * et la planche est identifiée (SheetClassifier) : distribution, coffrage, façade, coupe… L'architecte
@@ -736,8 +744,12 @@ const PlanBook = (() => {
 
     // Couverture : meilleure vue éligible (façade/cover d’abord), sinon capture éligible, sinon axonométrie 3D.
     const heroW = 2600, heroH = Math.round(heroW * H / W); // image d'ouverture pleine page
-    const fallbackCover = typeof DeliverableGate !== 'undefined' ? DeliverableGate.pickCover(media)?.file : null;
-    const heroSource = views[0]?.source || fallbackCover;
+    const pickedCover = typeof DeliverableGate !== 'undefined' ? DeliverableGate.pickCover(media) : null;
+    const heroView = views[0] || (pickedCover
+      ? { ...(pickedCover.item || {}), file: pickedCover.file, source: pickedCover.file, label: pickedCover.item?.label || 'Vue du projet',
+          ...(pickedCover.kind === 'render' ? { sourceKind: 'render3d' } : {}) }
+      : null);
+    const heroSource = heroView?.source || null;
     const hero = heroSource ? jpeg(await loadImage(heroSource), heroW, heroH) : render(hs, axonometric(data, hs), heroW, heroH);
     // Plan de distribution réel du projet pour la couverture : planche de l'architecte si elle existe.
     const coverPlan = await coverPlanSource(data, annexes, media.images || []);
@@ -745,7 +757,7 @@ const PlanBook = (() => {
     for (const [index, sheet] of sheets.entries()) {
       if (index) doc.addPage('a3', 'landscape');
       onStatus(`Composition — ${sheet.code} ${sheet.title}…`);
-      if (sheet.id === 'cover') cover(doc, data, sheet, hero, sheets, views[0], coverPlan);
+      if (sheet.id === 'cover') cover(doc, data, sheet, hero, sheets, heroView, coverPlan);
       else if (sheet.id === 'synth') await drawSynthesisBoard(doc, data, sheet, studio, views);
       else if (sheet.id === 'axo') {
         sheetFrame(doc, data, sheet);
@@ -924,10 +936,23 @@ const PlanBook = (() => {
       if (hs) doc.addImage(render(hs, axonometric(data, hs, -Math.PI / 2), 1200, 1000, { section: true }), 'JPEG', x, y, w, h);
     });
 
-    // Bas de page éditorial
+    // Bas de page éditorial : mention véridique selon les sources réellement affichées sur la planche.
+    const boardSources = [extSrc, sejourSrc, verandaSrc, cuisineSrc, suiteSrc, coupeSrc].filter(Boolean);
+    const boardViews = boardSources.map(src => views.find(v => v.source === src)).filter(Boolean);
+    const boardKinds = boardViews.map(v => (typeof DeliverableGate !== 'undefined' ? DeliverableGate.imageSourceKind(v, data) : (v.ai ? 'ai' : 'unknown')));
+    let boardNote;
+    if (boardKinds.includes('ai')) {
+      boardNote = viewSourceCaption(null, data, { fallbackKind: 'ai', plural: true });
+    } else if (boardKinds.length && new Set(boardKinds).size === 1) {
+      boardNote = viewSourceCaption(null, data, { fallbackKind: boardKinds[0], plural: boardKinds.length > 1 });
+    } else if (!boardViews.length && hs) {
+      boardNote = viewSourceCaption(null, data, { fallbackKind: 'render3d', plural: true });
+    } else {
+      boardNote = viewSourceCaption(null, data, { fallbackKind: 'unknown', plural: true });
+    }
     doc.setDrawColor(C.rule).setLineWidth(0.2).line(14, 287, W - 14, 287);
     text(doc, 'ARCHICAM STUDIO · PLANCHE DE SYNTHÈSE ARCHITECTURALE', 14, 291.5, 6.4, { bold: true, color: C.ink, space: 0.4 });
-    text(doc, 'Édition Monographe Privée · Rendu illustratif d’ambiance non contractuel', W - 14, 291.5, 6.2, { align: 'right', color: C.muted });
+    text(doc, `Édition Monographe Privée · ${boardNote}`, W - 14, 291.5, 6.2, { align: 'right', color: C.muted });
   }
 
   async function exportSynthesisBoard({ data, studio, screen = null, onStatus = () => {} }) {
@@ -1011,7 +1036,7 @@ const PlanBook = (() => {
 
     // Légende de la vue d'ouverture, à droite, sur l'image.
     text(doc, `FIG. 01  ·  ${roomName(images[0].view.label).toUpperCase()}`, PW - 16, PH - 19, 6.2, { bold: true, color: C.white, align: 'right', space: 0.6 });
-    text(doc, 'Rendu d’ambiance illustratif non contractuel', PW - 16, PH - 14, 5.8, { color: C.sand, align: 'right' });
+    text(doc, viewSourceCaption(images[0].view, data), PW - 16, PH - 14, 5.8, { color: C.sand, align: 'right' });
 
     // Une planche par image.
     images.forEach(({ view, img }, n) => {
@@ -1099,7 +1124,7 @@ const PlanBook = (() => {
     }
     // Légende de l'image d'ouverture.
     text(doc, `FIG. 01  ·  ${(view?.label || 'Axonométrie de la maquette').toUpperCase()}`, 22, H - 18, 6.2, { bold: true, color: C.white, space: 0.6, maxWidth: 200 });
-    text(doc, 'Rendu d’ambiance illustratif non contractuel', 22, H - 13.5, 5.6, { color: C.sand });
+    text(doc, viewSourceCaption(view, data, { fallbackKind: 'render3d' }), 22, H - 13.5, 5.6, { color: C.sand });
 
     // En-tête du panneau.
     text(doc, 'ARCHICAM STUDIO', x, 24, 9.5, { bold: true, color: C.gold, space: 1.6 });
