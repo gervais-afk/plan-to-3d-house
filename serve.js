@@ -8,6 +8,8 @@ const decisionStore = require('./decisionStore');
 const presentationStore = require('./presentationStore');
 const cabinetStore = require('./cabinetStore');
 const { createPortal, safePath } = require('./privatePortal');
+let DeliverableGate = null;
+try { DeliverableGate = require('./js/deliverableGate'); } catch { /* fixtures isolées sans js/deliverableGate.js */ }
 
 const PORT = Number(process.env.PORT) || 8000;
 const ROOT = fs.realpathSync(__dirname);
@@ -101,11 +103,23 @@ function saveRender(req, res, url) {
 }
 
 // Sélections de l’architecte sur une image publiée : catalogue des intérieurs et cahier de plans.
-function galleryFlags(req, res, url) {
+function galleryFlags(req, res, url, access = {}) {
   readBody(req, res, 4 * 1024, body => {
     const { id } = body || {};
     const flags = Object.fromEntries(['catalog', 'book', 'fidelityAccepted'].filter(key => typeof body?.[key] === 'boolean').map(key => [key, body[key]]));
-    if (typeof id !== 'string' || !/^[a-z0-9_-]{1,80}$/i.test(id) || !Object.keys(flags).length) {
+    const hasOverride = body && Object.prototype.hasOwnProperty.call(body, 'fidelityOverride');
+    let nextOverride;
+    if (hasOverride) {
+      if (body.fidelityOverride === null) nextOverride = null;
+      else {
+        const actor = String(access?.session?.label || access?.session?.role || 'architect');
+        nextOverride = sanitizeFidelityOverride(body.fidelityOverride, actor);
+        if (!nextOverride) {
+          return sendJson(res, 422, { error: 'Le forçage de fidélité exige un motif et un verdict valides.' });
+        }
+      }
+    }
+    if (typeof id !== 'string' || !/^[a-z0-9_-]{1,80}$/i.test(id) || (!Object.keys(flags).length && !hasOverride)) {
       return sendJson(res, 422, { error: 'Indiquez une image et un choix catalogue ou cahier.' });
     }
     let media;
@@ -130,9 +144,27 @@ function galleryFlags(req, res, url) {
       }
     }
     if (!item) return sendJson(res, 404, { error: 'Image introuvable dans ce projet.' });
+    const candidate = { ...item, ...flags };
+    if (hasOverride) {
+      if (nextOverride) { candidate.fidelityOverride = nextOverride; candidate.fidelityAccepted = true; }
+      else { delete candidate.fidelityOverride; candidate.fidelityAccepted = false; }
+    }
+    if (DeliverableGate && (flags.catalog === true || flags.book === true)) {
+      const verdict = DeliverableGate.evaluate(candidate);
+      if (!verdict.eligible) {
+        return sendJson(res, 422, { error: `Affectation refusée (Porte E) : ${verdict.reason}. Un forçage tracé avec motif est requis.` });
+      }
+    }
     Object.assign(item, flags);
+    if (hasOverride) {
+      if (nextOverride) { item.fidelityOverride = nextOverride; item.fidelityAccepted = true; }
+      else { delete item.fidelityOverride; item.fidelityAccepted = false; }
+    }
     atomicFile(media.manifest, JSON.stringify(manifest, null, 2));
-    return sendJson(res, 200, { ok: true, id, catalog: item.catalog === true, book: item.book === true });
+    return sendJson(res, 200, {
+      ok: true, id, catalog: item.catalog === true, book: item.book === true,
+      ...(item.fidelityOverride ? { fidelityOverride: item.fidelityOverride } : {})
+    });
   });
 }
 
@@ -184,16 +216,51 @@ function promptTags(tags) {
 }
 
 // Contrôle géométrique calculé dans le navigateur (js/fidelityCheck.js) : nombres bornés, verdict connu.
+function fidelityTile(tile) {
+  if (!tile || typeof tile !== 'object') return null;
+  const row = Number(tile.row), col = Number(tile.col), score = Number(tile.score);
+  if (!Number.isInteger(row) || row < 0 || row > 2 || !Number.isInteger(col) || col < 0 || col > 2 || !Number.isFinite(score)) return null;
+  return { row, col, score: Math.max(0, Math.min(1, Math.round(score * 1000) / 1000)) };
+}
+
 function fidelityResult(value) {
   if (!value || typeof value !== 'object' || !['faithful', 'review', 'unfaithful'].includes(value.verdict)) return null;
   const unit = n => Number.isFinite(Number(n)) ? Math.max(0, Math.min(1, Math.round(Number(n) * 1000) / 1000)) : 0;
   const offset = n => Number.isFinite(Number(n)) ? Math.max(-1, Math.min(1, Math.round(Number(n) * 1000) / 1000)) : 0;
-  return {
+  const worstTile = fidelityTile(value.worstTile);
+  const addedTile = fidelityTile(value.addedTile);
+  const result = {
     version: Number.isInteger(value.version) ? value.version : 0,
     verdict: value.verdict, score: unit(value.score), recall: unit(value.recall), chance: unit(value.chance),
     shift: { x: offset(value.shift?.x), y: offset(value.shift?.y) },
     aspect: Number.isFinite(Number(value.aspect)) ? Math.round(Number(value.aspect) * 1000) / 1000 : null
   };
+  if (worstTile) result.worstTile = worstTile;
+  if (addedTile) result.addedTile = addedTile;
+  return result;
+}
+
+function sanitizeFidelityOverride(value, actor = 'architect') {
+  if (DeliverableGate) return DeliverableGate.sanitizeOverride(value, { actor });
+  if (!value || typeof value !== 'object') return null;
+  const reason = String(value.reason || '').trim().slice(0, 300);
+  if (!reason || !['faithful', 'review', 'unfaithful', 'missing'].includes(value.verdict)) return null;
+  const fidelityVersion = Number.isInteger(value.fidelityVersion) && value.fidelityVersion >= 0 ? value.fidelityVersion : 0;
+  const acceptedAt = typeof value.acceptedAt === 'string' && Number.isFinite(Date.parse(value.acceptedAt))
+    ? new Date(value.acceptedAt).toISOString() : new Date().toISOString();
+  const acceptedBy = String(value.acceptedBy || actor || 'architect').trim().slice(0, 80) || 'architect';
+  return { acceptedAt, acceptedBy, reason, fidelityVersion, verdict: value.verdict };
+}
+
+function isAiItem(item) {
+  if (DeliverableGate) return DeliverableGate.isAiRender(item);
+  return Boolean(item && (item.ai === true || /^photor-/i.test(String(item.id || '')) || /openrouter/i.test(String(item.generator || ''))));
+}
+
+function isDeliverableEligible(item) {
+  if (DeliverableGate) return DeliverableGate.isEligible(item);
+  if (!isAiItem(item)) return true;
+  return item.fidelity?.version >= 2 && item.fidelity?.verdict === 'faithful';
 }
 
 function saveGenerated(req, res, url) {
@@ -235,8 +302,10 @@ function saveGenerated(req, res, url) {
       const index = manifest.items.findIndex(existing => existing.id === id);
       if (index >= 0) {
         const previous = manifest.items[index];
-        item.catalog = typeof previous.catalog === 'boolean' ? previous.catalog : true;
-        item.book = previous.book === true;
+        // Régénération : tout ancien forçage expire ; on ne conserve la publication que si le nouveau rendu est fidèle.
+        const eligible = isDeliverableEligible(item);
+        item.catalog = eligible && typeof previous.catalog === 'boolean' ? previous.catalog : false;
+        item.book = eligible && previous.book === true;
         manifest.items[index] = item;
       } else manifest.items.push(item);
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
@@ -327,6 +396,7 @@ function galleryMedia(res, url, access = {}) {
   const imagePrefix = `${media.prefix}images/`;
   const videoPrefix = `${media.prefix}videos/`;
   const renderPrefix = `${media.prefix}renders/`;
+  const planchesPrefix = `projects/${projectSlug(url.searchParams.get('project'))}/planches/`;
   let manifestItems = [];
   try {
     const manifest = JSON.parse(fs.readFileSync(media.manifest, 'utf8'));
@@ -346,9 +416,12 @@ function galleryMedia(res, url, access = {}) {
       return {
         id: String(item.id || ''), type: 'image', file: item.file,
         preview: preview && fs.statSync(path.join(media.images, preview), { throwIfNoEntry: false })?.isFile() ? imagePrefix + preview : null,
-        reference: typeof item.reference === 'string' && [renderPrefix, imagePrefix].some(prefix => item.reference.startsWith(prefix)
+        reference: typeof item.reference === 'string' && [renderPrefix, imagePrefix, planchesPrefix].some(prefix => item.reference.startsWith(prefix)
           && /^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp)$/i.test(item.reference.slice(prefix.length))) ? item.reference : null,
-        fidelity: fidelityResult(item.fidelity), fidelityAccepted: item.fidelityAccepted === true,
+        ai: isAiItem(item),
+        fidelity: fidelityResult(item.fidelity),
+        fidelityOverride: sanitizeFidelityOverride(item.fidelityOverride) || null,
+        fidelityAccepted: item.fidelityAccepted === true,
         room: item.room || null, label: item.label || item.id || 'Image générée', cover: item.cover === true,
         // Les anciennes images publiées restent visibles si le choix catalogue n’existait pas encore.
         catalog: item.catalog === true || item.catalog === undefined, book: item.book === true,
@@ -414,15 +487,20 @@ function readBody(req, res, limit, cb) {
   });
 }
 
-/** Vignette d'un projet pour l'index de l'atelier : couverture choisie, sinon façade, vue aérienne ou plan. */
+/** Vignette d'un projet pour l'index de l'atelier : couverture éligible, sinon façade, vue aérienne ou plan. */
 function projectCover(slug) {
   const base = path.join(PROJECTS, slug);
   const prefix = `projects/${slug}/`;
+  const validFile = file => typeof file === 'string' && file.startsWith(prefix)
+    && /\.(?:jpe?g|png|webp)$/i.test(file) && !file.includes('..') && fs.existsSync(path.join(ROOT, file));
   try {
     const manifest = JSON.parse(fs.readFileSync(path.join(base, 'generated', 'manifest.json'), 'utf8'));
-    const chosen = (manifest.items || []).find(item => item && item.cover === true && typeof item.file === 'string'
-      && item.file.startsWith(prefix) && /\.(?:jpe?g|png|webp)$/i.test(item.file) && !item.file.includes('..'));
-    if (chosen && fs.existsSync(path.join(ROOT, chosen.file))) return chosen.file;
+    const items = (manifest.items || []).filter(item => item && item.type === 'image' && item.status !== 'draft'
+      && item.published !== false && validFile(item.file) && isDeliverableEligible(item));
+    const chosen = DeliverableGate ? DeliverableGate.pickCover({ images: items, renders: [] }) : null;
+    if (chosen?.file && validFile(chosen.file)) return chosen.file;
+    const explicit = items.find(item => item.cover === true) || items.find(item => item.catalog !== false);
+    if (explicit) return explicit.file;
   } catch { /* pas de manifeste : on cherche une capture */ }
   const fallback = ['generated/renders/facade.jpg', 'generated/renders/vue-aerienne.jpg', 'plan.jpg']
     .find(file => fs.existsSync(path.join(base, file)));
@@ -996,7 +1074,7 @@ http.createServer((req, res) => {
   if (req.method === 'GET' && urlPath === '/api/ai/videos/status') return videoStatus(req, res, new URL(req.url, 'http://localhost'));
   if (req.method === 'POST' && urlPath === '/api/save-render') return saveRender(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/save-generated') return saveGenerated(req, res, requestUrl);
-  if (req.method === 'POST' && urlPath === '/api/gallery/flags') return galleryFlags(req, res, requestUrl);
+  if (req.method === 'POST' && urlPath === '/api/gallery/flags') return galleryFlags(req, res, requestUrl, access);
   if (req.method === 'POST' && urlPath === '/api/save-video') return saveVideo(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/save-sequence-frame') return saveSequenceFrame(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/save-sequence-manifest') return saveSequenceManifest(req, res, requestUrl);

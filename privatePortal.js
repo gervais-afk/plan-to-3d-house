@@ -19,7 +19,7 @@ const viewerFiles = new Set(['js/portal-context.js', 'js/houseDataCore.js', 'js/
   'js/scene.js', 'js/variantState.js', 'js/solarStudy.js', 'js/realism.js', 'js/assets.js', 'js/presentationPlan.js',
   'js/renderStudio.js', 'js/aiSequence.js', 'js/scrollTour.js', 'js/walkController.js', 'js/minimap.js', 'js/solarOptions.js',
   'js/clientFinishes.js', 'js/clientTools.js', 'js/clientVariants.js', 'js/clientFeedback.js', 'js/clientBrochure.js',
-  'js/aiPrompt.js', 'js/fidelityCheck.js', 'js/app.js', 'js/workspace.js', 'css/workspace.css', 'js/clientDecisions.js', 'css/style.css', 'css/clientTools.css',
+  'js/aiPrompt.js', 'js/fidelityCheck.js', 'js/deliverableGate.js', 'js/app.js', 'js/workspace.js', 'css/workspace.css', 'js/clientDecisions.js', 'css/style.css', 'css/clientTools.css',
   'css/tokens.css', 'css/motion.css', 'js/icons.js', 'js/motion.js', 'js/presentMode.js', 'js/viewOrder.js', 'js/costEstimate.js', 'js/sheetClassifier.js', 'js/woodGrain.js', 'js/planBook.js', 'assets/vendor/jspdf-4.2.1.umd.min.js', 'js/home.js', 'js/coverImage.js', 'css/accueil.css', 'css/presentation.css', 'assets/fonts/manrope.woff2', 'assets/fonts/source-serif-4.woff2']);
 const publicFiles = new Set(['portal.html', 'js/portal.js', 'css/portal.css', 'css/tokens.css', 'assets/fonts/manrope.woff2', 'assets/fonts/source-serif-4.woff2']);
 

@@ -236,8 +236,32 @@ window.startProjectViewer = () => {
             event.stopPropagation();
             toggle.disabled = true;
             try {
-              await setImageFlags(target.id, { [key]: !target[key] });
-              target[key] = !target[key];
+              const nextValue = !target[key];
+              const payload = { [key]: nextValue };
+              if (nextValue && typeof DeliverableGate !== 'undefined' && DeliverableGate.isAiRender(target)) {
+                let fidelity = target.fidelity || null;
+                if (fidelity?.version !== FidelityCheck.VERSION && target.reference) {
+                  fidelity = await fidelityFor({ file: target.file || target.url, fidelity }, target.reference);
+                }
+                const decision = DeliverableGate.evaluate({ ...target, fidelity });
+                if (!decision.eligible) {
+                  const reason = window.prompt(
+                    `Porte E — ${decision.reason}.\nCe rendu IA n’est pas classé « Fidèle au plan ». Indiquez un motif tracé pour forcer son affectation au ${label.toLowerCase()} (Annuler pour conserver hors livrables) :`
+                  );
+                  if (!reason || !reason.trim()) {
+                    status.textContent = `Affectation refusée (Porte E) : ${decision.reason}.`;
+                    return;
+                  }
+                  payload.fidelityOverride = DeliverableGate.sanitizeOverride({
+                    reason: reason.trim(),
+                    fidelityVersion: fidelity?.version ?? 0,
+                    verdict: fidelity?.verdict || 'missing'
+                  });
+                }
+              }
+              const res = await setImageFlags(target.id, payload);
+              target[key] = nextValue;
+              if (res?.fidelityOverride) { target.fidelityOverride = res.fidelityOverride; target.fidelityAccepted = true; }
               paint();
             } catch (error) { status.textContent = error.message; }
             finally { toggle.disabled = false; }
@@ -404,9 +428,12 @@ window.startProjectViewer = () => {
     const form = document.getElementById('rg-publish-form');
     const catalog = document.getElementById('rg-publish-catalog');
     const book = document.getElementById('rg-publish-book');
-    const warning = fidelity?.verdict === 'unfaithful'
-      ? ` Contrôle géométrique : ${FidelityCheck.describe(fidelity)}. Le rendu semble s’écarter de la vue source (cadrage, ouvertures ou volumes) ; régénérez-le plutôt que de le publier.`
-      : fidelity ? ` Contrôle géométrique : ${FidelityCheck.describe(fidelity)}.` : '';
+    const decision = typeof DeliverableGate !== 'undefined'
+      ? DeliverableGate.evaluate({ id: 'photor-draft', ai: true, fidelity })
+      : { eligible: fidelity?.verdict === 'faithful', reason: fidelity ? FidelityCheck.describe(fidelity) : 'Contrôle géométrique absent' };
+    const warning = !decision.eligible
+      ? ` Contrôle géométrique (Porte E) : ${decision.reason}. Ce rendu n’est pas classé « Fidèle au plan » : régénérez-le ou saisissez un motif de forçage tracé.`
+      : ` Contrôle géométrique : ${FidelityCheck.describe(fidelity)}.`;
     document.getElementById('rg-publish-caption').textContent = `« ${label} » a été généré et enregistré. Sélectionnez les livrables souhaités.${warning}`;
     document.getElementById('rg-publish-status').textContent = '';
     catalog.checked = false;
@@ -415,14 +442,26 @@ window.startProjectViewer = () => {
     return new Promise(resolve => {
       publishDialog.addEventListener('close', () => {
         const chosen = publishDialog.returnValue === 'save' ? { catalog: catalog.checked, book: book.checked } : null;
-        // Un rendu en écart géométrique n'entre dans un livrable qu'après une confirmation explicite.
-        if (chosen && fidelity?.verdict === 'unfaithful' && (chosen.catalog || chosen.book)
-          && !confirm('Ce rendu IA s’écarte de la géométrie du projet. Le publier quand même dans les livrables ?')) {
-          resolve({ catalog: false, book: false });
+        // Porte E : tout rendu IA non « faithful » exige un forçage explicite tracé pour entrer dans les livrables.
+        if (chosen && !decision.eligible && (chosen.catalog || chosen.book)) {
+          const reason = window.prompt(
+            `Porte E — ${decision.reason}.\nIndiquez le motif de forçage architecte pour publier ce rendu dans les livrables (Annuler pour le garder hors livrables) :`
+          );
+          if (!reason || !reason.trim()) {
+            resolve({ catalog: false, book: false });
+            return;
+          }
+          const fidelityOverride = typeof DeliverableGate !== 'undefined'
+            ? DeliverableGate.sanitizeOverride({
+                reason: reason.trim(),
+                fidelityVersion: fidelity?.version ?? 0,
+                verdict: fidelity?.verdict || 'missing'
+              })
+            : { acceptedAt: new Date().toISOString(), acceptedBy: 'architect', reason: reason.trim(), fidelityVersion: fidelity?.version ?? 0, verdict: fidelity?.verdict || 'missing' };
+          resolve({ ...chosen, fidelityOverride });
           return;
         }
-        // Choix explicite mémorisé : le contrôle à l'export ne réécartera pas ce rendu.
-        resolve(chosen && fidelity?.verdict === 'unfaithful' && (chosen.catalog || chosen.book) ? { ...chosen, fidelityAccepted: true } : chosen);
+        resolve(chosen);
       }, { once: true });
       publishDialog.showModal();
       form.querySelector('[value="save"]')?.focus();
@@ -1204,17 +1243,30 @@ window.startProjectViewer = () => {
     const s = page.sublimed;
     if (s) {
       const verdict = s.fidelity ? FidelityCheck.describe(s.fidelity) : 'Contrôle géométrique indisponible';
-      const bad = s.fidelity?.verdict === 'unfaithful';
-      box.innerHTML = `<img alt="Version d’ambiance générée"><div><span class="book-sheet-chip ${bad ? 'is-doubt' : s.fidelity?.verdict === 'faithful' ? 'is-sure' : 'is-likely'}"></span>
+      const decision = typeof DeliverableGate !== 'undefined'
+        ? DeliverableGate.evaluate({ id: s.id || 'photor-planche', ai: true, fidelity: s.fidelity, fidelityOverride: s.fidelityOverride })
+        : { eligible: s.fidelity?.verdict === 'faithful', reason: verdict };
+      const blocked = !decision.eligible;
+      box.innerHTML = `<img alt="Version d’ambiance générée"><div><span class="book-sheet-chip ${s.fidelity?.verdict === 'unfaithful' || !s.fidelity ? 'is-doubt' : s.fidelity?.verdict === 'faithful' ? 'is-sure' : 'is-likely'}"></span>
         <label class="book-sheet-check"><input type="checkbox" data-sublime-include> Ajouter au cahier, à côté de la planche technique</label>
         <small class="book-sheet-why"></small><button type="button" class="btn-toggle btn-small" data-sublime>Régénérer</button></div>`;
       box.querySelector('img').src = s.data;
       box.querySelector('.book-sheet-chip').textContent = `Version d’ambiance · ${verdict}`;
-      box.querySelector('.book-sheet-why').textContent = bad ? 'Le rendu s’écarte du plan : régénérez-le plutôt que de l’ajouter.' : `${s.model}${s.cost ? ` · ${s.cost}` : ''} · illustratif, non contractuel`;
+      box.querySelector('.book-sheet-why').textContent = blocked
+        ? 'Porte E : seul un rendu classé « Fidèle au plan » est inclus par défaut (forçage tracé requis sinon).'
+        : `${s.model}${s.cost ? ` · ${s.cost}` : ''} · illustratif, non contractuel`;
       const include = box.querySelector('[data-sublime-include]');
       include.checked = page.sublimedInclude;
       include.addEventListener('change', () => {
-        if (include.checked && bad && !confirm('Cette version d’ambiance s’écarte de la géométrie du plan. L’ajouter quand même au cahier ?')) { include.checked = false; return; }
+        if (include.checked && blocked) {
+          const reason = window.prompt(
+            `Porte E — ${decision.reason}.\nIndiquez le motif de forçage architecte pour inclure cette version d’ambiance dans le cahier :`
+          );
+          if (!reason || !reason.trim()) { include.checked = false; return; }
+          s.fidelityOverride = typeof DeliverableGate !== 'undefined'
+            ? DeliverableGate.sanitizeOverride({ reason: reason.trim(), fidelityVersion: s.fidelity?.version ?? 0, verdict: s.fidelity?.verdict || 'missing' })
+            : { acceptedAt: new Date().toISOString(), acceptedBy: 'architect', reason: reason.trim(), fidelityVersion: s.fidelity?.version ?? 0, verdict: s.fidelity?.verdict || 'missing' };
+        }
         page.sublimedInclude = include.checked; bookChanged();
       });
     } else {
@@ -1258,8 +1310,8 @@ window.startProjectViewer = () => {
         body: JSON.stringify({ id, data: image, metadata: { label: `${label} — version d’ambiance`, width: dims.width, height: dims.height, model: SUBLIME_MODEL, prompt, tags, fidelity } })
       }).then(r => r.json()).catch(() => null);
       const cost = result.usage?.cost !== undefined ? `${Number(result.usage.cost).toFixed(3)} $` : '';
-      page.sublimed = { data: image, fidelity, model: SUBLIME_MODEL, cost, id: saved?.ok ? id : null };
-      page.sublimedInclude = fidelity?.verdict !== 'unfaithful';
+      page.sublimed = { data: image, fidelity, model: SUBLIME_MODEL, cost, id: saved?.ok ? id : null, fidelityOverride: null };
+      page.sublimedInclude = Boolean(fidelity && fidelity.version >= FidelityCheck.VERSION && fidelity.verdict === 'faithful');
       bookDialogStatus.textContent = `Version d’ambiance prête${cost ? ` (${cost})` : ''} · ${fidelity ? FidelityCheck.describe(fidelity) : 'contrôle indisponible'}${saved?.ok ? ' · enregistrée dans la galerie' : ''}.`;
     } catch (error) {
       bookDialogStatus.textContent = `Sublimation impossible : ${error.message}`;
@@ -1429,15 +1481,22 @@ window.startProjectViewer = () => {
     }
   });
 
-  // ---------- Contrôle des rendus IA avant un livrable (catalogue, ambiances du cahier) ----------
-  // Un rendu en écart géométrique est écarté, sauf si l'architecte a confirmé sa publication.
+  // ---------- Contrôle des rendus IA avant un livrable (Porte E : catalogue, ambiances du cahier) ----------
+  // Seul un rendu classé « Fidèle au plan » (v2+) entre dans un livrable, sauf forçage explicite tracé.
   async function screenForDelivery(view) {
-    if (view.fidelityAccepted || (!view.reference && !view.fidelity)) return null;
-    const result = await fidelityFor({ file: view.source, fidelity: view.fidelity }, view.reference);
-    return result?.verdict === 'unfaithful' ? { exclude: true, reason: FidelityCheck.describe(result) } : null;
+    if (typeof DeliverableGate !== 'undefined' && !DeliverableGate.isAiRender(view)) return null;
+    let fidelity = view.fidelity || null;
+    if (fidelity?.version !== FidelityCheck.VERSION && view.reference) {
+      fidelity = await fidelityFor({ file: view.source, fidelity }, view.reference);
+    }
+    if (typeof DeliverableGate !== 'undefined') {
+      const decision = DeliverableGate.evaluate({ ...view, fidelity });
+      return decision.eligible ? null : { exclude: true, reason: decision.reason };
+    }
+    return fidelity?.verdict === 'faithful' ? null : { exclude: true, reason: fidelity ? FidelityCheck.describe(fidelity) : 'contrôle absent' };
   }
   const excludedNote = excluded => excluded?.length
-    ? ` ${excluded.length} rendu${excluded.length > 1 ? 's' : ''} écarté${excluded.length > 1 ? 's' : ''} pour écart géométrique : ${excluded.map(e => `${e.label} (${e.reason})`).join(', ')}.`
+    ? ` ${excluded.length} rendu${excluded.length > 1 ? 's' : ''} écarté${excluded.length > 1 ? 's' : ''} (Porte E) : ${excluded.map(e => `${e.label} (${e.reason})`).join(', ')}.`
     : '';
 
   // ---------- Catalogue des intérieurs : ouvert aux clients ----------

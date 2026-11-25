@@ -50,8 +50,8 @@ test('Documents : façade et intérieurs distincts, la sublimation la plus réce
     { id: 'plan', file: `${I}plan.png`, reference: `${R}plan-2d.png`, room: null, catalog: true },
     { id: 'facade', file: `${I}facade.jpg`, reference: `${R}facade-sud.jpg`, room: null, catalog: true },
     { id: 'sejour', file: `${I}sejour.jpg`, reference: `${R}sejour.jpg`, room: 'living', catalog: true },
-    { id: 'photor-sejour', file: `${I}photor-sejour.png`, reference: `${R}sejour.jpg`, room: 'living', catalog: true },
-    { id: 'photor-chambre', file: `${I}photor-chambre.png`, reference: `${R}chambre.jpg`, room: 'bed1', catalog: true }
+    { id: 'photor-sejour', file: `${I}photor-sejour.png`, reference: `${R}sejour.jpg`, room: 'living', catalog: true, fidelity: { version: 2, verdict: 'faithful', score: 0.78 } },
+    { id: 'photor-chambre', file: `${I}photor-chambre.png`, reference: `${R}chambre.jpg`, room: 'bed1', catalog: true, fidelity: { version: 2, verdict: 'faithful', score: 0.71 } }
   ] });
   assert.equal(picked.facade.id, 'facade');
   assert.deepEqual(picked.interiors.map(i => i.id), ['photor-sejour', 'photor-chambre']);
@@ -120,9 +120,21 @@ test('Documents : seules les images validées « Catalogue » par l’architecte
   const images = [
     { id: 'photor-facade', file: `${I}photor-facade.png`, reference: `${R}facade.jpg`, room: null },
     { id: 'photor-cuisine', file: `${I}photor-cuisine.png`, reference: `${R}cuisine.jpg`, room: 'kitchen', catalog: false },
-    { id: 'photor-sejour', file: `${I}photor-sejour.png`, reference: `${R}sejour.jpg`, room: 'living', catalog: true }
+    { id: 'photor-sejour', file: `${I}photor-sejour.png`, reference: `${R}sejour.jpg`, room: 'living', catalog: true, fidelity: { version: 2, verdict: 'faithful', score: 0.74 } }
   ];
   const picked = AIEnhance.pickImages({ images });
   assert.equal(picked.facade, null, 'façade non validée : le document garde le plan');
   assert.deepEqual(picked.interiors.map(i => i.id), ['photor-sejour']);
+});
+
+test('Documents (porte E) : exclut les rendus IA non vérifiés, « À vérifier » ou infidèles, sauf dérogation tracée', () => {
+  const images = [
+    { id: 'photor-unverified', file: `${I}photor-unverified.png`, reference: `${R}facade.jpg`, room: null, catalog: true },
+    { id: 'photor-review', file: `${I}photor-review.png`, reference: `${R}salon.jpg`, room: 'living', catalog: true, fidelity: { version: 2, verdict: 'review', score: 0.55 } },
+    { id: 'photor-unfaithful', file: `${I}photor-unfaithful.png`, reference: `${R}cuisine.jpg`, room: 'kitchen', catalog: true, fidelity: { version: 2, verdict: 'unfaithful', score: 0.22 } },
+    { id: 'photor-override', file: `${I}photor-override.png`, reference: `${R}chambre.jpg`, room: 'bed1', catalog: true, fidelity: { version: 2, verdict: 'review', score: 0.54 }, fidelityOverride: { reason: 'Vérifié visuellement par l’architecte', fidelityVersion: 2, verdict: 'review', acceptedAt: '2026-11-24T12:00:00.000Z' } }
+  ];
+  const picked = AIEnhance.pickImages({ images });
+  assert.equal(picked.facade, null);
+  assert.deepEqual(picked.interiors.map(i => i.id), ['photor-override']);
 });

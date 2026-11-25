@@ -97,11 +97,22 @@ window.ProjectCoverReady = (() => {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.json();
   }
-  // L’ordre historique reste le repli ; les sélections ne sont appliquées que si disponibles.
+  const isGateEligible = item => typeof DeliverableGate === 'undefined' || DeliverableGate.isEligible(item);
+  // L’ordre historique reste le repli ; les sélections ne sont appliquées que si éligibles (Porte E).
   const makeViews = (media, slug) => {
-    const published = ViewOrder.views({ images: media?.images || [], renders: [] }, slug).filter(view => view.catalog && view.category !== 'plan');
-    const automatic = published.slice(0, 3);
-    return ViewOrder.selectSlots(automatic, media?.presentation?.slots, published);
+    const eligible = ViewOrder.views({ images: media?.images || [], renders: [] }, slug).filter(isGateEligible);
+    const published = eligible.filter(view => view.catalog && view.category !== 'plan');
+    if (published.length) {
+      const automatic = published.slice(0, 3);
+      return ViewOrder.selectSlots(automatic, media?.presentation?.slots, published);
+    }
+    const anyEligible = eligible.filter(view => view.category !== 'plan');
+    if (anyEligible.length) return anyEligible.slice(0, 3);
+    // Repli garanti : la couverture ne reste jamais sans photo s'il existe une capture 3D locale.
+    return ViewOrder.views({ images: [], renders: media?.renders || [] }, slug)
+      .filter(view => view.category !== 'plan')
+      .slice(0, 3)
+      .map(view => ({ ...view, fallbackCover: true }));
   };
   async function showView(index) {
     if (!activeViews.length) return;
@@ -109,7 +120,7 @@ window.ProjectCoverReady = (() => {
     const version = ++pictureVersion;
     const shot = activeViews[current];
     const focal = current === 0 ? presentation?.focal : null;
-    if (!shot.published) {
+    if (!shot.published && !shot.fallbackCover) {
       image.hidden = true;
       cover.dataset.art = 'ambient';
       el('cover-caption').textContent = shot.label;
@@ -401,11 +412,11 @@ window.ProjectCoverReady = (() => {
   }
 
   function allCandidates(media, slug) {
-    return ViewOrder.views({ images: media?.images || [], renders: [] }, slug);
+    return ViewOrder.views({ images: media?.images || [], renders: [] }, slug).filter(isGateEligible);
   }
   function coverCandidate() {
     const reference = presentation.slots?.[0];
-    return presentationCatalog.find(view => view.source === reference) || ViewOrder.views({ images: currentMedia.images || [], renders: [] }, currentProject, 1)[0] || presentationCatalog[0];
+    return presentationCatalog.find(view => view.source === reference) || presentationCatalog[0] || makeViews(currentMedia, currentProject)[0];
   }
   function updateCropPreview() {
     const shot = coverCandidate();
@@ -568,7 +579,7 @@ window.ProjectCoverReady = (() => {
         el('planbook-empty').hidden = contents.children.length > 0;
       }).catch(() => {});
     }
-    const bookImages = (media?.images || []).filter(item => item.book === true);
+    const bookImages = (media?.images || []).filter(item => item.book === true && isGateEligible(item));
     if (bookImages.length) {
       const item = document.createElement('li'); item.textContent = `${bookImages.length} image${bookImages.length === 1 ? '' : 's'} publiée${bookImages.length === 1 ? '' : 's'} sélectionnée${bookImages.length === 1 ? '' : 's'} en annexe`;
       contents.append(item);
@@ -677,7 +688,7 @@ window.ProjectCoverReady = (() => {
     if (typeof crop === 'string' && crop.startsWith(`projects/${slug}/`) && /^[a-z\d_-]+\.(?:jpe?g|png|webp)$/i.test(crop.slice(`projects/${slug}/`.length))) {
       append(crop, 'Plan ou croquis d’origine', 'Document source');
     }
-    for (const view of ViewOrder.views({ images: media.images }, slug, Infinity, { keepDuplicates: true }).filter(view => view.catalog)) {
+    for (const view of ViewOrder.views({ images: media.images }, slug, Infinity, { keepDuplicates: true }).filter(view => view.catalog && isGateEligible(view))) {
       append(view.source, view.label, 'Rendu publié', view.preview || view.source);
     }
     for (const view of ViewOrder.views({ renders: media.renders }, slug, Infinity, { keepDuplicates: true })) {
@@ -690,10 +701,17 @@ window.ProjectCoverReady = (() => {
     if (!host.children.length) host.append(element('p', 'Aucun média partagé pour le moment.', 'workspace-empty'));
   }
 
-  function renderEdition(project, slug, host = el('edition-reader'), initial = 0) {
+  function renderEdition(project, slug, host = el('edition-reader'), initial = 0, media = loadedProjectMedia) {
     host.hidden = true; host.replaceChildren();
     if (slug !== 'residence-verandas' || !project?.edition) return;
-    const series = [...project.edition.sheets, ...project.edition.photos];
+    const manifestImages = media?.images || [];
+    const sheets = (project.edition.sheets || []).map(sheet => {
+      const resolved = typeof DeliverableGate !== 'undefined'
+        ? DeliverableGate.resolveSheetSource(sheet, manifestImages)
+        : { source: sheet.art || sheet.preview };
+      return { ...sheet, resolvedSource: resolved.source || sheet.preview };
+    });
+    const series = [...sheets, ...project.edition.photos];
     if (!series.length) return;
     const title = element('h3', 'Les planches de la résidence');
     const select = element('select'); select.setAttribute('aria-label', 'Choisir une planche');
@@ -706,7 +724,7 @@ window.ProjectCoverReady = (() => {
     download.href = `projects/${slug}/planches/cahier.pdf`; download.download = 'Residence-des-Verandas.pdf';
     function show(i) {
       const sheet = series[i]; select.selectedIndex = i;
-      image.src = sheet.image || sheet.art || sheet.preview;
+      image.src = sheet.image || sheet.resolvedSource || sheet.preview;
       image.alt = sheet.title; caption.textContent = `Fig. ${counter(i + 1)} / ${counter(series.length)} — ${sheet.title}`;
       prev.disabled = i === 0; next.disabled = i === series.length - 1;
     }
@@ -758,7 +776,7 @@ window.ProjectCoverReady = (() => {
       signature(projectRecord);
     } else status.textContent = 'Les informations du projet sont indisponibles pour le moment.';
     const media = gallery.status === 'fulfilled' ? gallery.value : { images: [], renders: [], presentation: { slots: [null, null, null], focal: { x: 50, y: 50 } } };
-    renderEdition(projectRecord, item.slug);
+    renderEdition(projectRecord, item.slug, el('edition-reader'), 0, media);
     renderEstimate(projectRecord, projectData, item.slug);
     renderGallery(projectRecord, media, item.slug);
     loadedProjectRecord = projectRecord; loadedProjectData = projectData; loadedProjectMedia = media;

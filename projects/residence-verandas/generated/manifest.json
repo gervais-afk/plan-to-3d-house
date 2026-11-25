@@ -19,9 +19,9 @@
       "file": "projects/residence-verandas/generated/images/perspective-01.jpg",
       "preview": "projects/residence-verandas/generated/images/perspective-01-apercu.webp",
       "label": "Façade et perron",
-      "catalog": false,
+      "catalog": true,
       "book": true,
-      "cover": false
+      "cover": true
     },
     {
       "id": "perspective-02",
@@ -76,7 +76,7 @@
       "id": "photor-perspective-01",
       "type": "image",
       "file": "projects/residence-verandas/generated/images/photor-perspective-01.png",
-      "reference": null,
+      "reference": "projects/residence-verandas/generated/images/perspective-01.jpg",
       "room": null,
       "label": "Façade et perron — photoréaliste",
       "width": 1376,
@@ -84,9 +84,31 @@
       "generator": "OpenRouter · google/gemini-3.1-flash-image",
       "prompt": "Photorealistically transform this exact architectural 3D house view into a premium, believable architectural photograph for a prestigious architecture studio cover. Preserve the source model faithfully: exact house geometry, two-storey proportions, camera angle and wide framing, front veranda and upper balcony, arches, columns, central stone-clad gable, sage/green exterior walls, green roof silhouette, windows, glass balustrades, front garden, steps and overall site arrangement. Do not redesign, add or remove storeys, change the roof, move openings, invent features, or alter the composition. Upgrade only the rendering realism: physically credible lime plaster in the same green family, natural variegated stone, realistic glazing and restrained reflections, delicate glass railings, refined paving, lush but restrained landscaping. Warm late-afternoon daylight, soft physically plausible shadows and global illumination, subtle atmospheric depth, elegant true-to-life color grading, high-end architectural photography. Keep the building unmistakably the focal subject in a clean wide landscape image. No text, logos, labels, borders, plans, diagrams, watermarks or UI. Photographic realism, not painterly or stylized.",
       "notes": "Rendu photoréaliste généré à partir de la maquette 3D ; vérifier les détails et matériaux par rapport au modèle source.",
-      "catalog": true,
-      "book": true,
-      "cover": true
+      "fidelity": {
+        "version": 2,
+        "verdict": "unfaithful",
+        "score": 0.266,
+        "recall": 0.523,
+        "chance": 0.35,
+        "shift": {
+          "x": 0.006,
+          "y": 0.019
+        },
+        "worstTile": {
+          "row": 1,
+          "col": 0,
+          "score": 0.003
+        },
+        "addedTile": {
+          "row": 0,
+          "col": 1,
+          "score": 0
+        },
+        "aspect": 1.194
+      },
+      "catalog": false,
+      "book": false,
+      "cover": false
     },
     {
       "id": "photor-plan-2d",
@@ -98,8 +120,30 @@
       "generator": "OpenRouter · google/gemini-3.1-flash-image",
       "prompt": "Transform this exact 2D architectural floor plan drawing into an elite, magazine-quality colored presentation floor plan (strict top-down view, plan de vente / plan commercial colorisé, Architectural Digest / Detail editorial style). Preserve the strict 2D orthogonal top-down projection and the exact geometry of all walls, partitions, doors, windows, verandas, and room boundaries: do not rotate, shift, slant, tilt into 3D perspective, or invent new rooms or walls. Infill solid walls with deep matte charcoal poché and subtle cast shadows to give architectural depth. Render floor finishes according to space: warm natural oak parquet in bedrooms, polished light stone or porcelain tiles in living spaces and kitchen, fine-jointed outdoor stone paving on verandas and porches. Add tastefully scaled minimalist top-down furniture (contemporary sofa, dining table, beds, bathroom fixtures) and subtle potted plants. Keep all spaces clearly readable, with clean linen-white background, crisp lines, and refined architectural palette. No perspective distortion, no tilt, strictly 2D flat top-down.",
       "notes": "Plan de vente 2D d’ambiance généré par IA à partir du plan source ; rendu illustratif non contractuel.",
-      "catalog": true,
-      "book": true,
+      "fidelity": {
+        "version": 2,
+        "verdict": "unfaithful",
+        "score": 0.267,
+        "recall": 0.53,
+        "chance": 0.358,
+        "shift": {
+          "x": 0,
+          "y": -0.012
+        },
+        "worstTile": {
+          "row": 0,
+          "col": 0,
+          "score": 0
+        },
+        "addedTile": {
+          "row": 1,
+          "col": 0,
+          "score": 0.022
+        },
+        "aspect": 1.415
+      },
+      "catalog": false,
+      "book": false,
       "cover": false
     },
     {
@@ -112,8 +156,25 @@
       "generator": "OpenRouter · google/gemini-3.1-flash-image",
       "prompt": "Transform this exact 2D architectural floor plan of the upper floor (Étage R+1) into an elite, magazine-quality colored presentation floor plan (strict orthogonal top-down view, plan de vente / plan commercial colorisé, Architectural Digest / Detail editorial style). Strictly preserve the 2D top-down projection and the exact geometry of all walls, partitions, doors, windows, upper balconies, verandas, terraces, and room outlines: do not rotate, shift, slant, tilt into 3D perspective, or invent new rooms or walls. Infill solid walls with deep matte charcoal poché and subtle cast contact shadows to give architectural depth. Render floor finishes according to space: warm natural oak parquet in the bedrooms, modern light stone or porcelain tiles in bathrooms and circulation, and fine-jointed outdoor stone or deck paving on the upper terrace and balconies. Add tastefully scaled minimalist top-down furniture (contemporary beds with crisp linen, wardrobes, bathroom vanity and fixtures) and subtle potted greenery on balconies. Clean linen-white background, crisp lines, refined architectural palette. Strictly 2D flat top-down view without perspective distortion.",
       "notes": "Plan de vente 2D d’ambiance généré par IA à partir du plan d’étage source ; rendu illustratif non contractuel.",
-      "catalog": true,
-      "book": true,
+      "fidelity": {
+        "version": 2,
+        "verdict": "unfaithful",
+        "score": 0.189,
+        "recall": 0.459,
+        "chance": 0.332,
+        "shift": {
+          "x": -0.006,
+          "y": 0
+        },
+        "worstTile": {
+          "row": 0,
+          "col": 0,
+          "score": 0
+        },
+        "aspect": 1.415
+      },
+      "catalog": false,
+      "book": false,
       "cover": false
     },
     {
@@ -126,8 +187,30 @@
       "generator": "OpenRouter · google/gemini-3.1-flash-image",
       "prompt": "Transform this exact architectural site plan (Plan de masse) into a prestigious, high-end colored landscape presentation plan (strict 2D orthogonal aerial top-down view, plan de masse paysager colorisé, architectural competition presentation style). Strictly preserve the cadastral boundaries, building footprint, roof silhouette, verandas, access roads, pedestrian pathways, setbacks, and site layout exactly as drawn: do not alter the building geometry or move property lines. Render the building roof with realistic refined dark green metal standing-seam roofing. Render the site context with lush, realistic landscape architecture: neat lawn with subtle turf texture, warm sand-colored gravel or stone vehicular driveway, refined paved walkways, neatly trimmed tropical hedges, tastefully scattered shade trees and palm canopies casting soft, gentle sun shadows. Clean, elegant architectural presentation with off-white background and subtle north indicator. Strictly flat 2D top-down view without tilt or 3D perspective distortion.",
       "notes": "Plan de masse paysager colorisé généré par IA à partir du plan source ; rendu illustratif non contractuel.",
-      "catalog": true,
-      "book": true,
+      "fidelity": {
+        "version": 2,
+        "verdict": "unfaithful",
+        "score": 0.386,
+        "recall": 0.56,
+        "chance": 0.284,
+        "shift": {
+          "x": -0.006,
+          "y": -0.019
+        },
+        "worstTile": {
+          "row": 0,
+          "col": 1,
+          "score": 0
+        },
+        "addedTile": {
+          "row": 1,
+          "col": 1,
+          "score": 0
+        },
+        "aspect": 1.415
+      },
+      "catalog": false,
+      "book": false,
       "cover": false
     },
     {
@@ -140,8 +223,30 @@
       "generator": "OpenRouter · google/gemini-3.1-flash-image",
       "prompt": "Transform this exact 2D architectural elevation drawing of the front facade (Façade avant) into a prestigious, photorealistically colored architectural elevation (strict 2D frontal elevation view, élévation colorisée réaliste, Architectural Digest / Detail style). Strictly preserve the two-storey proportions, roof profile, central stone gable, arches, columns, front veranda, upper balcony, windows, doors, and glass railings exactly as drafted: do not tilt into perspective, rotate the view, or alter the architectural silhouette. Render materials realistically in the Calm Luxury palette: physically credible sage green textured lime plaster on exterior walls, authentic variegated natural stone cladding on the central gable and porch elements, dark matte aluminium window and door frames, realistic glazing with soft subtle sky reflections, and delicate glass balustrades. Add ground line context with neat stone paving, low-rise tropical shrubs, and soft natural daylight with subtle physically plausible shadows cast by the roof overhangs and balconies. Clean pale architectural sky background. Strictly flat 2D frontal elevation without perspective vanishing points.",
       "notes": "Élévation 2D colorisée réaliste générée par IA à partir du tracé de façade source ; rendu illustratif non contractuel.",
-      "catalog": true,
-      "book": true,
+      "fidelity": {
+        "version": 2,
+        "verdict": "review",
+        "score": 0.515,
+        "recall": 0.667,
+        "chance": 0.314,
+        "shift": {
+          "x": -0.006,
+          "y": 0
+        },
+        "worstTile": {
+          "row": 2,
+          "col": 2,
+          "score": 0.532
+        },
+        "addedTile": {
+          "row": 1,
+          "col": 2,
+          "score": 0
+        },
+        "aspect": 1.266
+      },
+      "catalog": false,
+      "book": false,
       "cover": false
     },
     {
@@ -154,8 +259,30 @@
       "generator": "OpenRouter · google/gemini-3.1-flash-image",
       "prompt": "Transform this exact 2D architectural section drawing (Coupe transversale B–B) into a prestigious, high-end inhabited section perspective (strict architectural section view, coupe transversale habitée, Architectural Digest / El Croquis editorial monograph style). Strictly preserve the exact architectural geometry, floor-to-ceiling heights (2.80 m), floor slab thicknesses, roof pitch, veranda profiles, stair position, and room volumes: do not alter the structural levels or proportions. Render structural elements (slabs, footings, exterior and interior wall cross-sections) in refined matte charcoal architectural concrete poché with crisp cut outlines. Inside the cut volumes, reveal warm, realistic interior spaces: warm natural oak parquet on the upper floor, honed warm natural stone flooring on the ground floor, soft ambient interior lighting, tasteful minimalist designer furniture in elevation/profile, and 1-2 subtle monochrome scale figures to convey human scale. Render soft natural daylight streaming through the exterior veranda openings, casting gentle diagonal light beams and soft shadows. Elegant unbleached warm linen museum paper background (#F7F5F0) without digital glare. Strictly retain the flat orthogonal section plane without perspective vanishing distortion.",
       "notes": "Coupe transversale B–B d’ambiance habitée générée par IA à partir de la coupe technique source ; rendu illustratif non contractuel.",
-      "catalog": true,
-      "book": true,
+      "fidelity": {
+        "version": 2,
+        "verdict": "review",
+        "score": 0.57,
+        "recall": 0.703,
+        "chance": 0.309,
+        "shift": {
+          "x": -0.019,
+          "y": 0.006
+        },
+        "worstTile": {
+          "row": 1,
+          "col": 2,
+          "score": 0.584
+        },
+        "addedTile": {
+          "row": 0,
+          "col": 0,
+          "score": 0
+        },
+        "aspect": 1.266
+      },
+      "catalog": false,
+      "book": false,
       "cover": false
     },
     {
@@ -168,6 +295,23 @@
       "generator": "OpenRouter · google/gemini-3.1-flash-image",
       "prompt": "Create a high-end Calm Luxury architectural interior visualization based on this exact Three.js 3D camera capture of the main living room (Séjour & grande Véranda). Strictly preserve the camera viewpoint, perspective, room dimensions, double-height ceiling volume, wall partitions, sliding glass veranda doors, and windows: do not move walls or invent openings. Upgrade only the materials and light: warm off-white mineral lime plaster on walls, honed large-format limestone flooring with subtle soft reflections, warm natural oak wall accents, and slim matte dark aluminium glazing frames. Soft daylight pouring in through the expansive veranda doors with gentle cast shadows. Refined contemporary furniture (minimalist linen sofa, travertine coffee table, discreet architectural lighting). Non-contractual illustrative render.",
       "notes": "Rendu intérieur photoréaliste du séjour et de la véranda généré par IA à partir de la capture 3D ; rendu illustratif non contractuel.",
+      "fidelity": {
+        "version": 2,
+        "verdict": "faithful",
+        "score": 0.753,
+        "recall": 0.819,
+        "chance": 0.265,
+        "shift": {
+          "x": 0,
+          "y": 0
+        },
+        "worstTile": {
+          "row": 1,
+          "col": 1,
+          "score": 0.505
+        },
+        "aspect": 1.008
+      },
       "catalog": true,
       "book": true,
       "cover": false
@@ -182,6 +326,23 @@
       "generator": "OpenRouter · google/gemini-3.1-flash-image",
       "prompt": "Create a prestigious Calm Luxury architectural interior photograph based on this exact 3D camera capture of the kitchen (Cuisine contemporaine). Strictly preserve the camera angle, perspective, room bounds, window positions, and kitchen island / counter layout. Upgrade materials to luxury architectural standards: honed quartzite or matte marble worktops, seamless warm oak millwork cabinetry, integrated minimalist appliances, matte black designer fixtures, and honed stone floor tiles. Soft natural daylight streaming from the window, calm refined atmosphere. No people, no branding. Non-contractual illustrative render.",
       "notes": "Rendu intérieur de la cuisine contemporaine généré par IA à partir de la capture 3D ; rendu illustratif non contractuel.",
+      "fidelity": {
+        "version": 2,
+        "verdict": "faithful",
+        "score": 0.756,
+        "recall": 0.799,
+        "chance": 0.177,
+        "shift": {
+          "x": 0,
+          "y": -0.006
+        },
+        "worstTile": {
+          "row": 2,
+          "col": 0,
+          "score": 0.641
+        },
+        "aspect": 1.008
+      },
       "catalog": true,
       "book": true,
       "cover": false
@@ -196,6 +357,23 @@
       "generator": "OpenRouter · google/gemini-3.1-flash-image",
       "prompt": "Create an elite Calm Luxury architectural interior visualization based on this exact 3D camera capture of the dining room (Salle à manger). Strictly preserve the camera viewpoint, perspective, openings to the veranda, and room layout. Render materials with architectural elegance: solid natural oak dining table, sculptural contemporary dining chairs, minimalist designer pendant light, warm mineral wall plaster, and honed limestone flooring. Gentle warm daylight filtered through the veranda glazing with soft ambient reflections. Non-contractual illustrative render.",
       "notes": "Rendu intérieur de la salle à manger généré par IA à partir de la capture 3D ; rendu illustratif non contractuel.",
+      "fidelity": {
+        "version": 2,
+        "verdict": "faithful",
+        "score": 0.855,
+        "recall": 0.899,
+        "chance": 0.3,
+        "shift": {
+          "x": 0.006,
+          "y": -0.006
+        },
+        "worstTile": {
+          "row": 2,
+          "col": 2,
+          "score": 0.748
+        },
+        "aspect": 1.008
+      },
       "catalog": true,
       "book": true,
       "cover": false
@@ -210,6 +388,23 @@
       "generator": "OpenRouter · google/gemini-3.1-flash-image",
       "prompt": "Create a serene, high-end Calm Luxury architectural interior photograph based on this exact 3D camera capture of the master bedroom (Suite parentale). Strictly preserve the camera angle, room dimensions, balcony window openings, and bed position. Upgrade finishes: warm chevron natural oak parquet flooring, textured lime plaster headboard wall in soft oatmeal tone, crisp white linen bedding on a low-profile oak bed, sheer linen drapery, and matte dark aluminium balcony frames. Soft morning sunlight streaming through the windows with delicate atmospheric shadows. Non-contractual illustrative render.",
       "notes": "Rendu intérieur de la suite parentale généré par IA à partir de la capture 3D ; rendu illustratif non contractuel.",
+      "fidelity": {
+        "version": 2,
+        "verdict": "faithful",
+        "score": 0.637,
+        "recall": 0.73,
+        "chance": 0.257,
+        "shift": {
+          "x": 0,
+          "y": 0
+        },
+        "worstTile": {
+          "row": 2,
+          "col": 1,
+          "score": 0.357
+        },
+        "aspect": 1.008
+      },
       "catalog": true,
       "book": true,
       "cover": false
@@ -224,8 +419,30 @@
       "generator": "OpenRouter · google/gemini-3.1-flash-image",
       "prompt": "Create a prestigious Calm Luxury architectural interior visualization based on this exact 3D camera capture of the upper floor lounge and gallery (Séjour étage). Strictly preserve the camera position, mezzanine balustrade, ceiling slope, and terrace openings. Upgrade materials: warm continuous natural oak plank flooring, delicate glass and dark metal railing, smooth chalk-white mineral plaster, and contemporary low-profile seating. Soft ambient daylight cascading from the upper terrace doors with gentle sun patches. Non-contractual illustrative render.",
       "notes": "Rendu intérieur du salon de l’étage généré par IA à partir de la capture 3D ; rendu illustratif non contractuel.",
-      "catalog": true,
-      "book": true,
+      "fidelity": {
+        "version": 2,
+        "verdict": "review",
+        "score": 0.551,
+        "recall": 0.665,
+        "chance": 0.255,
+        "shift": {
+          "x": -0.006,
+          "y": 0
+        },
+        "worstTile": {
+          "row": 2,
+          "col": 0,
+          "score": 0.229
+        },
+        "addedTile": {
+          "row": 1,
+          "col": 1,
+          "score": 0
+        },
+        "aspect": 1.008
+      },
+      "catalog": false,
+      "book": false,
       "cover": false
     },
     {
@@ -238,6 +455,28 @@
       "generator": "OpenRouter · google/gemini-3.1-flash-image",
       "prompt": "Create a premium Calm Luxury architectural photograph based on this exact 3D camera capture of the rear veranda and garden terrace (Véranda arrière). Strictly preserve the building geometry, columns, roof overhang, sliding glass doors, upper balcony, and perspective. Render exterior walls in authentic sage green lime plaster, columns and patio in natural warm flamed stone paving, slim dark aluminium glazing with gentle garden reflections, and lush, restrained tropical landscape (neat lawn, manicured hedges, shade trees). Warm late afternoon sunlight with soft natural shadows. Non-contractual illustrative render.",
       "notes": "Rendu extérieur photoréaliste de la véranda arrière généré par IA à partir de la capture 3D ; rendu illustratif non contractuel.",
+      "fidelity": {
+        "version": 2,
+        "verdict": "unfaithful",
+        "score": 0.18,
+        "recall": 0.475,
+        "chance": 0.36,
+        "shift": {
+          "x": 0.019,
+          "y": 0.019
+        },
+        "worstTile": {
+          "row": 2,
+          "col": 0,
+          "score": 0
+        },
+        "addedTile": {
+          "row": 0,
+          "col": 1,
+          "score": 0.012
+        },
+        "aspect": 1.194
+      },
       "catalog": false,
       "book": false,
       "cover": false
@@ -252,6 +491,28 @@
       "generator": "OpenRouter · google/gemini-3.1-flash-image",
       "prompt": "Create a prestigious Calm Luxury architectural photograph based on this exact 3D camera capture of the entrance portico and steps (Portique d’entrée). Strictly preserve the symmetrical columns, arches, central stone-clad gable, front door, and steps. Upgrade materials: variegated natural local stone cladding on the central gable, sage green smooth mineral plaster on flanking walls, flamed stone steps with crisp bullnose edging, and elegant bronze/dark aluminium entry door. Soft morning daylight with crisp architectural shadows. Non-contractual illustrative render.",
       "notes": "Rendu extérieur photoréaliste du portique d’entrée généré par IA à partir de la capture 3D ; rendu illustratif non contractuel.",
+      "fidelity": {
+        "version": 2,
+        "verdict": "unfaithful",
+        "score": 0.069,
+        "recall": 0.365,
+        "chance": 0.318,
+        "shift": {
+          "x": 0,
+          "y": 0
+        },
+        "worstTile": {
+          "row": 1,
+          "col": 1,
+          "score": 0
+        },
+        "addedTile": {
+          "row": 0,
+          "col": 2,
+          "score": 0
+        },
+        "aspect": 1.194
+      },
       "catalog": false,
       "book": false,
       "cover": false
@@ -266,6 +527,28 @@
       "generator": "OpenRouter · google/gemini-3.1-flash-image",
       "prompt": "Create a high-end Calm Luxury architectural photograph based on this exact 3D camera capture of the side garden and facade (Jardin latéral). Strictly preserve the building silhouette, windows, roof eaves, and garden walkway. Render materials realistically: sage green lime plaster walls, dark green standing-seam metal roofing, dark aluminium window frames with sky reflections, gravel and flagstone walkway, and neat architectural landscaping. Gentle golden hour light with soft atmospheric depth. Non-contractual illustrative render.",
       "notes": "Rendu extérieur photoréaliste du jardin latéral généré par IA à partir de la capture 3D ; rendu illustratif non contractuel.",
+      "fidelity": {
+        "version": 2,
+        "verdict": "unfaithful",
+        "score": 0.241,
+        "recall": 0.507,
+        "chance": 0.351,
+        "shift": {
+          "x": -0.019,
+          "y": 0.019
+        },
+        "worstTile": {
+          "row": 2,
+          "col": 1,
+          "score": 0
+        },
+        "addedTile": {
+          "row": 0,
+          "col": 1,
+          "score": 0
+        },
+        "aspect": 1.194
+      },
       "catalog": false,
       "book": false,
       "cover": false
@@ -280,6 +563,28 @@
       "generator": "OpenRouter · google/gemini-3.1-flash-image",
       "prompt": "Create an elite Calm Luxury architectural photograph based on this exact 3D camera capture of the upper floor terrace (Terrasse haute). Strictly preserve the balcony railing, veranda roof below, exterior door, and wide perspective view. Render finishes with utmost precision: fine-jointed outdoor stone or composite teak deck tiles, delicate frameless glass balustrade with stainless steel hardware, sage green exterior walls, and panoramic horizon view under soft afternoon light. Clean, sophisticated architectural composition. Non-contractual illustrative render.",
       "notes": "Rendu photoréaliste de la terrasse haute généré par IA à partir de la capture 3D ; rendu illustratif non contractuel.",
+      "fidelity": {
+        "version": 2,
+        "verdict": "unfaithful",
+        "score": 0.264,
+        "recall": 0.546,
+        "chance": 0.383,
+        "shift": {
+          "x": 0.013,
+          "y": 0.019
+        },
+        "worstTile": {
+          "row": 1,
+          "col": 0,
+          "score": 0
+        },
+        "addedTile": {
+          "row": 0,
+          "col": 1,
+          "score": 0
+        },
+        "aspect": 1.194
+      },
       "catalog": false,
       "book": false,
       "cover": false
@@ -288,7 +593,7 @@
       "id": "anim-visite-demo",
       "type": "video",
       "file": "projects/residence-verandas/generated/videos/anim-test.mp4",
-      "poster": "projects/residence-verandas/generated/images/photor-perspective-01.png",
+      "poster": "projects/residence-verandas/generated/images/perspective-01.jpg",
       "duration": 5,
       "label": "Clip cinématique IA — Animation Seedance 2.5 Flash",
       "sourceLabel": "✨ Vidéo IA",
