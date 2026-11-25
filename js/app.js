@@ -1187,6 +1187,16 @@ window.startProjectViewer = () => {
   const pdfButton = document.getElementById('client-pdf');
   const pdfStatus = document.getElementById('client-pdf-status');
   let exportingPDF = false;
+  async function loadCabinetForPdf() {
+    if (typeof PdfIdentity === 'undefined' || typeof PdfIdentity.loadCabinetProfile !== 'function') return null;
+    try { return await PdfIdentity.loadCabinetProfile(); } catch (_) { return null; }
+  }
+  const missingCartoucheNote = cabinet => {
+    if (typeof PdfIdentity === 'undefined' || typeof PdfIdentity.missingFields !== 'function') return '';
+    const { message } = PdfIdentity.missingFields(HOUSE_DATA, { cabinet });
+    return message ? ` ${message} (masqués du cartouche).` : '';
+  };
+
   async function exportClientPDF(variant = null) {
     if (exportingPDF || tourRecording || exportVideoButton.disabled) return;
     const variantButton = document.getElementById('variant-pdf');
@@ -1195,14 +1205,15 @@ window.startProjectViewer = () => {
     pdfStatus.textContent = 'Composition de la brochure…';
     try {
       await assetsReady;
+      const cabinet = await loadCabinetForPdf();
       await ClientBrochure.exportPDF(HOUSE_DATA, studio, variant, () => {
         if (!variant) return;
         const floor = document.getElementById('client-floor').value, facade = document.getElementById('client-facade').value;
         clientTools.finishes.setFloor(variant.floor);
         clientTools.finishes.setFacade(variant.facade);
         return () => { clientTools.finishes.setFloor(floor); clientTools.finishes.setFacade(facade); };
-      });
-      pdfStatus.textContent = 'Brochure PDF téléchargée.';
+      }, { cabinet });
+      pdfStatus.textContent = `Brochure PDF téléchargée.${missingCartoucheNote(cabinet)}`;
     } catch (error) {
       console.error(error);
       pdfStatus.textContent = `Export PDF impossible : ${error.message}`;
@@ -1225,6 +1236,7 @@ window.startProjectViewer = () => {
   bookOpen.hidden = invited;
   let bookViews = [];
   let bookSheets = []; // pages PDF de l'architecte, lues et identifiées (PlanBook.readSheets)
+  let bookCabinet = null;
 
   // ---------- Planches PDF de l'architecte : identification, corrections, contenu du dossier ----------
   const modelLevels = () => [...new Set(HOUSE_DATA.walls.map(w => Number(w.level) || 0))].sort((a, b) => a - b);
@@ -1434,8 +1446,9 @@ window.startProjectViewer = () => {
     }));
     bookDialogStatus.textContent = 'Chargement des images…';
     bookDialog.showModal();
-    bookViews = await PlanBook.publishedViews(HOUSE_DATA);
-    bookDialogStatus.textContent = '';
+    [bookViews, bookCabinet] = await Promise.all([PlanBook.publishedViews(HOUSE_DATA), loadCabinetForPdf()]);
+    const missing = missingCartoucheNote(bookCabinet).trim();
+    bookDialogStatus.textContent = missing ? `Cartouche : ${missing}` : '';
     renderBookImages();
     bookChanged();
   });
@@ -1459,7 +1472,10 @@ window.startProjectViewer = () => {
   });
   bookApproved.addEventListener('change', () => {
     bookExport.disabled = !bookApproved.checked;
-    bookDialogStatus.textContent = bookApproved.checked ? 'Composition approuvée : vous pouvez exporter le PDF.' : '';
+    const missing = missingCartoucheNote(bookCabinet).trim();
+    bookDialogStatus.textContent = bookApproved.checked
+      ? `Composition approuvée : vous pouvez exporter le PDF.${missing ? ` (${missing})` : ''}`
+      : (missing ? `Cartouche : ${missing}` : '');
   });
   bookExport.addEventListener('click', async () => {
     if (!bookApproved.checked || exportingPDF || tourRecording || exportVideoButton.disabled || invited) return;
@@ -1467,9 +1483,10 @@ window.startProjectViewer = () => {
     exportingPDF = bookExport.disabled = pdfButton.disabled = true;
     try {
       await assetsReady;
-      const result = await PlanBook.exportBook({ data: HOUSE_DATA, studio, annexes: bookSheets, sections, screen: screenForDelivery,
+      const cabinet = bookCabinet || await loadCabinetForPdf();
+      const result = await PlanBook.exportBook({ data: HOUSE_DATA, studio, annexes: bookSheets, sections, cabinet, screen: screenForDelivery,
         onStatus: message => { bookDialogStatus.textContent = message; } });
-      const done = `Cahier de ${result.pages} planches téléchargé${result.annexes ? `, dont ${result.annexes} de l’architecte` : ''}.${excludedNote(result.excluded)}`;
+      const done = `Cahier de ${result.pages} planches téléchargé${result.annexes ? `, dont ${result.annexes} de l’architecte` : ''}.${excludedNote(result.excluded)}${missingCartoucheNote(cabinet)}`;
       Motion.success(bookDialogStatus, done);
       Motion.success(bookStatus, done);
     } catch (error) {
@@ -1504,9 +1521,10 @@ window.startProjectViewer = () => {
     if (exportingPDF) return;
     exportingPDF = catalogButton.disabled = true;
     try {
-      const result = await PlanBook.exportCatalog({ data: HOUSE_DATA, screen: screenForDelivery, onStatus: message => { bookStatus.textContent = message; } });
+      const cabinet = await loadCabinetForPdf();
+      const result = await PlanBook.exportCatalog({ data: HOUSE_DATA, cabinet, screen: screenForDelivery, onStatus: message => { bookStatus.textContent = message; } });
       const low = result.lowRes?.length ? ` Définition faible pour une pleine page imprimée : ${result.lowRes.map(r => `${r.label} (${r.dpi} dpi)`).join(', ')}.` : '';
-      Motion.success(bookStatus, `Catalogue de ${result.images} image${result.images > 1 ? 's' : ''} téléchargé.${excludedNote(result.excluded)}${low}`);
+      Motion.success(bookStatus, `Catalogue de ${result.images} image${result.images > 1 ? 's' : ''} téléchargé.${excludedNote(result.excluded)}${low}${missingCartoucheNote(cabinet)}`);
     } catch (error) {
       Motion.error(bookStatus, error.message, catalogButton);
     } finally {

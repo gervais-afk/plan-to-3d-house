@@ -15,7 +15,7 @@
   const common = ['motion', 'houseDataCore', 'viewOrder', 'deliverableGate', 'costEstimate'];
   const viewer = ['icons', 'data', 'projectLoader', 'scene', 'variantState', 'solarStudy', 'realism', 'assets', 'presentationPlan',
     'renderStudio', 'aiSequence', 'scrollTour', 'walkController', 'minimap', 'clientFinishes', 'solarOptions', 'clientTools', 'clientVariants',
-    'clientDecisions', 'clientFeedback', 'clientBrochure', 'sheetClassifier', 'woodGrain', 'planBook', 'aiPrompt', 'fidelityCheck', 'app', 'presentMode'];
+    'clientDecisions', 'clientFeedback', 'woodGrain', 'pdfIdentity', 'clientBrochure', 'sheetClassifier', 'planBook', 'aiPrompt', 'fidelityCheck', 'app', 'presentMode'];
   const scripts = new Map();
   const status = el('workspace-status');
   let active = 'cover';

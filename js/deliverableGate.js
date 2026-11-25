@@ -156,10 +156,10 @@ const DeliverableGate = (() => {
   }
 
   const isPlanLike = item => /\bplan\b|masse|coupe/i.test(
-    `${item?.id || ''} ${item?.label || ''} ${item?.file || item?.source || ''}`.normalize('NFD').replace(/[̀-ͯ]/g, '')
+    `${item?.id || ''} ${item?.label || ''} ${item?.file || item?.source || ''}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   );
   const isFacadeLike = item => /facade|perspective-01|porche|entree/i.test(
-    `${item?.id || ''} ${item?.label || ''} ${item?.file || item?.source || ''}`.normalize('NFD').replace(/[̀-ͯ]/g, '')
+    `${item?.id || ''} ${item?.label || ''} ${item?.file || item?.source || ''}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   );
 
   /**
@@ -184,7 +184,7 @@ const DeliverableGate = (() => {
     return null;
   }
 
-  const normalizeLabel = text => String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const normalizeLabel = text => String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
   function itemPath(item) {
     if (!item || typeof item !== 'object') return '';

@@ -20,16 +20,19 @@ const APSGenerator = (() => {
     pageWidth: 210,
     pageHeight: 297,
     margin: 20,
-    bodyTop: 55,
+    bodyTop: 50,
     bodyBottom: 268,
     colors: {
-      primary: '#1a1a2e',
-      secondary: '#16213e',
-      accent: '#e94560',
-      text: '#333333',
-      lightGray: '#f5f5f5',
-      rule: '#dddddd',
-      mediumGray: '#999999',
+      primary: '#1d2620',
+      secondary: '#202a23',
+      accent: '#b78a3c',
+      sand: '#d8c7a0',
+      paper: '#f4f2eb',
+      text: '#1b2320',
+      lightGray: '#ebe8de',
+      rule: '#c9cbbf',
+      ruleDark: '#3d4a3f',
+      mediumGray: '#5f6a63',
       white: '#ffffff'
     },
     font: 'helvetica'
@@ -52,7 +55,8 @@ const APSGenerator = (() => {
     return {
       CostEstimate: overrides.CostEstimate ?? (typeof CostEstimate !== 'undefined' ? CostEstimate : dependency('CostEstimate', './costEstimate.js')),
       Habitability: overrides.Habitability ?? (typeof Habitability !== 'undefined' ? Habitability : dependency('Habitability', './habitability.js')),
-      DeliverableGate: overrides.DeliverableGate ?? (typeof DeliverableGate !== 'undefined' ? DeliverableGate : dependency('DeliverableGate', './deliverableGate.js'))
+      DeliverableGate: overrides.DeliverableGate ?? (typeof DeliverableGate !== 'undefined' ? DeliverableGate : dependency('DeliverableGate', './deliverableGate.js')),
+      PdfIdentity: overrides.PdfIdentity ?? (typeof PdfIdentity !== 'undefined' ? PdfIdentity : dependency('PdfIdentity', './pdfIdentity.js'))
     };
   }
 
@@ -183,18 +187,36 @@ const APSGenerator = (() => {
 
     const openings = q ? { doors: q.doors, windows: q.windows, bays: q.bays } : null;
     const nature = meta.nature || `Construction neuve — ${lowerFirst(levelsSummary(levelCount))}`;
-    const date = options.date || new Date();
+    const { PdfIdentity: ID } = dependencies(options);
+    const identityMeta = ID
+      ? ID.extractMeta(project, { cabinet: options.cabinet, date: options.date, dateStyle: 'long' })
+      : {
+          project: meta.name || 'Projet architectural',
+          subtitle: meta.subtitle || '',
+          client: meta.client || '',
+          location: meta.location || meta.address || '',
+          phase: meta.phase || '',
+          revision: meta.revision || '',
+          date: options.date instanceof Date ? options.date.toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' }) : (meta.issueDate || meta.date || ''),
+          agency: meta.architect || meta.agency || '',
+          brand: meta.agency || 'ARCHICAM STUDIO'
+        };
 
     return {
       name: meta.name || 'Projet architectural',
       subtitle: meta.subtitle || '',
-      client: meta.client || 'À préciser',
-      location: meta.location || meta.address || finance?.city || 'À préciser',
+      client: identityMeta.client || 'À préciser',
+      location: identityMeta.location || 'À préciser',
+      agency: identityMeta.agency,
+      phase: identityMeta.phase,
+      revision: identityMeta.revision,
+      identityMeta,
       description: meta.description || '',
-      date: date.toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' }),
+      date: identityMeta.date,
       nature,
       levelCount,
       levelsSummary: levelsSummary(levelCount),
+      levelsShort: levelCount > 1 ? `R+${levelCount - 1}` : 'Plain-pied',
       wallHeight: project.config?.wallHeight || null,
       surfaces: {
         habitable: m2(habitable),
@@ -279,14 +301,19 @@ const APSGenerator = (() => {
   }
 
   function text(doc, value, x, y, size, options = {}) {
-    const { bold = false, color = CONFIG.colors.text, maxWidth, align = 'left' } = options;
+    const { bold = false, serif = false, color = CONFIG.colors.text, maxWidth, align = 'left', space = 0 } = options;
     let label = pdfSafe(value);
-    doc.setFont(CONFIG.font, bold ? 'bold' : 'normal').setFontSize(size).setTextColor(color);
-    if (maxWidth && doc.getTextWidth(label) > maxWidth) {
-      while (label.length && doc.getTextWidth(`${label}...`) > maxWidth) label = label.slice(0, -1);
+    doc.setFont(serif ? 'times' : CONFIG.font, bold ? 'bold' : 'normal').setFontSize(size).setTextColor(color);
+    if (typeof doc.setCharSpace === 'function') doc.setCharSpace(space);
+    const widthOf = str => doc.getTextWidth(str) + (space && str.length > 1 ? space * (str.length - 1) : 0);
+    if (maxWidth && widthOf(label) > maxWidth) {
+      while (label.length && widthOf(`${label}...`) > maxWidth) label = label.slice(0, -1);
       label += '...';
     }
-    doc.text(label, x, y, { align });
+    const extra = space && label.length > 1 ? space * (label.length - 1) : 0;
+    const drawX = align === 'right' ? x - extra : (align === 'center' ? x - extra / 2 : x);
+    doc.text(label, drawX, y, { align });
+    if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0);
   }
 
   /** Paragraphe sur plusieurs lignes ; renvoie la nouvelle ordonnée. */
@@ -298,20 +325,27 @@ const APSGenerator = (() => {
     return y + lines.length * lineHeight;
   }
 
-  /** Contexte de page : en-tête, pied et saut de page automatique. */
+  /** Contexte de page : en-tête agence, pied et saut de page automatique. */
   function pageContext(doc, content) {
+    const { PdfIdentity: ID } = dependencies();
     const ctx = { doc, content, page: doc.getNumberOfPages(), y: CONFIG.bodyTop, title: '' };
     ctx.start = title => {
       doc.addPage();
       ctx.page = doc.getNumberOfPages();
       ctx.title = title;
-      drawGradient(doc, 0, 0, CONFIG.pageWidth, 40, CONFIG.colors.primary, CONFIG.colors.secondary);
-      text(doc, title, CONFIG.margin, 25, 20, { bold: true, color: CONFIG.colors.white, maxWidth: WIDTH - 15 });
-      text(doc, `${ctx.page}`, CONFIG.pageWidth - CONFIG.margin, 25, 16, { bold: true, color: CONFIG.colors.accent, align: 'right' });
-      doc.setDrawColor(CONFIG.colors.mediumGray).setLineWidth(0.3);
+      doc.setFillColor(CONFIG.colors.paper).rect(0, 0, CONFIG.pageWidth, CONFIG.pageHeight, 'F');
+      doc.setFillColor(CONFIG.colors.primary).rect(0, 0, CONFIG.pageWidth, 35, 'F');
+      if (ID) ID.drawWoodGrain(doc, { x: 0, y: 0, w: CONFIG.pageWidth, h: 35 }, { seed: 7 + ctx.page, knots: 1, spacing: 6.5 });
+      doc.setFillColor(CONFIG.colors.accent).rect(0, 35, CONFIG.pageWidth, 0.8, 'F');
+      text(doc, 'ARCHICAM STUDIO · AVANT-PROJET SOMMAIRE', CONFIG.margin, 12.5, 6.2, { bold: true, color: CONFIG.colors.sand, space: 1.0 });
+      text(doc, title, CONFIG.margin, 25.5, 17, { serif: true, bold: true, color: CONFIG.colors.white, maxWidth: WIDTH - 18 });
+      text(doc, String(ctx.page).padStart(2, '0'), CONFIG.pageWidth - CONFIG.margin, 25.5, 15, { serif: true, bold: true, color: CONFIG.colors.accent, align: 'right' });
+      doc.setDrawColor(CONFIG.colors.rule).setLineWidth(0.3);
       doc.line(CONFIG.margin, 280, CONFIG.pageWidth - CONFIG.margin, 280);
-      text(doc, `${content.name} — Avant-projet sommaire`, CONFIG.margin, 286, 8, { color: CONFIG.colors.mediumGray, maxWidth: WIDTH - 30 });
-      text(doc, content.date, CONFIG.pageWidth - CONFIG.margin, 286, 8, { color: CONFIG.colors.mediumGray, align: 'right' });
+      text(doc, `${content.name} — Avant-projet sommaire`, CONFIG.margin, 286, 8, { color: CONFIG.colors.mediumGray, maxWidth: WIDTH - 35 });
+      if (content.date) {
+        text(doc, content.date, CONFIG.pageWidth - CONFIG.margin, 286, 8, { color: CONFIG.colors.mediumGray, align: 'right' });
+      }
       ctx.y = CONFIG.bodyTop;
     };
     ctx.need = (height, continuation) => {
@@ -322,7 +356,7 @@ const APSGenerator = (() => {
     };
     ctx.heading = label => {
       ctx.need(16);
-      text(doc, label, CONFIG.margin, ctx.y, 13, { bold: true, color: CONFIG.colors.primary });
+      text(doc, label, CONFIG.margin, ctx.y, 13, { serif: true, bold: true, color: CONFIG.colors.primary });
       ctx.y += 8;
     };
     ctx.field = (label, value) => {
@@ -333,7 +367,7 @@ const APSGenerator = (() => {
     ctx.bullets = (items, size = 9.5) => {
       for (const item of items) {
         ctx.need(6);
-        text(doc, '•', CONFIG.margin + 2, ctx.y, size);
+        text(doc, '•', CONFIG.margin + 2, ctx.y, size, { color: CONFIG.colors.accent, bold: true });
         ctx.y = paragraph(doc, item, CONFIG.margin + 7, ctx.y, size, WIDTH - 7) + 1.5;
       }
     };
@@ -366,23 +400,33 @@ const APSGenerator = (() => {
   // =====================================================================
 
   function drawCover(doc, content, project, studio, variant, options = {}) {
-    drawGradient(doc, 0, 0, CONFIG.pageWidth, CONFIG.pageHeight, CONFIG.colors.primary, CONFIG.colors.secondary, 30);
-    text(doc, 'AVANT-PROJET SOMMAIRE (APS)', CONFIG.margin, 60, 13, { bold: true, color: CONFIG.colors.accent });
-    doc.setFont(CONFIG.font, 'bold').setFontSize(30).setTextColor(CONFIG.colors.white);
-    const title = doc.splitTextToSize(pdfSafe(content.name), WIDTH).slice(0, 2);
-    doc.text(title, CONFIG.margin, 100);
-    let y = 100 + title.length * 12;
-    if (content.subtitle) {
-      y = paragraph(doc, content.subtitle, CONFIG.margin, y, 13, WIDTH, { color: '#c8c8d0' });
+    const { PdfIdentity: ID } = dependencies(options);
+    doc.setFillColor(CONFIG.colors.primary).rect(0, 0, CONFIG.pageWidth, CONFIG.pageHeight, 'F');
+    if (ID) {
+      ID.drawWoodGrain(doc, { x: 0, y: 0, w: CONFIG.pageWidth, h: CONFIG.pageHeight }, { seed: 11, knots: 2, spacing: 5.8 });
+      ID.cropMarks(doc, 10, 10, CONFIG.pageWidth - 20, CONFIG.pageHeight - 20, CONFIG.colors.accent);
+      ID.drawCoverHeader(doc, { x: CONFIG.margin, y: 21, w: WIDTH, brand: content.identityMeta?.brand || 'ARCHICAM STUDIO', documentType: 'AVANT-PROJET SOMMAIRE' });
     }
-    doc.setDrawColor(CONFIG.colors.accent).setLineWidth(2.5);
-    doc.line(CONFIG.margin, y + 4, CONFIG.margin + 60, y + 4);
 
-    const imageTop = Math.max(y + 14, 150);
+    const kickerLabel = ['AVANT-PROJET SOMMAIRE (APS)', content.revision && `INDICE ${content.revision}`].filter(Boolean).join(' · ');
+    text(doc, kickerLabel, CONFIG.margin, 36, 7.2, { bold: true, color: CONFIG.colors.sand, space: 0.8 });
+
+    doc.setFont('times', 'bold').setFontSize(28).setTextColor(CONFIG.colors.white);
+    const title = doc.splitTextToSize(pdfSafe(content.name), WIDTH).slice(0, 2);
+    doc.text(title, CONFIG.margin, 49);
+    let y = 49 + (title.length - 1) * 11 + 5;
+    doc.setDrawColor(CONFIG.colors.accent).setLineWidth(0.8);
+    doc.line(CONFIG.margin, y, CONFIG.margin + 26, y);
+    y += 7;
+    if (content.subtitle) {
+      y = paragraph(doc, content.subtitle, CONFIG.margin, y, 9.5, WIDTH, { color: '#d5dbd1', lineHeight: 4.5 });
+    }
+
+    const imageTop = Math.max(y + 6, 86);
+    const frameH = 85;
     const cover = options.coverImage;
     if (cover?.data) {
       // Cadrage au ratio réel de l'image décodée ; si introuvable, cadrage « contain » sans déformation.
-      const frameH = 85;
       const fmt = /^data:image\/png/i.test(cover.data) ? 'PNG' : 'JPEG';
       const size = resolveImageSize(doc, cover);
       doc.saveGraphicsState();
@@ -398,32 +442,36 @@ const APSGenerator = (() => {
         doc.addImage(cover.data, fmt, CONFIG.margin, imageTop, 0, frameH);
       }
       doc.restoreGraphicsState();
-      text(doc, captionForImage(cover, project), CONFIG.margin, imageTop + frameH + 5, 7, { color: CONFIG.colors.mediumGray });
+      doc.setDrawColor(CONFIG.colors.accent).setLineWidth(0.35).rect(CONFIG.margin, imageTop, WIDTH, frameH);
+      text(doc, captionForImage(cover, project), CONFIG.margin, imageTop + frameH + 5, 6.8, { color: CONFIG.colors.sand });
     } else if (studio?.hs && typeof studio.capture === 'function' && project.walls?.length) {
       try {
         const shots = selectShots(project);
         const image = studio.capture(shots.facade, 1600, 800, 1, { clean: true, solar: variant });
-        doc.addImage(image, 'JPEG', CONFIG.margin, imageTop, WIDTH, 85);
-        text(doc, captionForImage('render3d', project), CONFIG.margin, imageTop + 90, 7, { color: CONFIG.colors.mediumGray });
+        doc.addImage(image, 'JPEG', CONFIG.margin, imageTop, WIDTH, frameH);
+        doc.setDrawColor(CONFIG.colors.accent).setLineWidth(0.35).rect(CONFIG.margin, imageTop, WIDTH, frameH);
+        text(doc, captionForImage('render3d', project), CONFIG.margin, imageTop + frameH + 5, 6.8, { color: CONFIG.colors.sand });
       } catch (error) {
         console.warn('[APS] Vue 3D indisponible :', error);
       }
     }
 
-    const info = [
-      ['Maître d\'ouvrage', content.client],
-      ['Localisation', content.location],
-      ['Programme', `${content.levelsSummary} · ${content.surfaces.habitable} habitables · ${content.mainRoomCount} pièces principales`],
-      ['Date', content.date]
+    const factsY = Math.max(imageTop + frameH + 14, 192);
+    const facts = [
+      { value: content.surfaces.habitable, label: 'Surface habitable' },
+      { value: String(content.mainRoomCount), label: 'Pièces principales' },
+      { value: content.levelsShort, label: 'Niveaux' }
     ];
-    let infoY = 252;
-    for (const [label, value] of info) {
-      text(doc, label, CONFIG.margin, infoY, 9, { bold: true, color: CONFIG.colors.mediumGray });
-      text(doc, value, CONFIG.margin + 40, infoY, 9, { color: CONFIG.colors.white, maxWidth: WIDTH - 40 });
-      infoY += 6;
+    if (ID) {
+      ID.drawFactsBand(doc, facts, { x: CONFIG.margin, y: factsY, w: WIDTH, h: 24 });
+      ID.drawCartouche(doc, content.identityMeta, { x: CONFIG.margin, y: 230, w: WIDTH, h: 42 }, {
+        theme: 'dark',
+        documentLabel: 'Avant-projet sommaire',
+        code: ID.documentCode('aps', 0)
+      });
     }
     if (variant?.aiEnhanced) {
-      text(doc, 'Rendus sublimés par IA', CONFIG.pageWidth - CONFIG.margin, 286, 8, { color: CONFIG.colors.accent, align: 'right' });
+      text(doc, 'Rendus sublimés par IA', CONFIG.pageWidth - CONFIG.margin, 285, 7.5, { color: CONFIG.colors.accent, align: 'right' });
     }
   }
 
@@ -608,12 +656,15 @@ const APSGenerator = (() => {
    */
   async function generateAPS(project, studio = null, variant = null, options = {}) {
     if (!project || !Array.isArray(project.rooms)) throw new Error('Projet sans pièces : impossible de générer l\'APS');
-    const JsPDF = options.JsPDF || await loadJsPDF();
-    const content = buildContent(project, options);
-    const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: options.compress !== false });
+    const { PdfIdentity: ID } = dependencies(options);
+    const cabinet = options.cabinet !== undefined ? options.cabinet : (ID ? await ID.loadCabinetProfile() : null);
+    const resolvedOptions = cabinet ? { ...options, cabinet } : options;
+    const JsPDF = resolvedOptions.JsPDF || await loadJsPDF();
+    const content = buildContent(project, resolvedOptions);
+    const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: resolvedOptions.compress !== false });
     doc.setProperties({ title: pdfSafe(`APS - ${content.name}`), subject: 'Avant-projet sommaire', creator: 'ArchiCam Studio' });
 
-    drawCover(doc, content, project, studio, variant, options);
+    drawCover(doc, content, project, studio, variant, resolvedOptions);
     const ctx = pageContext(doc, content);
     drawPresentation(ctx);
     drawProgram(ctx);
@@ -621,7 +672,7 @@ const APSGenerator = (() => {
     drawSchedule(ctx);
     drawVigilance(ctx);
 
-    if (options.save !== false) {
+    if (resolvedOptions.save !== false) {
       const slug = (project.meta?.slug || 'projet').replace(/[^a-z0-9-]/gi, '-');
       doc.save(`${slug}-APS.pdf`);
     }
