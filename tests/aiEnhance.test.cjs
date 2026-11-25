@@ -138,3 +138,44 @@ test('Documents (porte E) : exclut les rendus IA non vérifiés, « À vérifier
   assert.equal(picked.facade, null);
   assert.deepEqual(picked.interiors.map(i => i.id), ['photor-override']);
 });
+
+test('Dimensions : lit la taille réelle d’un JPEG/PNG et renvoie null en cas d’échec (jamais 1920×1080)', async () => {
+  const fs = require('node:fs');
+  const perspectiveData = `data:image/jpeg;base64,${fs.readFileSync('projects/residence-verandas/generated/images/perspective-01.jpg').toString('base64')}`;
+  assert.deepEqual(await AIEnhance.dimensions(perspectiveData), { width: 1080, height: 720 });
+  assert.deepEqual(await AIEnhance.dimensions(`data:image/png;base64,${PIXEL}`), { width: 1, height: 1 });
+  assert.equal(await AIEnhance.dimensions('data:image/jpeg;base64,AAAA'), null);
+  assert.equal(await AIEnhance.dimensions('not-an-image'), null);
+  assert.equal(await AIEnhance.dimensions(''), null);
+});
+
+test('documentImages : mesure les vraies dimensions (1080×720) et propage la provenance sans inventer', async () => {
+  const fs = require('node:fs');
+  const perspectiveBuf = fs.readFileSync('projects/residence-verandas/generated/images/perspective-01.jpg');
+  const refBuf = fs.readFileSync('projects/residence-verandas/generated/images/interieur-sejour-reference.jpg');
+  const fetch = async url => {
+    if (url.startsWith('api/gallery/media')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          images: [
+            { id: 'perspective-01', file: `${I}perspective-01.jpg`, label: 'Façade et perron', source: 'architect', cover: true, catalog: true },
+            { id: 'sejour-ref', file: `${I}interieur-sejour-reference.jpg`, label: 'Séjour', notes: 'Capture issue de la maquette Three.js', room: 'living', catalog: true }
+          ],
+          renders: []
+        })
+      };
+    }
+    if (url.endsWith('perspective-01.jpg')) return { ok: true, status: 200, blob: async () => new Blob([perspectiveBuf], { type: 'image/jpeg' }) };
+    if (url.endsWith('interieur-sejour-reference.jpg')) return { ok: true, status: 200, blob: async () => new Blob([refBuf], { type: 'image/jpeg' }) };
+    return { ok: false, status: 404, json: async () => ({ error: 'introuvable' }) };
+  };
+  const docs = await AIEnhance.documentImages('demo', { fetch });
+  assert.equal(docs.facade.width, 1080);
+  assert.equal(docs.facade.height, 720);
+  assert.equal(docs.facade.sourceKind, 'architect');
+  assert.equal(docs.interiors.length, 1);
+  assert.equal(docs.interiors[0].sourceKind, 'render3d');
+  assert.ok(docs.interiors[0].width > 0 && docs.interiors[0].height > 0);
+});

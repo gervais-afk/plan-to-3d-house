@@ -184,9 +184,66 @@ const DeliverableGate = (() => {
     return null;
   }
 
+  const normalizeLabel = text => String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+  function itemPath(item) {
+    if (!item || typeof item !== 'object') return '';
+    if (typeof item.file === 'string' && item.file) return item.file;
+    if (typeof item.source === 'string' && item.source.includes('/')) return item.source;
+    return '';
+  }
+
+  function isListedInEditionPhotos(filePath, project) {
+    if (!filePath || !Array.isArray(project?.edition?.photos)) return false;
+    return project.edition.photos.some(photo => photo && (photo.image === filePath || photo.preview === filePath));
+  }
+
+  /**
+   * Détermine la provenance véridique d'une image sans jamais la deviner :
+   * 1. 'ai'        si isAiRender(item) est vrai ;
+   * 2. 'render3d'  si fichier dans generated/renders/, generator Three.js, note « Capture issue de la maquette »,
+   *                ou déclaration explicite 'render3d' ;
+   * 3. 'architect' UNIQUEMENT si déclaré explicitement (source: 'architect' dans le manifeste)
+   *                ou listé dans project.edition.photos ;
+   * 4. 'unknown'   sinon (aucune origine inventée).
+   */
+  function imageSourceKind(item, project = null) {
+    if (!item || typeof item !== 'object') return 'unknown';
+    if (isAiRender(item)) return 'ai';
+    const filePath = itemPath(item);
+    const declared = item.sourceKind || item.declaredSource || (typeof item.source === 'string' && !item.source.includes('/') ? item.source : '');
+    if (declared === 'render3d'
+      || /(?:^|\/)generated\/renders\//i.test(filePath)
+      || /three\.?js/i.test(String(item.generator || ''))
+      || /capture\s+issue\s+de\s+la\s+maquette/i.test(normalizeLabel(item.notes || ''))
+      || (item.published === false && /capture de la maquette/i.test(normalizeLabel(item.kind || '')))) {
+      return 'render3d';
+    }
+    if (declared === 'architect' || isListedInEditionPhotos(filePath, project)) {
+      return 'architect';
+    }
+    return 'unknown';
+  }
+
+  const SOURCE_CAPTIONS = {
+    ai: { singular: 'Image générée par IA — non contractuelle', plural: 'Images générées par IA — non contractuelles' },
+    render3d: { singular: 'Capture de la maquette 3D', plural: 'Captures de la maquette 3D' },
+    architect: { singular: 'Perspective de l\'architecte', plural: 'Perspectives de l\'architecte' },
+    unknown: { singular: 'Illustration du projet', plural: 'Illustrations du projet' }
+  };
+
+  /** Mention imprimable correspondant à la provenance réelle ; « non contractuelle » uniquement pour l'IA. */
+  function imageCaption(item, { project = null, plural = false } = {}) {
+    const kind = typeof item === 'string' && SOURCE_CAPTIONS[item] ? item : imageSourceKind(item, project);
+    const entry = SOURCE_CAPTIONS[kind] || SOURCE_CAPTIONS.unknown;
+    return plural ? entry.plural : entry.singular;
+  }
+
   return Object.freeze({
     MIN_FIDELITY_VERSION,
     isAiRender,
+    imageSourceKind,
+    imageCaption,
     sanitizeOverride,
     hasValidOverride,
     evaluate,

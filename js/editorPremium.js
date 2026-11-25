@@ -176,7 +176,7 @@
     const slug = await savedSlug(data);
     if (!slug) return { facade: null, interiors: [] };
     try {
-      return await AIEnhance.documentImages(slug);
+      return await AIEnhance.documentImages(slug, { project: data });
     } catch (error) {
       console.warn('[EditorPremium] Images IA indisponibles :', error);
       return { facade: null, interiors: [] };

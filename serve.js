@@ -263,6 +263,60 @@ function isDeliverableEligible(item) {
   return item.fidelity?.version >= 2 && item.fidelity?.verdict === 'faithful';
 }
 
+function imageDimensionsFromBuffer(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 12) return null;
+  // PNG : signature 8 octets + IHDR (width @16, height @20)
+  if (buf.length >= 24 && buf.readUInt32BE(0) === 0x89504e47 && buf.readUInt32BE(4) === 0x0d0a1a0a) {
+    const width = buf.readUInt32BE(16), height = buf.readUInt32BE(20);
+    return width > 0 && height > 0 ? { width, height } : null;
+  }
+  // JPEG : marqueurs SOF0..SOF15 (hors C4, C8, CC)
+  if (buf[0] === 0xff && buf[1] === 0xd8) {
+    let offset = 2;
+    while (offset + 4 <= buf.length) {
+      while (offset < buf.length && buf[offset] !== 0xff) offset++;
+      while (offset < buf.length && buf[offset] === 0xff) offset++;
+      if (offset >= buf.length) break;
+      const marker = buf[offset++];
+      if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+      if (marker === 0xd9 || marker === 0xda) break;
+      if (offset + 2 > buf.length) break;
+      const length = buf.readUInt16BE(offset);
+      if (length < 2 || offset + length > buf.length) break;
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        if (offset + 7 <= buf.length) {
+          const height = buf.readUInt16BE(offset + 3), width = buf.readUInt16BE(offset + 5);
+          return width > 0 && height > 0 ? { width, height } : null;
+        }
+        break;
+      }
+      offset += length;
+    }
+    return null;
+  }
+  // WebP : RIFF....WEBP (VP8X / VP8L / VP8 )
+  if (buf.length >= 30 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') {
+    const chunk = buf.toString('ascii', 12, 16);
+    if (chunk === 'VP8X') {
+      const width = 1 + (buf[24] | (buf[25] << 8) | (buf[26] << 16));
+      const height = 1 + (buf[27] | (buf[28] << 8) | (buf[29] << 16));
+      return width > 0 && height > 0 ? { width, height } : null;
+    }
+    if (chunk === 'VP8L' && buf[20] === 0x2f) {
+      const bits = buf.readUInt32LE(21);
+      const width = (bits & 0x3fff) + 1;
+      const height = ((bits >>> 14) & 0x3fff) + 1;
+      return width > 0 && height > 0 ? { width, height } : null;
+    }
+    if (chunk === 'VP8 ' && buf[23] === 0x9d && buf[24] === 0x01 && buf[25] === 0x2a) {
+      const width = buf.readUInt16LE(26) & 0x3fff;
+      const height = buf.readUInt16LE(28) & 0x3fff;
+      return width > 0 && height > 0 ? { width, height } : null;
+    }
+  }
+  return null;
+}
+
 function saveGenerated(req, res, url) {
   readBody(req, res, 30 * 1024 * 1024, body => {
     try {
@@ -274,8 +328,14 @@ function saveGenerated(req, res, url) {
       const media = ensureProjectMedia(slug);
       const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
       const file = `${media.prefix}images/${id}.${ext}`;
+      const imageBuffer = Buffer.from(match[2], 'base64');
       fs.mkdirSync(media.images, { recursive: true });
-      fs.writeFileSync(path.join(media.images, `${id}.${ext}`), Buffer.from(match[2], 'base64'));
+      fs.writeFileSync(path.join(media.images, `${id}.${ext}`), imageBuffer);
+      const measuredSize = imageDimensionsFromBuffer(imageBuffer);
+      const validDim = value => {
+        const n = Number(value);
+        return Number.isFinite(n) && n >= 1 && n <= 8192 ? Math.round(n) : null;
+      };
 
       const manifestPath = media.manifest;
       let manifest = { version: 1, items: [] };
@@ -288,8 +348,8 @@ function saveGenerated(req, res, url) {
         id, type: 'image', file, reference,
         room: typeof metadata.room === 'string' ? metadata.room.slice(0, 80) : null,
         label: String(metadata.label || id).slice(0, 120),
-        width: Math.max(1, Math.min(8192, Number(metadata.width) || 1920)),
-        height: Math.max(1, Math.min(8192, Number(metadata.height) || 1080)),
+        width: measuredSize?.width ?? validDim(metadata.width),
+        height: measuredSize?.height ?? validDim(metadata.height),
         generator: IMAGE_MODELS.includes(metadata.model)
           ? `OpenRouter · ${metadata.model}` : 'OpenRouter · google/gemini-3.1-flash-image',
         prompt: String(metadata.prompt || '').slice(0, 6000),
@@ -419,6 +479,8 @@ function galleryMedia(res, url, access = {}) {
         reference: typeof item.reference === 'string' && [renderPrefix, imagePrefix, planchesPrefix].some(prefix => item.reference.startsWith(prefix)
           && /^[a-z0-9_-]+\.(?:jpg|jpeg|png|webp)$/i.test(item.reference.slice(prefix.length))) ? item.reference : null,
         ai: isAiItem(item),
+        source: typeof item.source === 'string' ? item.source : null,
+        sourceKind: DeliverableGate ? DeliverableGate.imageSourceKind(item) : null,
         fidelity: fidelityResult(item.fidelity),
         fidelityOverride: sanitizeFidelityOverride(item.fidelityOverride) || null,
         fidelityAccepted: item.fidelityAccepted === true,

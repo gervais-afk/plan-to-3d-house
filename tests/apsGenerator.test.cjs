@@ -8,22 +8,34 @@ const villa = require('../projects/villa-serena/project.json');
 // Termes du logiciel lui-même qui n'ont rien à faire dans l'APS d'une maison.
 const SOFTWARE_TERMS = /tests? unitaires|Vectorization|BIMExport|Modules? stratégiques|PDF Premium|Déploiement production|HTTPS|€/;
 
-/** Génère le PDF sans le télécharger et récupère tout le texte écrit. */
+/** Génère le PDF sans le télécharger et récupère tout le texte écrit, les images placées et les propriétés. */
 async function render(project, options = {}) {
   const written = [];
-  // jsPDF définit text() sur chaque instance : on l'enveloppe après construction.
+  const placedImages = [];
+  let properties = null;
+  // jsPDF définit text() / addImage() sur chaque instance : on les enveloppe après construction.
   class SpyPDF extends jsPDF {
     constructor(...args) {
       super(...args);
-      const original = this.text.bind(this);
+      const originalText = this.text.bind(this);
       this.text = (value, ...rest) => {
         written.push(...(Array.isArray(value) ? value : [value]));
-        return original(value, ...rest);
+        return originalText(value, ...rest);
+      };
+      const originalAddImage = this.addImage.bind(this);
+      this.addImage = (data, fmt, x, y, w, h, ...rest) => {
+        placedImages.push({ fmt, x, y, w, h });
+        return originalAddImage(data, fmt, x, y, w, h, ...rest);
+      };
+      const originalSetProps = this.setProperties.bind(this);
+      this.setProperties = props => {
+        properties = props;
+        return originalSetProps(props);
       };
     }
   }
   const doc = await APSGenerator.generateAPS(project, null, null, { JsPDF: SpyPDF, save: false, ...options });
-  return { doc, all: written.join('\n') };
+  return { doc, all: written.join('\n'), placedImages, properties };
 }
 
 test('APS : le programme reprend les pièces et surfaces du projet', () => {
@@ -97,13 +109,81 @@ test('APS : un projet sans pièces est refusé clairement', async () => {
   await assert.rejects(APSGenerator.generateAPS({}, null, null, { JsPDF: jsPDF, save: false }), /sans pièces/);
 });
 
-test('APS : la façade photoréaliste du projet illustre la couverture', async () => {
+test('APS : la façade photoréaliste IA porte la mention IA non contractuelle et le creator ArchiCam Studio', async () => {
   const fs = require('node:fs');
-  const coverImage = { data: `data:image/jpeg;base64,${fs.readFileSync('projects/villa-serena/generated/renders/facade-sud.jpg').toString('base64')}`, width: 1376, height: 768 };
-  const { all } = await render(villa, { coverImage });
+  const coverImage = {
+    data: `data:image/jpeg;base64,${fs.readFileSync('projects/villa-serena/generated/renders/facade-sud.jpg').toString('base64')}`,
+    width: 1376,
+    height: 768,
+    ai: true
+  };
+  const { all, properties } = await render(villa, { coverImage });
   assert.ok(all.includes('générée par IA'));
+  assert.ok(all.includes('non contractuelle'));
+  assert.equal(properties.creator, 'ArchiCam Studio');
   const without = await render(villa);
   assert.ok(!without.all.includes('générée par IA'));
+  assert.ok(!without.all.includes('non contractuelle'));
+});
+
+test('APS : perspective-01 (1080×720) sans dimensions déclarées est placée sans déformation avec la mention architecte', async () => {
+  const fs = require('node:fs');
+  const verandas = require('../projects/residence-verandas/project.json');
+  const data = `data:image/jpeg;base64,${fs.readFileSync('projects/residence-verandas/generated/images/perspective-01.jpg').toString('base64')}`;
+  // Aucune width/height passée : le placement doit lire le vrai ratio 1080/720 = 1,5 (jamais 1920/1080).
+  const { all, placedImages } = await render(verandas, {
+    coverImage: { id: 'perspective-01', file: 'projects/residence-verandas/generated/images/perspective-01.jpg', source: 'architect', data }
+  });
+  assert.equal(placedImages.length, 1);
+  const placed = placedImages[0];
+  assert.ok(Math.abs((placed.w / placed.h) - (1080 / 720)) < 1e-4, `ratio déformé : ${placed.w / placed.h} ≠ 1.5`);
+  assert.ok(all.includes('Perspective de l\'architecte'));
+  assert.ok(!all.includes('générée par IA'));
+  assert.ok(!all.includes('non contractuelle'));
+});
+
+test('APS : mentions véridiques selon la provenance (capture 3D dans generated/images, origine non déclarée)', async () => {
+  const fs = require('node:fs');
+  const verandas = require('../projects/residence-verandas/project.json');
+  const refData = `data:image/jpeg;base64,${fs.readFileSync('projects/residence-verandas/generated/images/interieur-sejour-reference.jpg').toString('base64')}`;
+  const refRes = await render(verandas, {
+    coverImage: {
+      id: 'sejour-veranda-reference',
+      file: 'projects/residence-verandas/generated/images/interieur-sejour-reference.jpg',
+      notes: 'Capture issue de la maquette Three.js ; vue de référence, et non photographie ni rendu IA.',
+      data: refData
+    }
+  });
+  assert.ok(refRes.all.includes('Capture de la maquette 3D'));
+  assert.ok(!refRes.all.includes('Perspective de l\'architecte'));
+  assert.ok(!refRes.all.includes('non contractuelle'));
+
+  const unknownRes = await render(villa, { coverImage: { data: refData } });
+  assert.ok(unknownRes.all.includes('Illustration du projet'));
+  assert.ok(!unknownRes.all.includes('Perspective de l\'architecte'));
+  assert.ok(!unknownRes.all.includes('générée par IA'));
+  assert.ok(!unknownRes.all.includes('non contractuelle'));
+});
+
+test('APS : si les dimensions sont introuvables, cadrage contain sans hypothèse 16:9', async () => {
+  const fs = require('node:fs');
+  const data = `data:image/jpeg;base64,${fs.readFileSync('projects/residence-verandas/generated/images/perspective-01.jpg').toString('base64')}`;
+  const placed = [];
+  class NoPropsPDF extends jsPDF {
+    constructor(...args) {
+      super(...args);
+      this.getImageProperties = () => { throw new Error('indisponible'); };
+      const orig = this.addImage.bind(this);
+      this.addImage = (img, fmt, x, y, w, h, ...rest) => {
+        placed.push({ w, h });
+        return orig(img, fmt, x, y, w, h, ...rest);
+      };
+    }
+  }
+  await APSGenerator.generateAPS(villa, null, null, { JsPDF: NoPropsPDF, save: false, coverImage: { data } });
+  assert.equal(placed.length, 1);
+  assert.equal(placed[0].w, 0, 'largeur calculée proportionnellement (contain), jamais étirée en 16:9');
+  assert.equal(placed[0].h, 85);
 });
 
 test('APS : pièces principales au sens immobilier, « R+1 » lisible, pas d’« annexe » répétée', async () => {
