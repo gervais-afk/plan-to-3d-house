@@ -783,6 +783,168 @@ body.fps-active .crosshair {
   }
 }
 
+/* Inspecteur de fidélité Avant/Après (rideau + grille 3×3 worstTile / addedTile) */
+.rg-compare-view {
+  flex-direction: column;
+  align-items: center;
+}
+.rg-inspector-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--on-night, #f3f4f6);
+}
+.rg-inspector-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.rg-inspector-legend {
+  font-size: 12px;
+  opacity: 0.9;
+}
+.rg-slider-stage {
+  position: relative;
+  width: min(100%, 1080px);
+  max-height: calc(100vh - 220px);
+  background: var(--night);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.16);
+  user-select: none;
+}
+.rg-slider-before,
+.rg-slider-after {
+  width: 100%;
+  max-height: calc(100vh - 220px);
+  object-fit: contain;
+  display: block;
+}
+.rg-slider-after-clip {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.rg-slider-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #e1c38f;
+  box-shadow: 0 0 8px rgba(0,0,0,0.65);
+  pointer-events: none;
+  z-index: 3;
+}
+.rg-slider-line::after {
+  content: "⇄";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(20, 26, 22, 0.92);
+  border: 1.5px solid #e1c38f;
+  color: #f7f5f0;
+  font-size: 14px;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+}
+.rg-slider-tag-left { left: 12px; right: auto; }
+.rg-slider-tag-right { left: auto; right: 12px; }
+.rg-slider-range {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: ew-resize;
+  z-index: 5;
+}
+.rg-fidelity-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  pointer-events: none;
+  z-index: 4;
+}
+.rg-fidelity-cell {
+  border: 1px dashed rgba(255,255,255,0.22);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 6px;
+}
+.rg-fidelity-cell.is-worst,
+.rg-fidelity-cell.is-both {
+  border: 2.5px solid #dc2626;
+  background: rgba(220, 38, 38, 0.16);
+}
+.rg-fidelity-cell.is-added {
+  border: 2.5px dashed #d97706;
+  background: rgba(217, 119, 6, 0.16);
+}
+.rg-fidelity-cell-label {
+  background: rgba(17, 24, 39, 0.88);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-align: center;
+}
+.rg-compare-side {
+  display: flex;
+  width: 100%;
+  gap: 16px;
+}
+.gate-override-dialog textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.88rem;
+  resize: vertical;
+  background: #fff;
+  color: var(--ink);
+  box-sizing: border-box;
+}
+.gate-override-label {
+  font-weight: 700;
+  font-size: 0.84rem;
+}
+.gate-override-error {
+  margin: 0;
+  min-height: 1.2em;
+  color: #b91c1c;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.gate-override-history-box {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.gate-override-history-box ul {
+  margin: 6px 0 0;
+  padding-left: 16px;
+}
+.gate-override-confirm {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
 .rg-lb-bar {
   display: flex;
   justify-content: space-between;
@@ -833,3 +995,102 @@ body.fps-active .crosshair {
 
 /* Arrivée depuis l’accueil : la couverture s’ouvre sur la maquette (css/motion.css). */
 #webgl-container { view-transition-name: plan3d-hero; }
+
+/* Tableau de bord Livrables (5 étapes + 5 documents) */
+.dlv-dialog { width: min(680px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.dlv-summary { margin: 4px 0 10px; font-size: 0.92rem; }
+.dlv-steps { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
+.dlv-step { padding: 10px 12px; border: 1px solid var(--rule, #d6d3cb); border-radius: 8px; background: var(--surface, #faf8f4); }
+.dlv-step.is-done { border-color: rgba(21,128,61,0.35); background: rgba(21,128,61,0.04); }
+.dlv-step.is-partial { border-color: rgba(217,119,6,0.38); background: rgba(217,119,6,0.04); }
+.dlv-step.is-todo { border-color: var(--rule, #d6d3cb); }
+.dlv-step-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 700; font-size: 0.86rem; }
+.dlv-badge { padding: 2px 6px; border: 1px solid transparent; border-radius: 3px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.dlv-badge.is-done { border-color: rgba(21,128,61,0.28); background: rgba(21,128,61,0.1); color: #15803d; }
+.dlv-badge.is-partial { border-color: rgba(217,119,6,0.3); background: rgba(217,119,6,0.1); color: #b45309; }
+.dlv-badge.is-todo { border-color: rgba(107,114,128,0.25); background: rgba(107,114,128,0.08); color: #4b5563; }
+.dlv-step-summary { margin: 4px 0 0; font-size: 0.8rem; color: var(--muted, #4b5563); }
+.dlv-missing { margin: 5px 0 0; padding-left: 16px; font-size: 0.78rem; color: #b45309; }
+.dlv-docs-title { margin: 12px 0 8px; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.dlv-docs-grid { display: grid; gap: 8px; }
+.dlv-doc-card { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid var(--rule, #d6d3cb); border-radius: 8px; background: #fff; }
+.dlv-doc-card strong { display: block; font-size: 0.84rem; }
+.dlv-doc-card small { display: block; font-size: 0.76rem; color: var(--muted, #4b5563); margin-top: 2px; }
+
+/* Filtres rapides de la galerie de rendus (filets architecturaux, zéro pastille) */
+.rg-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  margin: 0 0 18px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+.rg-filters button {
+  position: relative;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--on-night-muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+.rg-filters button::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -9px;
+  height: 2px;
+  background: var(--accent-soft, #d8c7a0);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s ease;
+}
+.rg-filters button:hover,
+.rg-filters button[aria-selected="true"] { color: var(--on-night); }
+.rg-filters button[aria-selected="true"]::after { transform: scaleX(1); }
+.rg-filter-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--on-night-muted);
+  font-variant-numeric: tabular-nums;
+}
+.rg-card[hidden] { display: none !important; }
+
+/* Aide rapide des raccourcis clavier du cockpit 3D */
+.shortcuts-dialog { width: min(560px, calc(100vw - 24px)); }
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 18px;
+  margin: 12px 0 16px;
+}
+.shortcuts-grid > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--rule-soft, rgba(22, 28, 25, 0.12));
+  font-size: 0.8rem;
+}
+.shortcuts-grid dt { display: flex; gap: 3px; white-space: nowrap; }
+.shortcuts-grid dd { margin: 0; color: var(--ink-2, #46504a); text-align: right; }
+.shortcuts-grid kbd {
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border: 1px solid var(--rule, #c9cbbf);
+  border-radius: 3px;
+  background: var(--paper-2, #f1eee6);
+  color: var(--ink, #161c19);
+}
+@media (max-width: 560px) { .shortcuts-grid { grid-template-columns: 1fr; } }

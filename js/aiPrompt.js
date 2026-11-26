@@ -153,7 +153,50 @@ const AiPrompt = (() => {
     return { prompt: parts.join(' '), tags };
   }
 
-  return { build, sunAt, planVersion, compass, FLOORS, FACADES };
+  const FLOOR_LABELS_FR = {
+    oak: 'parquet chêne naturel',
+    parquet: 'parquet bois chaleureux',
+    wood: 'parquet bois',
+    tile: 'carrelage grand format',
+    tiles: 'carrelage clair',
+    concrete: 'béton ciré',
+    stone: 'pierre naturelle',
+    marble: 'marbre clair'
+  };
+
+  const WARM_COPY = {
+    living: 'Un espace de vie accueillant et lumineux, pensé pour les moments partagés et la douceur du quotidien.',
+    dining: 'Un lieu convivial et baigné de lumière naturelle, conçu pour réunir famille et invités dans le calme.',
+    kitchen: 'Une cuisine contemporaine fonctionnelle et chaleureuse, aux lignes sobres et aux circulations fluides.',
+    suite: 'Un refuge apaisant et élégant, dédié au repos, à l’intimité et à la lumière douce.',
+    bedroom: 'Une chambre sereine et confortable, imaginée comme un cocon reposant aux proportions équilibrées.',
+    bathroom: 'Une pièce d’eau soignée aux finitions minérales, pensée comme une parenthèse de bien-être.',
+    office: 'Un espace de travail calme et inspirant, propice à la concentration dans une atmosphère chaleureuse.',
+    circulation: 'Un seuil lumineux qui distribue naturellement les espaces et accompagne le regard vers les pièces de vie.'
+  };
+
+  /**
+   * Génère un descriptif court, chaleureux et strictement fidèle aux données réelles de la pièce
+   * (nom, surface mesurée, niveau, revêtement de sol) — sans jamais inventer d’équipement inexistant.
+   */
+  function warmRoomCaption(room, options = {}) {
+    const rawName = String(room?.name || options.label || '').trim();
+    const displayName = rawName.replace(/\s*—\s*Rendu IA$/i, '').replace(/^Vue\s+—\s+/i, '').trim() || 'Espace intérieur';
+    const match = roomUse({ name: displayName });
+    const baseSentence = match ? WARM_COPY[match.use] : 'Un volume harmonieux pensé pour le confort, la lumière naturelle et la qualité des matières.';
+    const areaVal = Number.isFinite(room?.area) && room.area > 0
+      ? room.area
+      : (room?.bounds ? Math.max(0, room.bounds.xMax - room.bounds.xMin) * Math.max(0, room.bounds.zMax - room.bounds.zMin) : 0);
+    const details = [];
+    if (areaVal >= 1) details.push(`${Math.round(areaVal * 10) / 10} m²`.replace('.', ','));
+    if (Number(room?.level) > 0) details.push(`à l’étage R+${Number(room.level)}`);
+    const floorKey = options.floor || room?.floorType;
+    if (floorKey && FLOOR_LABELS_FR[floorKey]) details.push(`sol en ${FLOOR_LABELS_FR[floorKey]}`);
+    const qualifier = details.length ? ` (${details.join(' · ')})` : '';
+    return `${displayName}${qualifier} — ${baseSentence}`;
+  }
+
+  return { build, sunAt, planVersion, compass, warmRoomCaption, FLOORS, FACADES };
 })();
 
 if (typeof module !== 'undefined') module.exports = AiPrompt;

@@ -85,6 +85,7 @@
           <button id="btn-plan-compare" type="button" class="btn-toggle btn-small" aria-pressed="false">Comparer plan / 3D</button>
           <button id="btn-clearance-guides" type="button" class="btn-toggle btn-small" aria-pressed="false" aria-describedby="clearance-note" title="Repères indicatifs — gabarits d’encombrement visuels et non normatifs">Gabarits indicatifs</button>
           <span id="clearance-note" class="sr-only">Repères indicatifs : bandes théoriques de 90 centimètres autour de certains meubles et arcs simplifiés de portes. Ils ne valident pas la conformité des circulations.</span>
+          <button id="btn-deliverables" type="button" class="btn-toggle btn-small" aria-haspopup="dialog">Livrables</button>
           <button id="btn-present" type="button" class="btn-toggle btn-small" aria-pressed="false" title="Plein écran sans outils ; flèches pour avancer, Échap pour quitter"><svg class="i" aria-hidden="true"><use href="#i-present"></use></svg> <span>Présenter</span></button>
           <a id="portal-account" href="portal.html" class="btn-toggle btn-small" hidden>Espace privé</a>
         </div>
@@ -212,6 +213,7 @@
                 <button type="button" id="btn-photo-mode" class="btn-toggle btn-small is-active" title="Touche F" aria-pressed="true">Mode photo</button>
                 <button type="button" id="btn-export-video" class="btn-toggle btn-small">Exporter l’animation vidéo</button>
                 <button type="button" id="btn-ai-sequence" class="btn-toggle btn-small" title="Images par images, profondeur et contours, pour Runway, Luma ou ComfyUI">Séquence pour l’IA</button>
+                <button type="button" id="btn-shortcuts-help" class="btn-toggle btn-small" title="Afficher tous les raccourcis clavier (?)">Raccourcis (?)</button>
               </div>
             </div>
           </details>
@@ -255,7 +257,7 @@
           <button type="button" id="guided-next" class="btn-toggle dock-arrow" aria-label="Étape suivante">→</button>
         </div>
         <button type="button" id="guided-action" class="btn-toggle guided-next">Démarrer la visite</button>
-        <details id="cockpit-tools" hidden><summary>Atlas de visite</summary><div><button type="button" data-atlas="plans">Cahier de plans</button><button type="button" data-atlas="photos">Perspectives HD</button><button type="button" data-atlas="estimate">Estimation &amp; devis</button><button type="button" data-atlas="renders">Studio de rendus IA</button></div><section id="atlas-estimate" hidden aria-labelledby="atlas-estimate-title"><h3 id="atlas-estimate-title">Métré &amp; estimation indicative</h3><label>Standing <select id="atlas-standing"><option value="moyen">Moyen standing</option><option value="haut">Haut standing</option></select></label><div id="atlas-estimate-data" aria-live="polite"></div><button type="button" id="atlas-bqe">Télécharger le BQE · CSV</button><small>Ordres de grandeur indicatifs au Cameroun, en FCFA ; prix à confirmer auprès des entreprises. Ce document n’est pas un devis contractuel.</small></section></details>
+        <details id="cockpit-tools" hidden><summary>Atlas de visite</summary><div><button type="button" data-atlas="plans">Cahier de plans</button><button type="button" data-atlas="photos">Perspectives HD</button><button type="button" data-atlas="estimate">Estimation &amp; devis</button><button type="button" data-atlas="renders">Studio de rendus IA</button></div><section id="atlas-estimate" hidden aria-labelledby="atlas-estimate-title"><h3 id="atlas-estimate-title">Métré &amp; estimation indicative</h3><label>Standing <select id="atlas-standing"><option value="moyen">Moyen standing</option><option value="haut">Haut standing</option></select></label><div id="atlas-estimate-data" aria-live="polite"></div><button type="button" id="atlas-bqe">Télécharger le BQE · CSV</button><button type="button" id="atlas-bqe-xlsx">Télécharger le BQE · Excel (.xlsx)</button><small>Ordres de grandeur indicatifs au Cameroun, en FCFA ; prix à confirmer auprès des entreprises. Ce document n’est pas un devis contractuel.</small></section></details>
         <div class="dock-shortcuts">
           <button type="button" class="btn-toggle" id="take-stairs" hidden>Prendre l’escalier</button>
           <select id="visit-level" class="btn-toggle" aria-label="Niveau de la maquette" hidden><option value="all">Vue d’ensemble</option><option value="0">Rez-de-chaussée</option><option value="1">Étage</option></select>
@@ -364,6 +366,14 @@
       </div>
     </div>
 
+    <div id="rg-filters" class="rg-filters" role="tablist" aria-label="Filtrer les vues de la galerie">
+      <button type="button" role="tab" data-filter="all" aria-selected="true">Tous</button>
+      <button type="button" role="tab" data-filter="verified" aria-selected="false">Validés Porte E</button>
+      <button type="button" role="tab" data-filter="review" aria-selected="false">À vérifier</button>
+      <button type="button" role="tab" data-filter="plan" aria-selected="false">Plans &amp; Planches</button>
+      <span id="rg-filter-count" class="rg-filter-count" aria-live="polite"></span>
+    </div>
+
     <div id="rg-grid" class="rg-grid"></div>
 
     <!-- Visionneuse / Lightbox -->
@@ -421,6 +431,61 @@
       <div class="rg-publish-actions">
         <button type="submit" value="later" class="btn-toggle btn-small">Plus tard</button>
         <button id="rg-publish-save" type="submit" value="save" class="btn-toggle btn-small" autofocus>Enregistrer mes choix</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="gate-override-dialog" class="rg-publish-dialog gate-override-dialog" aria-labelledby="gate-override-title">
+    <form method="dialog" id="gate-override-form">
+      <p class="rg-publish-kicker">PORTE E — CONTRÔLE GÉOMÉTRIQUE</p>
+      <h2 id="gate-override-title">Forçage explicite architecte</h2>
+      <p id="gate-override-summary" class="rg-publish-caption"></p>
+      <p id="gate-override-fidelity" class="rg-publish-warning"></p>
+      <label class="gate-override-label" for="gate-override-reason">Motif tracé obligatoire</label>
+      <textarea id="gate-override-reason" rows="3" maxlength="240" required placeholder="Expliquez pourquoi ce rendu IA peut être publié malgré l’alerte géométrique…"></textarea>
+      <p id="gate-override-error" class="gate-override-error" role="alert"></p>
+      <details class="gate-override-history-box">
+        <summary>Historique des forçages de la session</summary>
+        <ul id="gate-override-history"></ul>
+      </details>
+      <div class="rg-publish-actions">
+        <button id="gate-override-cancel" type="button" class="btn-toggle btn-small">Annuler (garder hors livrables)</button>
+        <button id="gate-override-confirm" type="button" class="btn-toggle btn-small gate-override-confirm">Valider le forçage tracé</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-deliverables" class="rg-publish-dialog dlv-dialog" aria-labelledby="dlg-deliverables-title">
+    <form method="dialog" class="dlv-form">
+      <p class="rg-publish-kicker">DOSSIER ARCHITECTURAL</p>
+      <h2 id="dlg-deliverables-title">Tableau de bord — Livrables</h2>
+      <p id="dlg-deliverables-status" class="rg-publish-caption" role="status"></p>
+      <div id="dlg-deliverables-body"></div>
+      <div class="rg-publish-actions">
+        <button id="dlg-deliverables-close" type="submit" value="close" class="btn-toggle btn-small">Fermer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-shortcuts" class="rg-publish-dialog shortcuts-dialog" aria-labelledby="dlg-shortcuts-title">
+    <form method="dialog">
+      <p class="rg-publish-kicker">NAVIGATION 3D</p>
+      <h2 id="dlg-shortcuts-title">Raccourcis clavier</h2>
+      <p class="rg-publish-caption">Naviguez librement dans la maquette sans quitter le plein écran.</p>
+      <div class="shortcuts-grid">
+        <div><kbd>1</kbd>–<kbd>9</kbd><span>Points de vue caméra</span></div>
+        <div><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd><span>Marcher (mode visite libre)</span></div>
+        <div><kbd>C</kbd><span>Basculer plan / élévation / coupe</span></div>
+        <div><kbd>T</kbd><span>Afficher / masquer la toiture</span></div>
+        <div><kbd>N</kbd><span>Basculer jour / nuit</span></div>
+        <div><kbd>V</kbd><span>Démarrer / pause visite guidée</span></div>
+        <div><kbd>R</kbd><span>Ouvrir la galerie &amp; les planches</span></div>
+        <div><kbd>P</kbd><span>Mode présentation client</span></div>
+        <div><kbd>H</kbd><span>Qualité de rendu (éco / fin)</span></div>
+        <div><kbd>?</kbd><span>Afficher cette fiche d’aide</span></div>
+      </div>
+      <div class="rg-publish-actions">
+        <button type="submit" value="close" class="btn-toggle btn-small" autofocus>Fermer</button>
       </div>
     </form>
   </dialog>

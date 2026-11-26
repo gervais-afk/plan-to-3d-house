@@ -1,0 +1,4 @@
+BASE : 97f9ca7
+DERNIER_LOT_TERMINE : Lot 9 — Installation pour un cabinet (224274e) — 574 pass, 0 fail, 4 skipped
+LOT_SUIVANT : Aucun (tous les lots 1 à 9 sont terminés et testés)
+LOT_EN_COURS : Aucun

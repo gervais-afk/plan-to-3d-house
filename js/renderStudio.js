@@ -113,31 +113,24 @@ class RenderStudio {
     const hs = this.hs, r = hs.renderer, cam = hs.camera;
     const saved = {
       pos: cam.position.clone(), quat: cam.quaternion.clone(), fov: cam.fov, aspect: cam.aspect,
-      bg: hs.scene.background, materialOverride: null
+      bg: hs.scene.background, ratio: r.getPixelRatio(), size: r.getSize(new THREE.Vector2())
     };
-    
+    const originalMaterials = new Map();
+    let customDepthMaterial = null;
+
     try {
-      // Configure la caméra
       cam.position.fromArray(shot.pos);
       cam.lookAt(new THREE.Vector3().fromArray(shot.look));
       cam.fov = shot.fov;
       cam.aspect = width / height;
       cam.updateProjectionMatrix();
-      
-      // Calcule la plage de profondeur (near/far)
+
       const near = cam.near || 0.1;
       const far = cam.far || 100;
-      
-      // Matériau de profondeur : encode la distance Z en niveaux de gris
-      const depthMaterial = new THREE.MeshDepthMaterial();
-      depthMaterial.depthTest = true;
-      depthMaterial.depthWrite = true;
-      
-      // Shader personnalisé pour convertir la profondeur en niveaux de gris linéaires
-      const depthShader = {
+      customDepthMaterial = new THREE.ShaderMaterial({
         uniforms: {
-          'mNear': { value: near },
-          'mFar': { value: far }
+          mNear: { value: near },
+          mFar: { value: far }
         },
         vertexShader: `
           void main() {
@@ -153,39 +146,30 @@ class RenderStudio {
             gl_FragColor = vec4(vec3(linearDepth), 1.0);
           }
         `
-      };
-      
-      const customDepthMaterial = new THREE.ShaderMaterial(depthShader);
-      
-      // Remplace tous les matériaux par le matériau de profondeur
-      const originalMaterials = new Map();
+      });
+
       hs.scene.traverse((obj) => {
         if (obj.isMesh && obj.material) {
           originalMaterials.set(obj, obj.material);
           obj.material = customDepthMaterial;
         }
       });
-      
-      // Rendu
+
+      r.setPixelRatio(1);
       r.setSize(width, height, false);
-      const origBg = hs.scene.background;
-      hs.scene.background = new THREE.Color(0x000000); // Fond noir = infini
+      hs.scene.background = new THREE.Color(0x000000);
       r.render(hs.scene, cam);
-      
-      // Restaure les matériaux
-      originalMaterials.forEach((mat, obj) => {
-        obj.material = mat;
-      });
-      hs.scene.background = origBg;
-      
       return r.domElement.toDataURL('image/jpeg', 0.92);
     } finally {
-      // Restaure l'état de la caméra
+      originalMaterials.forEach((mat, obj) => { obj.material = mat; });
+      if (customDepthMaterial) customDepthMaterial.dispose();
       cam.position.copy(saved.pos);
       cam.quaternion.copy(saved.quat);
       cam.fov = saved.fov;
       cam.aspect = saved.aspect;
       cam.updateProjectionMatrix();
+      r.setPixelRatio(saved.ratio);
+      r.setSize(saved.size.x, saved.size.y, false);
       hs.scene.background = saved.bg;
     }
   }

@@ -32,8 +32,8 @@ test('Profil Cabinet stocke le nom, l’architecte et un logo PNG transparent sa
   const saved = cabinet.save(root, { name: 'Atelier Équinoxe', architect: 'A. Exemple', logo: data });
   assert.equal(saved.name, 'Atelier Équinoxe');
   assert.equal(saved.architect, 'A. Exemple');
-  assert.equal(saved.logoUrl, '/assets/cabinet/logo.png');
-  assert.deepEqual(fs.readFileSync(path.join(root, 'assets', 'cabinet', 'logo.png')), png());
+  assert.equal(saved.logoUrl, '/api/cabinet/logo');
+  assert.deepEqual(fs.readFileSync(path.join(root, '.cabinet', 'logo.png')), png());
   assert.throws(() => cabinet.save(root, { name: 'Modification rejetée', architect: '', logo: `data:image/png;base64,${png(2).toString('base64')}` }), /transparence/);
   assert.equal(cabinet.read(root).name, 'Atelier Équinoxe', 'un logo invalide ne modifie pas le profil existant');
   assert.equal(cabinet.save(root, { name: 'Atelier Équinoxe', architect: 'A. Exemple', logo: '' }).logoUrl, '');

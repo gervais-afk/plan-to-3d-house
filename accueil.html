@@ -44,6 +44,7 @@
         <select id="home-project"></select>
       </div>
       <a class="nav-link" id="home-account" href="portal.html" hidden>Espace privé</a>
+      <button type="button" class="nav-link" id="home-deliverables" hidden>Livrables</button>
       <a class="nav-link" id="home-editor" href="editor.html" hidden>Éditeur <span aria-hidden="true">↗</span></a>
     </nav>
   </header>
@@ -71,7 +72,10 @@
         <button id="cover-prev" type="button" aria-label="Vue précédente">←</button>
         <span id="cover-number">01 / 01</span>
         <button id="cover-next" type="button" aria-label="Vue suivante">→</button>
+        <button id="cover-toggle" type="button" aria-pressed="false" aria-label="Mettre en pause le défilement" title="Pause / Lecture">❚❚</button>
+        <button id="cover-expand" type="button" aria-label="Voir le visuel en plein écran sans masque" title="Voir en grand">⤢</button>
       </div>
+      <div class="cover-strip" id="cover-strip" hidden role="group" aria-label="Accès direct aux visuels et planches"></div>
       <div class="cover-caption"><span class="caption-key" aria-hidden="true">AC</span><span id="cover-caption" role="status">UNE ARCHITECTURE À DÉCOUVRIR</span></div>
     </section>
     <p id="home-status" class="load-status" role="status"></p>
@@ -126,6 +130,12 @@
     </div>
 
     <section class="welcome-presentation" id="project-sheet" aria-labelledby="sheet-title" hidden>
+      <nav class="sheet-subnav" aria-label="Navigation dans la présentation">
+        <a href="#sheet-concept-block">L’esprit</a>
+        <a href="#sheet-schedule">Surfaces</a>
+        <a href="#view-title">Visuels &amp; Planches</a>
+        <button type="button" id="sheet-open-deliverables">Livrables</button>
+      </nav>
       <div class="welcome-presentation-intro">
         <p class="welcome-section-label">PRÉSENTATION DU PROJET</p>
         <div class="sheet-concept" id="sheet-concept-block">
@@ -193,6 +203,33 @@
     </div>
   </main>
   <footer class="footer shell"><span>ARCHICAM STUDIO</span><span class="footer-signature" id="footer-signature" hidden><span id="footer-architect"></span> <a id="footer-contact" hidden></a></span><span>Le cockpit architectural immersif.</span><a class="footer-link" id="footer-editor" href="editor.html">ESPACE ATELIER</a></footer>
+  <dialog id="dlg-home-deliverables" class="rg-publish-dialog dlv-dialog" aria-labelledby="dlg-home-deliverables-title">
+    <form method="dialog" class="dlv-form">
+      <p class="rg-publish-kicker">DOSSIER ARCHITECTURAL</p>
+      <h2 id="dlg-home-deliverables-title">Tableau de bord — Livrables</h2>
+      <p id="dlg-home-deliverables-status" class="rg-publish-caption" role="status"></p>
+      <div id="dlg-home-deliverables-body"></div>
+      <div class="rg-publish-actions">
+        <button id="dlg-home-deliverables-close" type="submit" value="close" class="btn-toggle btn-small">Fermer</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="cover-lightbox" class="cover-lightbox" aria-labelledby="cover-lightbox-title">
+    <div class="cover-lightbox-bar">
+      <div class="cover-lightbox-meta">
+        <span class="cover-lightbox-count" id="cover-lightbox-count">01 / 01</span>
+        <strong id="cover-lightbox-title">Visuel du projet</strong>
+      </div>
+      <div class="cover-lightbox-actions">
+        <button type="button" id="cover-lightbox-prev" aria-label="Visuel précédent">←</button>
+        <button type="button" id="cover-lightbox-next" aria-label="Visuel suivant">→</button>
+        <button type="button" id="cover-lightbox-close" aria-label="Fermer l’aperçu">×</button>
+      </div>
+    </div>
+    <div class="cover-lightbox-stage">
+      <img id="cover-lightbox-img" alt="">
+    </div>
+  </dialog>
   </div>
   <p id="workspace-status" class="workspace-status" role="status" hidden></p>
 </body>

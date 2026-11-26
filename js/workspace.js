@@ -12,10 +12,10 @@
     ['wp', 'variant', 'retours'].some(key => fragment.has(key));
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
   const knownViews = ['cover', 'visit', 'dossier', 'estimate', 'gallery'];
-  const common = ['motion', 'houseDataCore', 'viewOrder', 'deliverableGate', 'costEstimate'];
+  const common = ['motion', 'houseDataCore', 'viewOrder', 'deliverableGate', 'costEstimate', 'xlsxExport', 'technicalDrawings', 'variantComparator', 'pdfIdentity', 'deliverableChecklist'];
   const viewer = ['icons', 'data', 'projectLoader', 'scene', 'variantState', 'solarStudy', 'realism', 'assets', 'presentationPlan',
     'renderStudio', 'aiSequence', 'scrollTour', 'walkController', 'minimap', 'clientFinishes', 'solarOptions', 'clientTools', 'clientVariants',
-    'clientDecisions', 'clientFeedback', 'woodGrain', 'pdfIdentity', 'clientBrochure', 'sheetClassifier', 'planBook', 'aiPrompt', 'fidelityCheck', 'app', 'presentMode'];
+    'clientDecisions', 'clientFeedback', 'woodGrain', 'clientBrochure', 'sheetClassifier', 'planBook', 'aiPrompt', 'fidelityCheck', 'gateReviewUI', 'app', 'presentMode'];
   const scripts = new Map();
   const status = el('workspace-status');
   let active = 'cover';
@@ -73,16 +73,18 @@
       const content = document.importNode(template.content, true);
       document.body.append(content);
       document.body.append(el('book-dialog')); // L’export peut s’ouvrir depuis le dossier, indépendamment du canvas.
+      const gateDlg = el('gate-override-dialog');
+      if (gateDlg) document.body.append(gateDlg);
+      const dlvDlg = el('dlg-deliverables');
+      if (dlvDlg) document.body.append(dlvDlg);
       markup = el('visit-workspace');
       markup.hidden = active !== 'visit';
     }
     await load(common);
-    const core = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-    const cdn = 'https://cdn.jsdelivr.net/npm/three@0.128.0/';
-    await script(core).catch(() => script(`${cdn}build/three.min.js`));
-    const extras = ['loaders/GLTFLoader.js', 'loaders/RGBELoader.js', 'environments/RoomEnvironment.js'];
+    await script('assets/vendor/three/three.min.js');
+    const extras = ['GLTFLoader.js', 'RGBELoader.js', 'RoomEnvironment.js'];
     // Le plan et la scène de base restent utilisables si un module de réalisme est indisponible.
-    await Promise.allSettled(extras.map(path => script(`${cdn}examples/js/${path}`)));
+    await Promise.allSettled(extras.map(name => script(`assets/vendor/three/${name}`)));
     await load(viewer);
     if (!window.startProjectViewer?.()) throw new Error('Le moteur 3D n’a pas démarré');
     viewerReady = true;

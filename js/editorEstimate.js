@@ -123,10 +123,19 @@
     E.toast('Bordereau d’achats téléchargé (CSV)');
   }
 
+  async function downloadXLSX() {
+    if (typeof XlsxExport === 'undefined') { E.toast('Module Excel indisponible.', true); return; }
+    const snap = { ...project(), meta: E.S.p.meta || {}, estimate: E.S.p.estimate };
+    const result = C.estimate(snap, E.S.p.estimate);
+    await XlsxExport.downloadXlsx(snap, result, { slug: E.S.p.meta?.slug || 'projet' });
+    E.toast('Métrés et BQE téléchargés (Excel .xlsx avec formules)');
+  }
+
   formEl.addEventListener('change', apply);
   formEl.addEventListener('submit', event => event.preventDefault());
   $('est-reset').onclick = () => { E.commit(); E.S.p.estimate = C.settings({}); E.refreshPanel(); fill(current()); render(); E.toast('Valeurs par défaut rétablies'); };
   $('est-csv').onclick = downloadCSV;
+  if ($('est-xlsx')) $('est-xlsx').onclick = () => { void downloadXLSX(); };
   $('est-close').onclick = () => dialog.close();
   $('btn-estimate').onclick = () => { fill(current()); render(); dialog.showModal(); };
 })();

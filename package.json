@@ -1,0 +1,12 @@
+{
+  "name": "archicam-studio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ArchiCam Studio — atelier numérique d'architecture : plans cotés, maquette 3D, ambiances et dossiers d'agence.",
+  "scripts": {
+    "dev": "PORT=3000 HOST=0.0.0.0 node serve.js",
+    "start": "node serve.js",
+    "build": "node --check serve.js privatePortal.js cabinetStore.js decisionStore.js feedbackStore.js presentationStore.js",
+    "lint": "node --check serve.js privatePortal.js cabinetStore.js decisionStore.js feedbackStore.js presentationStore.js"
+  }
+}

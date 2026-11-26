@@ -15,29 +15,61 @@
 <body>
   <header class="ed-top">
     <div class="ed-brand">
-      <img class="ed-brand-logo" src="assets/archicam-icon.svg" alt="" width="34" height="34">
-      <strong>ARCHICAM STUDIO <span>· ÉDITEUR</span></strong>
+      <a class="ed-back-link" id="ed-back-home" href="./" title="Retourner à l’accueil de l’atelier">← Accueil</a>
+      <a class="ed-brand-home" href="./" title="Entrée de l’atelier ArchiCam Studio">
+        <img class="ed-brand-logo" src="assets/archicam-icon.svg" alt="" width="34" height="34">
+        <strong>ARCHICAM STUDIO <span>· ÉDITEUR</span></strong>
+      </a>
       <span id="ed-project-name" class="ed-muted">Nouveau projet</span>
       <span id="ed-save-state" class="ed-save-state" role="status"></span>
     </div>
     <div class="ed-actions" role="group" aria-label="Actions du projet">
-      <button id="btn-new" title="Nouveau projet">Nouveau</button>
-      <button id="btn-open" title="Ouvrir un projet enregistré">Ouvrir…</button>
-      <button id="btn-import-villa" title="Charger la Villa Serena (js/data.js) comme exemple">Exemple Villa Serena</button>
-      <button id="btn-cabinet" type="button" title="Profil du cabinet">Profil Cabinet</button>
-      <label class="ed-btn-file" title="Importer une image ou un PDF de plan">Plan PDF / image…<input id="file-plan" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,.png,.jpg,.jpeg"></label>
-      <button id="btn-ai-read" title="Lecture automatique du plan par IA (OpenRouter)"><svg class="i" aria-hidden="true"><use href="#i-sparkle"></use></svg> Lecture IA</button>
-      <button id="btn-plan-cleanup" type="button" disabled title="Importez d’abord une image de plan">Nettoyage visuel…</button>
-      <button id="btn-undo" aria-label="Annuler" title="Annuler (Ctrl+Z)">↶</button>
-      <button id="btn-redo" aria-label="Rétablir" title="Rétablir (Ctrl+Y)">↷</button>
-      <button id="btn-save" class="ed-primary" title="Enregistrer dans projects/ (Ctrl+S)">Enregistrer</button>
-      <button id="btn-export-json" type="button">Exporter le JSON</button>
-      <button id="btn-estimate" type="button" title="Métré et estimation indicative en FCFA">Estimation FCFA</button>
-      <button id="btn-aps" type="button" title="Générer un Avant-Projet Sommaire automatique">📋 APS Auto</button>
-      <button id="btn-sublimate" type="button" title="Photoréaliser par IA (OpenRouter) les vues enregistrées dans la visite 3D">✨ Sublimer avec l'IA</button>
-      <button id="btn-export-premium" type="button" title="Exporter un catalogue PDF premium">🎨 Catalogue Premium</button>
-      <button id="btn-advanced" type="button" title="Outils avancés : export BIM, analyse structurelle, bioclimatique…"><svg class="i" aria-hidden="true"><use href="#i-sparkle"></use></svg> Outils avancés</button>
-      <button id="btn-preview" title="Enregistrer puis ouvrir la visite 3D de ce projet"><svg class="i" aria-hidden="true"><use href="#i-eye"></use></svg> Lancer la visite 3D</button>
+      <div class="ed-action-group">
+        <details class="ed-menu" id="menu-dossier">
+          <summary>Dossier ▾</summary>
+          <div class="ed-menu-panel">
+            <a class="ed-menu-link" id="btn-back-studio" href="./">← Entrée de l’atelier</a>
+            <a class="ed-menu-link" id="btn-back-project" href="accueil.html">Page d’accueil du projet</a>
+            <hr>
+            <button id="btn-new" type="button" title="Nouveau projet">Nouveau projet</button>
+            <button id="btn-open" type="button" title="Ouvrir un projet enregistré">Ouvrir un dossier…</button>
+            <button id="btn-import-villa" type="button" title="Charger la Villa Serena (js/data.js) comme exemple">Exemple Villa Serena</button>
+            <hr>
+            <button id="btn-project-info" type="button" title="Informations du projet et cartouche PDF">Informations du projet</button>
+            <button id="btn-variants" type="button" title="Comparer deux variantes A / B d’aménagement ou de finitions">Comparer Variantes A / B</button>
+            <button id="btn-cabinet" type="button" title="Profil du cabinet">Profil Cabinet</button>
+          </div>
+        </details>
+        <button id="btn-undo" type="button" aria-label="Annuler" title="Annuler (Ctrl+Z)">↶</button>
+        <button id="btn-redo" type="button" aria-label="Rétablir" title="Rétablir (Ctrl+Y)">↷</button>
+        <button id="btn-save" type="button" class="ed-primary" title="Enregistrer dans projects/ (Ctrl+S)">Enregistrer</button>
+      </div>
+      <span class="ed-sep" aria-hidden="true"></span>
+      <div class="ed-action-group">
+        <label class="ed-btn-file" title="Importer une image ou un PDF de plan">Plan PDF / image…<input id="file-plan" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,.png,.jpg,.jpeg"></label>
+        <button id="btn-vector-pdf" type="button" title="Extraire directement les murs, portes et fenêtres d’un PDF CAO vectoriel (hors ligne, 0 $)">Vectoriel (0 $)</button>
+        <button id="btn-ai-read" type="button" title="Lecture automatique du plan par IA (OpenRouter)"><svg class="i" aria-hidden="true"><use href="#i-sparkle"></use></svg> Lecture IA</button>
+        <button id="btn-plan-cleanup" type="button" disabled title="Importez d’abord une image de plan">Nettoyage…</button>
+      </div>
+      <span class="ed-sep" aria-hidden="true"></span>
+      <div class="ed-action-group">
+        <details class="ed-menu ed-menu-right" id="menu-exports">
+          <summary>Exporter &amp; Livrables ▾</summary>
+          <div class="ed-menu-panel">
+            <button id="btn-deliverables" type="button" title="Tableau de bord d’avancement et des 5 livrables">Livrables (tableau de bord)</button>
+            <button id="btn-export-premium" type="button" title="Exporter un catalogue PDF premium">🎨 Catalogue Premium</button>
+            <button id="btn-aps" type="button" title="Générer un Avant-Projet Sommaire automatique">📋 APS Auto</button>
+            <button id="btn-tech-drawings" type="button" title="Plan de toiture et coupes 2D vectoriels générés depuis la maquette">Coupes 2D &amp; Toiture (maquette)</button>
+            <button id="btn-annotations" type="button" title="Remarques épinglées 2D / 3D reliées au portail client">Annotations client (2D / 3D)</button>
+            <button id="btn-estimate" type="button" title="Métré et estimation indicative en FCFA">Estimation FCFA</button>
+            <hr>
+            <button id="btn-sublimate" type="button" title="Photoréaliser par IA (OpenRouter) les vues enregistrées dans la visite 3D">✨ Sublimer avec l’IA</button>
+            <button id="btn-advanced" type="button" title="Outils avancés : export BIM, analyse structurelle, bioclimatique…"><svg class="i" aria-hidden="true"><use href="#i-sparkle"></use></svg> Outils avancés</button>
+            <button id="btn-export-json" type="button">Exporter le JSON</button>
+          </div>
+        </details>
+        <button id="btn-preview" type="button" class="ed-accent" title="Enregistrer puis ouvrir la visite 3D de ce projet"><svg class="i" aria-hidden="true"><use href="#i-eye"></use></svg> Visite 3D</button>
+      </div>
     </div>
   </header>
 
@@ -61,6 +93,7 @@
     <button data-tool="furniture" title="Mobilier : choisir dans la bibliothèque puis cliquer (E)"><svg class="i" aria-hidden="true"><use href="#i-sofa"></use></svg><span>Mobilier</span><kbd>E</kbd></button>
     <hr>
     <button data-tool="camera" title="Caméras du parcours : déplacer, orienter, ajouter (T)"><svg class="i" aria-hidden="true"><use href="#i-video"></use></svg><span>Caméras</span><kbd>T</kbd></button>
+    <button data-tool="annotate" title="Épingler une remarque 2D/3D sur une pièce ou un mur (N)"><svg class="i" aria-hidden="true"><use href="#i-pin"></use></svg><span>Annotations</span><kbd>N</kbd></button>
   </aside>
 
   <main class="ed-stage" id="ed-stage">
@@ -72,7 +105,15 @@
     <canvas id="ed-canvas"></canvas>
     <div id="ed-drop-overlay" class="ed-drop-overlay hidden" aria-hidden="true">Déposez ici votre plan PDF, PNG ou JPG</div>
     <div id="ed-hint" class="ed-hint"></div>
-    <div class="ed-status"><span id="ed-coords">x 0.00 · z 0.00 m</span><span id="ed-scale"></span></div>
+    <div class="ed-status">
+      <span id="ed-coords">x 0.00 · z 0.00 m</span>
+      <button type="button" id="ed-scale-cal" class="ed-status-btn" title="Cliquer pour calibrer l’échelle sur une cote réelle (K)">Échelle : à calibrer (K)</button>
+      <label class="ed-status-opacity" id="ed-opacity-wrap" hidden title="Comparer le tracé au plan source">
+        <span>Calque plan</span>
+        <input type="range" id="ed-quick-opacity" min="0" max="1" step="0.05" value="0.55" aria-label="Opacité du plan source">
+      </label>
+      <span id="ed-scale"></span>
+    </div>
   </main>
 
   <aside class="ed-panel">
@@ -152,6 +193,7 @@
     <div class="ed-dialog-actions">
       <button id="est-reset" type="button">Valeurs par défaut</button>
       <button id="est-csv" type="button">Bordereau CSV</button>
+      <button id="est-xlsx" type="button">Exporter Excel (.xlsx)</button>
       <button id="est-close" type="button" class="ed-primary">Fermer</button>
     </div>
   </dialog>
@@ -166,6 +208,14 @@
     <button id="cabinet-remove-logo" type="button">Retirer le logo — utiliser le nom du cabinet</button>
     <p id="cabinet-status" class="ed-note" role="status"></p>
     <div class="ed-dialog-actions"><button id="cabinet-close" type="button">Fermer</button><button id="cabinet-save" type="button" class="ed-primary">Enregistrer le profil</button></div>
+  </dialog>
+
+  <dialog id="dlg-project-info" class="ed-dialog ed-dialog-project" aria-labelledby="dlg-project-info-title">
+    <h3 id="dlg-project-info-title">Informations du projet</h3>
+    <div id="dlg-project-info-body"></div>
+    <div class="ed-dialog-actions">
+      <button id="dlg-project-info-close" type="button" class="ed-primary">Fermer</button>
+    </div>
   </dialog>
 
   <dialog id="dlg-plan-cleanup" class="ed-dialog ed-cleanup" aria-labelledby="dlg-plan-cleanup-title">
@@ -352,6 +402,190 @@
     </div>
   </dialog>
 
+  <dialog id="dlg-pdf-import" class="ed-dialog ed-pdf-import" aria-labelledby="pdf-import-title">
+    <div class="ed-dialog-head">
+      <h3 id="pdf-import-title">Import PDF multi-pages</h3>
+      <button type="button" id="pdf-import-close" aria-label="Fermer">✕</button>
+    </div>
+    <p class="ed-note" id="pdf-import-summary">Sélectionnez les plans de distribution à affecter aux niveaux et les planches à archiver en référence.</p>
+    <div id="pdf-import-gallery" class="ed-pdf-gallery"></div>
+    <p class="ed-note" id="pdf-import-status" role="status"></p>
+    <div class="ed-dialog-actions">
+      <button type="button" id="pdf-import-cancel">Annuler</button>
+      <button type="button" id="pdf-import-apply" class="ed-primary">Importer les planches</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-vector-pdf" class="ed-dialog" aria-labelledby="vector-pdf-title">
+    <h3 id="vector-pdf-title">Extraction vectorielle PDF (hors ligne · 0 $)</h3>
+    <p class="ed-note">Lit directement les traits, arcs de portes et textes d’un PDF CAO via PDF.js local, sans réseau et sans IA. Le résultat passe ensuite en revue visuelle (vert / orange / rouge) avant toute modification du projet.</p>
+    <div class="ed-field">
+      <label for="vec-file">Fichier PDF</label>
+      <input type="file" id="vec-file" accept="application/pdf,.pdf">
+    </div>
+    <div class="ed-field">
+      <label for="vec-page">Page du PDF</label>
+      <select id="vec-page"></select>
+    </div>
+    <p id="vec-detected-scale" class="ed-note" aria-live="polite"></p>
+    <div class="ed-field">
+      <label for="vec-scale-mode">Confirmation d’échelle</label>
+      <select id="vec-scale-mode">
+        <option value="calibrated">Échelle calibrée du plan (touche K)</option>
+        <option value="witness">Cote témoin mesurée (points PDF / m)</option>
+        <option value="cartouche">Échelle du cartouche (1/N, signalée à vérifier)</option>
+      </select>
+    </div>
+    <div id="vec-witness-fields" class="ed-vec-subfields">
+      <div class="ed-field">
+        <label for="vec-witness-pts">Distance PDF (pt)</label>
+        <input type="number" id="vec-witness-pts" min="1" step="0.1" placeholder="Ex. 141.7 (5 cm = 5 m au 1/100)">
+      </div>
+      <div class="ed-field">
+        <label for="vec-witness-meters">Longueur réelle (m)</label>
+        <input type="number" id="vec-witness-meters" min="0.1" step="0.01" placeholder="Ex. 5.00">
+      </div>
+    </div>
+    <div id="vec-cartouche-fields" class="ed-vec-subfields" hidden>
+      <div class="ed-field">
+        <label for="vec-denominator">Échelle 1 /</label>
+        <input type="number" id="vec-denominator" min="10" max="2000" step="1" placeholder="100">
+      </div>
+    </div>
+    <div class="ed-field">
+      <label for="vec-apply-mode">Tracé existant</label>
+      <select id="vec-apply-mode">
+        <option value="replace">Remplacer</option>
+        <option value="merge">Ajouter</option>
+      </select>
+    </div>
+    <p id="vec-status" class="ed-note" role="status"></p>
+    <div class="ed-dialog-actions">
+      <button type="button" id="vec-cancel">Fermer</button>
+      <button type="button" id="vec-run" class="ed-primary" disabled>Extraire et relire (0 $)</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-deliverables" class="ed-dialog ed-dialog-wide dlv-dialog" aria-labelledby="dlg-deliverables-title">
+    <h3 id="dlg-deliverables-title">Tableau de bord — Livrables</h3>
+    <p id="dlg-deliverables-status" class="ed-note" role="status"></p>
+    <div id="dlg-deliverables-body"></div>
+    <div class="ed-dialog-actions">
+      <button id="dlg-deliverables-close" type="button" class="ed-primary">Fermer</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-tech-drawings" class="ed-dialog ed-dialog-wide ed-tech-dialog" aria-labelledby="dlg-tech-title">
+    <h3 id="dlg-tech-title">Coupes 2D &amp; Plan de toiture — Maquette vectorielle</h3>
+    <p class="ed-note">Tracés vectoriels exacts dérivés directement des murs, pièces, auvents et toiture du modèle 3D (aucune hallucination IA). Intégrés automatiquement au Cahier de plans A3 lorsqu’aucune planche d’architecte n’est importée.</p>
+    <div class="ed-tech-toolbar">
+      <div class="ed-tech-tabs" role="group" aria-label="Type de planche vectorielle">
+        <button type="button" data-tech-mode="roof" aria-pressed="true">Plan de toiture</button>
+        <button type="button" data-tech-mode="section-aa" aria-pressed="false">Coupe longitudinale A–A</button>
+        <button type="button" data-tech-mode="section-bb" aria-pressed="false">Coupe transversale B–B</button>
+      </div>
+      <label id="tech-cut-wrap" class="ed-tech-cut" hidden>
+        <span>Axe de coupe</span>
+        <input id="tech-cut-range" type="range" step="0.1">
+        <output id="tech-cut-val"></output>
+      </label>
+    </div>
+    <div id="tech-preview" class="ed-tech-preview" aria-live="polite"></div>
+    <p id="tech-metrics" class="ed-note" role="status"></p>
+    <div class="ed-dialog-actions">
+      <button id="tech-download-svg" type="button">Télécharger le SVG</button>
+      <button id="tech-close" type="button" class="ed-primary">Fermer</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-annotations" class="ed-dialog ed-dialog-wide ed-ann-dialog" aria-labelledby="dlg-ann-title">
+    <h3 id="dlg-ann-title">Annotations &amp; Remarques client (2D ↔ 3D)</h3>
+    <p class="ed-note">Chaque repère épinglé sur une pièce ou un mur dans l’éditeur 2D apparaît immédiatement dans la visite 3D et sur le portail client, avec suivi de statut et réponse de l’architecte.</p>
+    <div class="ed-ann-toolbar">
+      <label class="ed-ann-select-wrap">
+        <span>Dossier de remarques</span>
+        <select id="ann-channel-select"></select>
+      </label>
+      <button id="ann-new-dossier" type="button">Nouveau dossier</button>
+      <button id="ann-copy-link" type="button">Copier le lien client</button>
+      <button id="ann-place-pin" type="button" class="ed-primary">Épingler sur le plan (N)</button>
+    </div>
+    <p id="ann-status" class="ed-note" role="status"></p>
+    <form id="ann-compose-form" class="ed-ann-compose" hidden>
+      <div class="ed-ann-target">Cible : <strong id="ann-target-label"></strong></div>
+      <textarea id="ann-text" rows="3" maxlength="1000" required placeholder="Notez votre remarque ou question précise pour le maître d’ouvrage ou l’équipe…"></textarea>
+      <div class="ed-ann-compose-actions">
+        <button id="ann-submit" type="submit" class="ed-primary">Enregistrer le repère</button>
+      </div>
+    </form>
+    <div id="ann-list" class="ed-ann-list"></div>
+    <div class="ed-dialog-actions">
+      <button id="ann-close" type="button" class="ed-primary">Fermer</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-variants" class="ed-dialog ed-dialog-wide ed-var-dialog" aria-labelledby="dlg-var-title">
+    <h3 id="dlg-var-title">Comparateur de Variantes — A / B</h3>
+    <p class="ed-note">Enregistrez deux options d’aménagement ou de matériaux sur ce dossier pour comparer leurs surfaces, pièces modifiées, plans et estimations FCFA côte à côte.</p>
+    <div class="ed-var-controls">
+      <fieldset class="ed-var-slot">
+        <legend>Variante A</legend>
+        <div class="ed-field"><label for="var-label-a">Intitulé</label><input id="var-label-a" type="text" maxlength="100" value="Variante A — Base"></div>
+        <div class="ed-field"><label for="var-floor-a">Sol principal</label>
+          <select id="var-floor-a">
+            <option value="Grès cérame 60×60">Grès cérame 60×60</option>
+            <option value="Carrelage grand format 80×80">Carrelage grand format 80×80</option>
+            <option value="Béton ciré minéral">Béton ciré minéral</option>
+            <option value="Parquet bois exotique">Parquet bois exotique</option>
+            <option value="Marbre / travertin">Marbre / travertin</option>
+          </select>
+        </div>
+        <div class="ed-field"><label for="var-facade-a">Façade</label>
+          <select id="var-facade-a">
+            <option value="Enduit minéral blanc cassé">Enduit minéral blanc cassé</option>
+            <option value="Enduit sable &amp; pierre">Enduit sable &amp; pierre</option>
+            <option value="Enduit &amp; parement bois">Enduit &amp; parement bois</option>
+            <option value="Béton architectonique">Béton architectonique</option>
+          </select>
+        </div>
+        <div class="ed-var-slot-actions">
+          <button id="var-save-a" type="button" class="ed-primary">Enregistrer l’état actuel en A</button>
+          <button id="var-load-a" type="button" disabled>Charger A dans l’éditeur</button>
+        </div>
+      </fieldset>
+      <fieldset class="ed-var-slot">
+        <legend>Variante B</legend>
+        <div class="ed-field"><label for="var-label-b">Intitulé</label><input id="var-label-b" type="text" maxlength="100" value="Variante B — Alternative"></div>
+        <div class="ed-field"><label for="var-floor-b">Sol principal</label>
+          <select id="var-floor-b">
+            <option value="Grès cérame 60×60">Grès cérame 60×60</option>
+            <option value="Carrelage grand format 80×80" selected>Carrelage grand format 80×80</option>
+            <option value="Béton ciré minéral">Béton ciré minéral</option>
+            <option value="Parquet bois exotique">Parquet bois exotique</option>
+            <option value="Marbre / travertin">Marbre / travertin</option>
+          </select>
+        </div>
+        <div class="ed-field"><label for="var-facade-b">Façade</label>
+          <select id="var-facade-b">
+            <option value="Enduit minéral blanc cassé">Enduit minéral blanc cassé</option>
+            <option value="Enduit sable &amp; pierre" selected>Enduit sable &amp; pierre</option>
+            <option value="Enduit &amp; parement bois">Enduit &amp; parement bois</option>
+            <option value="Béton architectonique">Béton architectonique</option>
+          </select>
+        </div>
+        <div class="ed-var-slot-actions">
+          <button id="var-save-b" type="button" class="ed-primary">Enregistrer l’état actuel en B</button>
+          <button id="var-load-b" type="button" disabled>Charger B dans l’éditeur</button>
+        </div>
+      </fieldset>
+    </div>
+    <p id="var-status" class="ed-note" role="status"></p>
+    <div id="var-compare-grid"></div>
+    <div class="ed-dialog-actions">
+      <button id="var-close" type="button" class="ed-primary">Fermer</button>
+    </div>
+  </dialog>
+
   <div id="ed-toast" class="ed-toast" role="status"></div>
 
   <script src="js/icons.js"></script>
@@ -359,8 +593,9 @@
   <script src="js/houseDataCore.js"></script>
   <script src="js/data.js"></script>
   <script src="js/projectLoader.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="assets/vendor/pdf.min.js"></script>
   <script src="js/costEstimate.js"></script>
+  <script src="js/xlsxExport.js"></script>
   <script src="js/habitability.js"></script>
   <!-- Modules stratégiques -->
   <script src="js/vectorization.js"></script>
@@ -377,18 +612,26 @@
   <!-- Modules PDF Premium -->
   <script src="js/woodGrain.js"></script>
   <script src="js/pdfIdentity.js"></script>
+  <script src="js/sheetClassifier.js"></script>
+  <script src="js/technicalDrawings.js"></script>
+  <script src="js/planBook.js"></script>
+  <script src="js/pdfVectorExtract.js"></script>
+  <script src="js/planHomography.js"></script>
   <script src="js/clientBrochurePremium.js"></script>
   <script src="js/aiPrompt.js"></script>
   <script src="js/fidelityCheck.js"></script>
   <script src="js/deliverableGate.js"></script>
+  <script src="js/deliverableChecklist.js"></script>
   <script src="js/aiEnhance.js"></script>
   <script src="js/apsGenerator.js"></script>
+  <script src="js/variantComparator.js"></script>
   <script src="js/editor.js"></script>
   <script src="js/planCleanup.js"></script>
   <script src="js/aiTopology.js"></script>
   <script src="js/planProposalReview.js"></script>
   <script src="js/editorAI.js"></script>
   <script src="js/editorEstimate.js"></script>
+  <script src="js/editorStudioTools.js"></script>
   <script src="js/editorAdvanced.js"></script>
   <script src="js/editorPremium.js"></script>
 </body>

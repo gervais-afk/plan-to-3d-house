@@ -116,6 +116,16 @@
     el('active').hidden = false;
     el('heading').textContent = architect ? 'Gestion des accès' : 'Votre visite privée';
     el('active-title').textContent = architect ? 'Session architecte' : `${session.project} · ${roleLabel(session.role)}`;
+    const roleBanner = el('role-banner');
+    const roleTag = el('role-tag');
+    const roleScope = el('role-scope');
+    if (roleBanner) roleBanner.dataset.role = architect ? 'architect' : 'guest';
+    if (roleTag) roleTag.textContent = architect ? 'Mode Architecte' : 'Mode Invité · Client';
+    if (roleScope) {
+      roleScope.textContent = architect
+        ? 'Édition de plans, validation Porte E, planches PDF et gestion des invitations'
+        : `Accès restreint à ce projet (${roleLabel(session.role).toLowerCase()})`;
+    }
     el('visit').href = visit(session.project);
     el('editor').hidden = !architect;
     status.textContent = architect ? 'Gérez les accès projet par projet.' : 'Votre accès est limité à ce projet.';
@@ -173,8 +183,18 @@
   });
   el('copy').addEventListener('click', async () => {
     const link = el('link');
-    try { await navigator.clipboard.writeText(link.value); status.textContent = 'Lien copié.'; }
-    catch { link.focus(); link.select(); status.textContent = 'Copiez le lien sélectionné.'; }
+    const btn = el('copy');
+    try {
+      await navigator.clipboard.writeText(link.value);
+      status.textContent = 'Lien copié dans le presse-papiers.';
+      if (btn) {
+        const prev = btn.textContent;
+        btn.textContent = 'Lien copié ✓';
+        setTimeout(() => { btn.textContent = prev; }, 2200);
+      }
+    } catch {
+      link.focus(); link.select(); status.textContent = 'Copiez le lien sélectionné.';
+    }
   });
   api('session').then(display).catch(error => {
     status.classList.add('is-error');

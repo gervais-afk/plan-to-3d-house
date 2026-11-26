@@ -449,16 +449,19 @@ const ClientBrochurePremium = (() => {
       });
       premiumText(doc, facadeImage.label || 'Vue extérieure', margin + 4, imgY + imgH - 3.6, 8, { color: '#ffffff', maxWidth: width - 8 });
       doc.setDrawColor(COLORS.accent).setLineWidth(0.35).rect(margin, imgY, width, imgH);
+      doc.setDrawColor(COLORS.light).setLineWidth(0.14).rect(margin + 1.4, imgY + 1.4, width - 2.8, imgH - 2.8);
     } else if (hasStudio(studio)) {
       const shots = selectShots(data, studio.hs);
       drawFitted(doc, { data: studio.capture(shots.facade, 1600, 800, 1, { clean: true, solar: variant }), width: 1600, height: 800 }, margin, imgY, width, imgH);
       doc.setDrawColor(COLORS.accent).setLineWidth(0.35).rect(margin, imgY, width, imgH);
+      doc.setDrawColor(COLORS.light).setLineWidth(0.14).rect(margin + 1.4, imgY + 1.4, width - 2.8, imgH - 2.8);
     } else {
       doc.setFillColor('#ffffff');
       doc.rect(margin, imgY, width, imgH, 'F');
       sitePlan(doc, data, margin + 4, imgY + 4, width - 8, imgH - 13, { labels: true });
       premiumText(doc, 'Plan du rez-de-chaussée', margin + 5, imgY + imgH - 3.5, 7.5, { color: COLORS.medium });
       doc.setDrawColor(COLORS.accent).setLineWidth(0.35).rect(margin, imgY, width, imgH);
+      doc.setDrawColor(COLORS.light).setLineWidth(0.14).rect(margin + 1.4, imgY + 1.4, width - 2.8, imgH - 2.8);
     }
 
     const sourceNote = coverSourceCaption(data, studio, variant, options);
@@ -538,11 +541,18 @@ const ClientBrochurePremium = (() => {
       next = 176;
     }
 
+    const AP = typeof AiPrompt !== 'undefined' ? AiPrompt : (typeof globalThis !== 'undefined' ? globalThis.AiPrompt : null);
+    const warmDescFor = (item) => {
+      if (item?.notes && String(item.notes).trim()) return String(item.notes).trim();
+      if (!AP || typeof AP.warmRoomCaption !== 'function') return '';
+      const matched = (data.rooms || []).find(r => r.id === item?.room || (r.name && String(item?.label || '').toLowerCase().includes(String(r.name).toLowerCase())));
+      return AP.warmRoomCaption(matched || { name: item?.label || 'Espace intérieur' }, { label: item?.label });
+    };
     const shots = hasStudio(studio) && options.includeInterior !== false ? selectShots(data, studio.hs).interior.slice(0, 2) : [];
     const photos = options.includeInterior !== false ? (options.images?.interiors || []).filter(image => image?.data).slice(0, 2) : [];
     if (photos.length) {
       premiumText(doc, 'Vues intérieures', margin, next, 18, { serif: true, bold: true });
-      const photoW = (width - 8) / 2, photoH = 66, y = next + 8;
+      const photoW = (width - 8) / 2, photoH = 60, y = next + 7;
       photos.forEach((photo, i) => {
         const x = margin + i * (photoW + 8);
         drawFitted(doc, photo, x, y, photoW, photoH);
@@ -552,14 +562,19 @@ const ClientBrochurePremium = (() => {
         });
         doc.setDrawColor(COLORS.accent).setLineWidth(0.3).rect(x, y, photoW, photoH);
         premiumText(doc, photo.label || 'Vue intérieure', x + 3, y + photoH - 3.4, 8.5, { bold: true, color: '#ffffff', maxWidth: photoW - 6 });
+        const warm = warmDescFor(photo);
+        if (warm) {
+          doc.setFont('helvetica', 'normal').setFontSize(6.6).setTextColor(COLORS.medium);
+          doc.splitTextToSize(pdfSafe(warm), photoW).slice(0, 2).forEach((ln, li) => doc.text(ln, x, y + photoH + 4.2 + li * 3.1));
+        }
       });
       const interiorNote = imagesCaption(photos, data, variant);
       if (interiorNote) {
-        premiumText(doc, interiorNote, margin, y + photoH + 5.5, 7, { color: COLORS.medium, maxWidth: width });
+        premiumText(doc, interiorNote, margin, y + photoH + 12.2, 6.8, { color: COLORS.medium, maxWidth: width });
       }
     } else if (shots.length) {
       premiumText(doc, 'Vues intérieures', margin, next, 18, { serif: true, bold: true });
-      const photoW = (width - 8) / 2, photoH = 66, y = next + 8;
+      const photoW = (width - 8) / 2, photoH = 60, y = next + 7;
       shots.forEach((shot, i) => {
         const x = margin + i * (photoW + 8);
         drawFitted(doc, { data: studio.capture(shot, 1200, 750, 1, { clean: true, solar: variant }), width: 1200, height: 750 }, x, y, photoW, photoH);
@@ -569,10 +584,15 @@ const ClientBrochurePremium = (() => {
         });
         doc.setDrawColor(COLORS.accent).setLineWidth(0.3).rect(x, y, photoW, photoH);
         premiumText(doc, shot.label, x + 3, y + photoH - 3.4, 8.5, { bold: true, color: '#ffffff', maxWidth: photoW - 6 });
+        const warm = warmDescFor(shot);
+        if (warm) {
+          doc.setFont('helvetica', 'normal').setFontSize(6.6).setTextColor(COLORS.medium);
+          doc.splitTextToSize(pdfSafe(warm), photoW).slice(0, 2).forEach((ln, li) => doc.text(ln, x, y + photoH + 4.2 + li * 3.1));
+        }
       });
       const G = gateModule();
       const note = G ? G.imageCaption('render3d', { plural: shots.length > 1 }) : (shots.length > 1 ? 'Captures de la maquette 3D' : 'Capture de la maquette 3D');
-      premiumText(doc, note, margin, y + photoH + 5.5, 7, { color: COLORS.medium, maxWidth: width });
+      premiumText(doc, note, margin, y + photoH + 12.2, 6.8, { color: COLORS.medium, maxWidth: width });
     } else {
       drawProgram(doc, data, next);
     }

@@ -1,0 +1,800 @@
+From 45f2da50caaa8c55ccd73054c0c8c6e7d85e3bf5 Mon Sep 17 00:00:00 2001
+From: ArchiCam Dev <dev@archicam.local>
+Date: Wed, 25 Nov 2026 18:19:23 +0000
+Subject: [PATCH] =?UTF-8?q?Lot=206=20=E2=80=94=20Croquis=20et=20calibratio?=
+ =?UTF-8?q?n=20assist=C3=A9e?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ editor.html                       |   1 +
+ js/editor.js                      | 177 +++++++++++++++++++--
+ js/editorAI.js                    |  42 ++++-
+ js/planHomography.js              | 255 ++++++++++++++++++++++++++++++
+ js/planProposalReview.js          |   6 +-
+ tests/sketch-calibration.test.cjs | 136 ++++++++++++++++
+ 6 files changed, 602 insertions(+), 15 deletions(-)
+ create mode 100644 js/planHomography.js
+ create mode 100644 tests/sketch-calibration.test.cjs
+
+diff --git a/editor.html b/editor.html
+index 1af3bf5..e9f93dd 100644
+--- a/editor.html
++++ b/editor.html
+@@ -403,6 +403,7 @@
+   <script src="js/sheetClassifier.js"></script>
+   <script src="js/planBook.js"></script>
+   <script src="js/pdfVectorExtract.js"></script>
++  <script src="js/planHomography.js"></script>
+   <script src="js/clientBrochurePremium.js"></script>
+   <script src="js/aiPrompt.js"></script>
+   <script src="js/fidelityCheck.js"></script>
+diff --git a/js/editor.js b/js/editor.js
+index dd31d99..799a98c 100644
+--- a/js/editor.js
++++ b/js/editor.js
+@@ -44,7 +44,9 @@
+   };
+   const HINTS = {
+     select: 'Cliquez un élément pour le modifier · glissez pour le déplacer · glissez une extrémité de mur pour l\'ajuster',
+-    calibrate: 'Cliquez les deux extrémités d\'une cote connue du plan, puis saisissez sa longueur réelle',
++    calibrate: 'Cliquez les deux extrémités d\'une cote connue du plan (loupe active), puis saisissez sa longueur réelle',
++    'verify-scale': 'Contrôle : cliquez les deux extrémités d\'une 2ᵉ cote connue (loupe active) pour vérifier l\'échelle (alerte > 1 %)',
++    rectify: 'Redressement 4 points : cliquez les 4 coins du cadre/plan dans l\'ordre (haut-gauche, haut-droite, bas-droite, bas-gauche)',
+     'wall-ext': 'Cliquez point après point · Échap ou double-clic pour terminer · Alt : mur en biais',
+     'wall-int': 'Cliquez point après point · Échap ou double-clic pour terminer · Alt : cloison en biais',
+     door: 'Cliquez sur un mur pour poser une porte · ensuite H inverse les gonds, J le sens d\'ouverture',
+@@ -973,17 +975,32 @@
+   function drawDraft() {
+     const k = S.view.scale;
+     const h = S.hover;
+-    if (S.draft && (S.draft.kind === 'wall' || S.draft.kind === 'calibrate') && h) {
+-      const a = S.draft.kind === 'calibrate' ? S.draft.screenA : toScreen(S.draft.from.x, S.draft.from.z);
+-      const bpt = S.draft.kind === 'calibrate' ? h.screen : toScreen(h.snap.x, h.snap.z);
+-      ctx.strokeStyle = S.draft.kind === 'calibrate' ? '#d97706' : 'rgba(23,121,110,0.9)';
+-      ctx.lineWidth = S.draft.kind === 'calibrate' ? 2 : Math.max(3, (S.tool === 'wall-ext' ? 0.25 : 0.15) * k);
++    if (S.draft && (S.draft.kind === 'wall' || S.draft.kind === 'calibrate' || S.draft.kind === 'verify-scale') && h) {
++      const isCal = S.draft.kind === 'calibrate' || S.draft.kind === 'verify-scale';
++      const a = isCal ? S.draft.screenA : toScreen(S.draft.from.x, S.draft.from.z);
++      const bpt = isCal ? h.screen : toScreen(h.snap.x, h.snap.z);
++      ctx.strokeStyle = S.draft.kind === 'verify-scale' ? '#2563eb' : (S.draft.kind === 'calibrate' ? '#d97706' : 'rgba(23,121,110,0.9)');
++      ctx.lineWidth = isCal ? 2 : Math.max(3, (S.tool === 'wall-ext' ? 0.25 : 0.15) * k);
+       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(bpt.x, bpt.y); ctx.stroke();
+       if (S.draft.kind === 'wall') {
+         const L = Math.hypot(h.snap.x - S.draft.from.x, h.snap.z - S.draft.from.z);
+         label(`${L.toFixed(2)} m`, (a.x + bpt.x) / 2, (a.y + bpt.y) / 2 - 14, 12, '#9a6f2a');
+       }
+     }
++    if (S.draft && S.draft.kind === 'rectify' && S.draft.pts.length) {
++      ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 2;
++      ctx.fillStyle = 'rgba(37,99,235,0.10)';
++      ctx.beginPath();
++      S.draft.pts.forEach((p, i) => { const s = toScreen(p.x, p.z); i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y); });
++      if (h) ctx.lineTo(h.screen.x, h.screen.y);
++      ctx.stroke();
++      S.draft.pts.forEach((p, idx) => {
++        const s = toScreen(p.x, p.z);
++        ctx.fillStyle = '#2563eb';
++        ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, Math.PI * 2); ctx.fill();
++        label(`C${idx + 1}`, s.x + 10, s.y - 10, 11, '#1d4ed8');
++      });
++    }
+     if (S.draft && S.draft.kind === 'poly' && S.draft.pts.length) {
+       ctx.strokeStyle = '#9a6f2a'; ctx.lineWidth = 1.5;
+       ctx.fillStyle = 'rgba(23,121,110,0.12)';
+@@ -1033,6 +1050,52 @@
+       ctx.strokeStyle = '#9a6f2a'; ctx.lineWidth = 1.5;
+       ctx.beginPath(); ctx.arc(s.x, s.y, 4, 0, Math.PI * 2); ctx.stroke();
+     }
++    // Loupe de précision lors du calibrage, du contrôle 2e cote ou du redressement 4 points
++    if (h && S.planImg && S.p?.config?.planImage && ['calibrate', 'verify-scale', 'rectify'].includes(S.tool)) {
++      drawCalibrationLoupe(h);
++    }
++  }
++
++  function drawCalibrationLoupe(h) {
++    const pi = S.p.config.planImage;
++    if (!pi || !pi.originPx || !pi.pxPerMeter || !S.planImg) return;
++    const imgX = h.world.x * pi.pxPerMeter + pi.originPx[0];
++    const imgY = h.world.z * pi.pxPerMeter + pi.originPx[1];
++    const radius = 58;
++    const zoom = 3;
++    const rect = canvas.getBoundingClientRect();
++    let cx = h.screen.x + radius + 24;
++    let cy = h.screen.y - radius - 24;
++    if (cx + radius + 8 > rect.width) cx = h.screen.x - radius - 24;
++    if (cy - radius - 8 < 0) cy = h.screen.y + radius + 24;
++
++    ctx.save();
++    ctx.beginPath();
++    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
++    ctx.fillStyle = '#ffffff';
++    ctx.fill();
++    ctx.clip();
++    const srcHalf = (radius / zoom) * (pi.pxPerMeter / Math.max(1, S.view.scale));
++    ctx.drawImage(
++      S.planImg,
++      imgX - srcHalf, imgY - srcHalf, srcHalf * 2, srcHalf * 2,
++      cx - radius, cy - radius, radius * 2, radius * 2
++    );
++    ctx.strokeStyle = '#d97706';
++    ctx.lineWidth = 1;
++    ctx.beginPath();
++    ctx.moveTo(cx - radius, cy); ctx.lineTo(cx + radius, cy);
++    ctx.moveTo(cx, cy - radius); ctx.lineTo(cx, cy + radius);
++    ctx.stroke();
++    ctx.restore();
++
++    ctx.save();
++    ctx.strokeStyle = '#1b2320';
++    ctx.lineWidth = 2;
++    ctx.beginPath();
++    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
++    ctx.stroke();
++    ctx.restore();
+   }
+ 
+   // ---------------------------------------------------------------------------
+@@ -1397,10 +1460,85 @@
+     pi.originPx = [pxA.x - aw.x * newK, pxA.y - aw.z * newK];
+     pi.pxPerMeter = Math.round(newK * 100) / 100;
+     pi.calibrated = true;
+-    toast(`Échelle : ${pi.pxPerMeter} px/m — tracez maintenant les murs extérieurs (M)`);
++    delete pi.controlCheck;
++    refreshPanel();
++    toast(`Échelle : ${pi.pxPerMeter} px/m — vérifiez sur une 2ᵉ cote de contrôle ou tracez les murs (M)`);
+     setTool('wall-ext');
+   }
+ 
++  function finishScaleControl(a, b, explicitMeters = null) {
++    const pi = S.p.config.planImage;
++    if (!pi || !pi.calibrated || !S.planImg) { toast('Calibrez d’abord le plan sur une 1ʳᵉ cote (K).', true); return null; }
++    if (typeof PlanHomography === 'undefined') { toast('Module PlanHomography indisponible.', true); return null; }
++    const p1 = [a.x * pi.pxPerMeter + pi.originPx[0], a.z * pi.pxPerMeter + pi.originPx[1]];
++    const p2 = [b.x * pi.pxPerMeter + pi.originPx[0], b.z * pi.pxPerMeter + pi.originPx[1]];
++    const raw = explicitMeters !== null ? String(explicitMeters) : prompt('Longueur réelle de la 2ᵉ cote de contrôle (en mètres) ?', '');
++    const m = parseFloat((raw || '').replace(',', '.'));
++    if (!(m > 0)) { toast('Contrôle annulé', true); return null; }
++    const check = PlanHomography.evaluateControlDimension({ p1, p2, realMeters: m, pxPerMeter: pi.pxPerMeter, tolerance: 0.01 });
++    commit();
++    pi.controlCheck = check;
++    refreshPanel();
++    toast(check.message, check.alert);
++    setTool('select');
++    return check;
++  }
++
++  function finishRectification(worldPts) {
++    const pi = S.p.config.planImage;
++    if (!pi || !S.planImg || typeof PlanHomography === 'undefined') {
++      toast('Importez un plan avant de redresser la perspective.', true);
++      return null;
++    }
++    const srcQuad = worldPts.map(pt => [
++      pt.x * pi.pxPerMeter + pi.originPx[0],
++      pt.z * pi.pxPerMeter + pi.originPx[1]
++    ]);
++    try {
++      const rect = PlanHomography.rectifyCanvas(S.planImg, srcQuad);
++      commit();
++      // Conserver l'image source intacte pour permettre la restauration à tout moment.
++      const originalUrl = pi.originalUrl || pi.url;
++      S.planDataUrl = rect.dataUrl;
++      S.p.config.planImage = {
++        url: rect.dataUrl,
++        originalUrl,
++        rectified: true,
++        pxPerMeter: pi.pxPerMeter || 50,
++        originPx: null,
++        calibrated: false
++      };
++      if (S.p.config.planImages && typeof S.p.config.planImages === 'object') {
++        S.p.config.planImages[String(S.activeLevel)] = S.p.config.planImage;
++        S.levelPlanDataUrls = S.levelPlanDataUrls || {};
++        S.levelPlanDataUrls[String(S.activeLevel)] = rect.dataUrl;
++      }
++      loadPlanImage(rect.dataUrl);
++      setTool('calibrate');
++      toast(`Plan redressé (${rect.width} × ${rect.height} px, original conservé) — calibrez maintenant l'échelle (K).`);
++      return rect;
++    } catch (err) {
++      toast(`Redressement impossible : ${err.message}`, true);
++      return null;
++    }
++  }
++
++  function restoreOriginalPlanImage() {
++    const pi = S.p.config.planImage;
++    if (!pi || !pi.originalUrl) return false;
++    commit();
++    const orig = pi.originalUrl;
++    S.planDataUrl = orig.startsWith('data:') ? orig : null;
++    S.p.config.planImage = { url: orig, pxPerMeter: pi.pxPerMeter || 50, originPx: null, calibrated: false };
++    if (S.p.config.planImages && typeof S.p.config.planImages === 'object') {
++      S.p.config.planImages[String(S.activeLevel)] = S.p.config.planImage;
++    }
++    loadPlanImage(orig);
++    refreshPanel();
++    toast('Image du plan d’origine restaurée.');
++    return true;
++  }
++
+   // ---------------------------------------------------------------------------
+   // SOURIS & CLAVIER
+   // ---------------------------------------------------------------------------
+@@ -1445,6 +1583,19 @@
+         if (!S.draft) S.draft = { kind: 'calibrate', screenA: P.screen, worldA: P.world };
+         else { const a = S.draft.worldA; finishCalibration(a, P.world); S.draft = null; }
+         break;
++      case 'verify-scale':
++        if (!S.draft) S.draft = { kind: 'verify-scale', screenA: P.screen, worldA: P.world };
++        else { const a = S.draft.worldA; finishScaleControl(a, P.world); S.draft = null; }
++        break;
++      case 'rectify':
++        if (!S.draft || S.draft.kind !== 'rectify') S.draft = { kind: 'rectify', pts: [] };
++        S.draft.pts.push(P.world);
++        if (S.draft.pts.length >= 4) {
++          const corners = S.draft.pts.slice(0, 4);
++          S.draft = null;
++          finishRectification(corners);
++        }
++        break;
+       case 'wall-ext':
+       case 'wall-int':
+         if (!S.draft) S.draft = { kind: 'wall', from: P.snap };
+@@ -1953,7 +2104,9 @@
+       <div class="ed-field"><label>Opacité du plan</label><input type="range" id="${idPrefix}rng-opacity" data-proj="rng-opacity" min="0" max="1" step="0.05" value="${S.planOpacity}"></div>
+       <div class="ed-field"><label>Hauteur sous plafond</label><input type="number" id="${idPrefix}num-height" data-proj="num-height" step="0.05" value="${p.config.wallHeight}"></div>
+       ${extrasNote}
+-      <p class="ed-note">${pi && S.planImg ? `Échelle du plan : <strong>${pi.pxPerMeter} px/m</strong>` : 'Commencez par importer l\'image du plan, puis calibrez l\'échelle (K).'}</p>
++      <p class="ed-note">${pi && S.planImg ? `Échelle du plan : <strong>${pi.pxPerMeter} px/m</strong>${pi.calibrated ? ' (calibré)' : ' (non calibré)'}${pi.rectified ? ' · redressé' : ''}` : 'Commencez par importer l\'image du plan, puis calibrez l\'échelle (K).'}</p>
++      ${pi && pi.controlCheck ? `<p class="ed-note ${pi.controlCheck.alert ? 'warn' : ''}">${escapeHtml(pi.controlCheck.message)}</p>` : ''}
++      ${pi && S.planImg ? `<div class="ed-row"><button type="button" data-proj="btn-rectify">Redresser perspective (4 pts)</button>${pi.calibrated ? '<button type="button" data-proj="btn-verify-scale">Contrôler sur 2ᵉ cote</button>' : ''}${pi.originalUrl ? '<button type="button" data-proj="btn-restore-plan">Plan d’origine</button>' : ''}</div>` : ''}
+       ${warn}
+       ${diagnosticHtml(idPrefix)}
+       <div class="ed-stats">
+@@ -1989,6 +2142,12 @@
+     if (btnFit) btnFit.onclick = () => { fitView(); draw(); };
+     const btnCenter = container.querySelector('[data-proj="btn-center"]');
+     if (btnCenter) btnCenter.onclick = () => { commit(); centerProject(); fitView(); draw(); toast('Projet recentré sur l\'origine'); };
++    const btnRectify = container.querySelector('[data-proj="btn-rectify"]');
++    if (btnRectify) btnRectify.onclick = () => { if (inDialog) $('dlg-project-info')?.close(); setTool('rectify'); toast('Cliquez les 4 coins du cadre/plan (haut-gauche → sens horaire).'); };
++    const btnVerifyScale = container.querySelector('[data-proj="btn-verify-scale"]');
++    if (btnVerifyScale) btnVerifyScale.onclick = () => { if (inDialog) $('dlg-project-info')?.close(); setTool('verify-scale'); toast('Cliquez les 2 extrémités d’une 2ᵉ cote connue (loupe active).'); };
++    const btnRestorePlan = container.querySelector('[data-proj="btn-restore-plan"]');
++    if (btnRestorePlan) btnRestorePlan.onclick = () => restoreOriginalPlanImage();
+     wireDiagnostic(container);
+   }
+ 
+@@ -2419,5 +2578,5 @@
+   toast('Importez l\'image d\'un plan, ou ouvrez l\'exemple Villa Serena');
+   window.__editor = S; // débogage
+   // API interne pour les modules complémentaires (lecture IA, caméras…)
+-  window.EditorAPI = { S, commit, refreshPanel, draw, toast, fitView, setTool, select, switchLevel, loadProject, projectPanel, openProjectInfoDialog, planPdfImport, applyPdfImportSelection, FURNITURE, OPENINGS, wallLen, projectOnWall, slugify, r2, round, allLevelItems, toProjectJson };
++  window.EditorAPI = { S, commit, refreshPanel, draw, toast, fitView, setTool, select, switchLevel, loadProject, projectPanel, openProjectInfoDialog, planPdfImport, applyPdfImportSelection, finishRectification, finishScaleControl, restoreOriginalPlanImage, FURNITURE, OPENINGS, wallLen, projectOnWall, slugify, r2, round, allLevelItems, toProjectJson };
+ })();
+diff --git a/js/editorAI.js b/js/editorAI.js
+index 1352df8..548b226 100644
+--- a/js/editorAI.js
++++ b/js/editorAI.js
+@@ -92,7 +92,8 @@ Extract its geometry precisely. Return ONLY one JSON object, no prose, with this
+   "walls": [ { "x1": n, "y1": n, "x2": n, "y2": n, "kind": "exterior" | "interior" } ],
+   "openings": [ { "kind": "door" | "window" | "opening", "x": n, "y": n, "width": n } ],
+   "rooms": [ { "name": "label as written on the plan", "polygon": [[x, y], ...], "floor": "parquet" | "tiles" | "stone" | "concrete", "habitable": true | false } ],
+-  "columns": [ { "x": n, "y": n, "size": n } ]${withFurniture ? `,
++  "columns": [ { "x": n, "y": n, "size": n } ],
++  "uncertainZones": [ { "label": "short zone name", "reason": "blurry | undimensioned | occluded", "x": n, "y": n, "width": n, "height": n } ]${withFurniture ? `,
+   "furniture": [ { "type": "${Object.keys(FURN_MAP).join('" | "')}", "x": n, "y": n, "width": n, "depth": n, "rotation": 0 | 90 | 180 | 270 } ]` : ''}
+ }
+ Rules:
+@@ -101,6 +102,7 @@ Rules:
+ - Openings: every door (swing arc symbol), every window (thin parallel lines inside a wall) and every wide passage without door. (x, y) is the opening CENTER on the wall centerline; width is its size along the wall, in pixels.
+ - Rooms: every labelled space, including covered exterior spaces (porch, terrace: habitable false). The polygon follows the wall centerlines around the room, in order. Use "tiles" for kitchens, bathrooms and WC, "stone" for porches and terraces, "parquet" otherwise.
+ - Columns: square posts or pillars (often small filled squares), center and side length in pixels.
++- Uncertainty: NEVER invent geometry in blurry, faded, handwritten, or undimensioned sketch areas. Set "uncertain": true (and optional "uncertainReason") on any wall, opening or room with low visibility or missing dimensions, and list blurry/undimensioned areas in "uncertainZones".
+ - Scale: scale is calibrated externally on a real dimension by the user; report a visible dimension annotation in "scale.reference" if one is clearly readable, otherwise null. Never guess a scale from doors or fixtures.${withFurniture ? '\n- Furniture: only items actually drawn on the plan. rotation = direction the FRONT of the item faces: 0 = down, 90 = right, 180 = up, 270 = left (beds: the foot of the bed; sofas: the seat side). width is along the front, depth front-to-back, in pixels.' : ''}`;
+ 
+   // ---------------------------------------------------------------------------
+@@ -183,10 +185,24 @@ Rules:
+     };
+ 
+     const toVerify = [];
+-    const flag = (type, label, reason, position) => {
+-      toVerify.push({ type, label, reason, position: position || null });
++    const flag = (type, label, reason, position, extra = null) => {
++      toVerify.push(Object.assign({ type, label, reason, position: position || null }, extra || {}));
+     };
+ 
++    const uncertainZones = Array.isArray(ai && ai.uncertainZones) ? ai.uncertainZones : [];
++    const pointInUncertainZone = (px, py) => uncertainZones.find(z =>
++      z && Number.isFinite(z.x) && Number.isFinite(z.y) && Number.isFinite(z.width) && Number.isFinite(z.height) &&
++      px >= z.x && px <= z.x + z.width && py >= z.y && py <= z.y + z.height
++    ) || null;
++    uncertainZones.forEach((z, idx) => {
++      if (!z || typeof z !== 'object') return;
++      const cx = Number.isFinite(z.x) ? X(z.x + (Number(z.width) || 0) / 2) : NaN;
++      const cz = Number.isFinite(z.y) ? Z(z.y + (Number(z.height) || 0) / 2) : NaN;
++      flag('zone', String(z.label || `Zone incertaine ${idx + 1}`),
++        `Zone floue ou non cotée (${z.reason || 'lisibilité insuffisante'}) — à vérifier sur le croquis source.`,
++        posOf(cx, cz), { uncertain: true });
++    });
++
+     // Validation topologique préalable (avant toute injection dans le projet)
+     const topology = Topology ? Topology.validate(ai || {}, ppm / factor) : null;
+     const removedWallMap = new Map();
+@@ -222,7 +238,10 @@ Rules:
+         flag('mur', wLabel, `Mur trop court (${rawLen.toFixed(2)} m < 0,20 m).`, mid);
+         return;
+       }
+-      candidateWalls.push({ from: a, to: b, ext: w.kind === 'exterior', label: wLabel });
++      const zoneHit = pointInUncertainZone((w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2);
++      const isUncertain = w.uncertain === true || Boolean(zoneHit);
++      const uncertainReason = w.uncertainReason || (zoneHit ? `Zone floue ou non cotée (${zoneHit.label || zoneHit.reason || 'croquis'})` : 'Mur marqué incertain par la lecture IA');
++      candidateWalls.push({ from: a, to: b, ext: w.kind === 'exterior', label: wLabel, uncertain: isUncertain, uncertainReason });
+     });
+ 
+     // Pièces candidates (les polygones rejetés par AITopology ou invalides sont consignés)
+@@ -267,7 +286,12 @@ Rules:
+         return;
+       }
+       seen.add(key);
+-      walls.push({ from: w.from, to: w.to, thick: w.ext ? 0.25 : 0.15, type: w.ext ? 'ext' : 'int', openings: [] });
++      const wallObj = { from: w.from, to: w.to, thick: w.ext ? 0.25 : 0.15, type: w.ext ? 'ext' : 'int', openings: [] };
++      if (w.uncertain) {
++        wallObj.uncertain = true;
++        flag('mur', w.label, w.uncertainReason || 'Mur incertain (zone floue ou non cotée).', mid, { uncertain: true });
++      }
++      walls.push(wallObj);
+     });
+ 
+     // Ouvertures sur le mur le plus proche (aucune suppression silencieuse)
+@@ -308,6 +332,10 @@ Rules:
+         flag('ouverture', oLabel, 'Chevauchement avec une autre ouverture sur le même mur.', oPos);
+         return;
+       }
++      if (o.uncertain === true || pointInUncertainZone(o.x, o.y)) {
++        def.uncertain = true;
++        flag('ouverture', oLabel, o.uncertainReason || 'Ouverture dans une zone floue ou non cotée.', oPos, { uncertain: true });
++      }
+       best.w.openings.push(def);
+       if (kind === 'door' && best.w.type === 'ext') doors.push(def);
+     });
+@@ -340,6 +368,10 @@ Rules:
+       while (used.has(id)) id += '-2';
+       used.add(id);
+       const room = { id, name: String(r.name || 'PIÈCE ' + (i + 1)).toUpperCase(), bounds, floorType: r.floor || 'parquet', habitable: r.habitable !== false, desc: '' };
++      if (r.uncertain === true) {
++        room.uncertain = true;
++        flag('pièce', r.label, r.uncertainReason || 'Pièce non cotée ou contour flou — à vérifier.', center, { uncertain: true });
++      }
+       const isRect = uniq.length === 4 && uniq.every(p => (p[0] === bounds.xMin || p[0] === bounds.xMax) && (p[1] === bounds.zMin || p[1] === bounds.zMax));
+       if (!isRect) room.poly = uniq;
+       outRooms.push(room);
+diff --git a/js/planHomography.js b/js/planHomography.js
+new file mode 100644
+index 0000000..2015d0a
+--- /dev/null
++++ b/js/planHomography.js
+@@ -0,0 +1,255 @@
++/**
++ * REDRESSEMENT DE PERSPECTIVE (HOMOGRAPHIE 4 POINTS) & CONTRÔLE DE CALIBRATION
++ * Module pur UMD (navigateur + Node.js, sans dépendance externe).
++ *
++ * - Calcule la matrice projective 3×3 (DLT 8×8 par pivot de Gauss) envoyant un quadrilatère
++ *   quelconque (photo de plan ou croquis pris en biais) sur un rectangle droit.
++ * - Rééchantillonne les pixels par interpolation bilinéaire dans une NOUVELLE image
++ *   sans jamais altérer l'image source originale.
++ * - Évalue une seconde cote de contrôle après calibrage principal et lève une alerte
++ *   explicite si l'écart relatif dépasse 1 %.
++ */
++(function (root, factory) {
++  const api = factory();
++  if (typeof module === 'object' && module.exports) module.exports = api;
++  if (typeof window !== 'undefined') window.PlanHomography = api;
++})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
++  'use strict';
++
++  function solveLinearSystem(A, b) {
++    const n = b.length;
++    const M = A.map((row, i) => row.slice().concat(b[i]));
++    for (let col = 0; col < n; col++) {
++      let pivot = col;
++      let maxAbs = Math.abs(M[col][col]);
++      for (let r = col + 1; r < n; r++) {
++        const val = Math.abs(M[r][col]);
++        if (val > maxAbs) { maxAbs = val; pivot = r; }
++      }
++      if (maxAbs < 1e-12) throw new Error('Quadrilatère dégénéré : les 4 points ne peuvent pas être colinéaires.');
++      if (pivot !== col) {
++        const tmp = M[col]; M[col] = M[pivot]; M[pivot] = tmp;
++      }
++      const div = M[col][col];
++      for (let c = col; c <= n; c++) M[col][c] /= div;
++      for (let r = 0; r < n; r++) {
++        if (r === col) continue;
++        const factor = M[r][col];
++        if (Math.abs(factor) < 1e-15) continue;
++        for (let c = col; c <= n; c++) M[r][c] -= factor * M[col][c];
++      }
++    }
++    return M.map(row => row[n]);
++  }
++
++  /**
++   * Calcule la matrice homographique 3×3 (tableau 9 éléments) envoyant srcQuad[0..3] sur dstQuad[0..3].
++   */
++  function solveHomography(srcQuad, dstQuad) {
++    if (!Array.isArray(srcQuad) || srcQuad.length !== 4 || !Array.isArray(dstQuad) || dstQuad.length !== 4) {
++      throw new Error('Quatre coins source et quatre coins destination sont requis.');
++    }
++    const A = [];
++    const b = [];
++    for (let i = 0; i < 4; i++) {
++      const [x, y] = srcQuad[i];
++      const [u, v] = dstQuad[i];
++      if (![x, y, u, v].every(Number.isFinite)) throw new Error('Coordonnées de coins invalides.');
++      A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]);
++      b.push(u);
++      A.push([0, 0, 0, x, y, 1, -v * x, -v * y]);
++      b.push(v);
++    }
++    const h = solveLinearSystem(A, b);
++    return [h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], 1];
++  }
++
++  function applyHomography(H, x, y) {
++    const w = H[6] * x + H[7] * y + H[8];
++    if (Math.abs(w) < 1e-12) return [NaN, NaN];
++    return [
++      (H[0] * x + H[1] * y + H[2]) / w,
++      (H[3] * x + H[4] * y + H[5]) / w
++    ];
++  }
++
++  function invert3x3(m) {
++    const [a, b, c, d, e, f, g, h, i] = m;
++    const c00 = e * i - f * h;
++    const c01 = -(d * i - f * g);
++    const c02 = d * h - e * g;
++    const c10 = -(b * i - c * h);
++    const c11 = a * i - c * g;
++    const c12 = -(a * h - b * g);
++    const c20 = b * f - c * e;
++    const c21 = -(a * f - c * d);
++    const c22 = a * e - b * d;
++    const det = a * c00 + b * c01 + c * c02;
++    if (Math.abs(det) < 1e-12) throw new Error('Matrice homographique non inversible.');
++    return [
++      c00 / det, c10 / det, c20 / det,
++      c01 / det, c11 / det, c21 / det,
++      c02 / det, c12 / det, c22 / det
++    ];
++  }
++
++  /**
++   * Calcule la taille (width, height) du rectangle redressé à partir des 4 coins [TL, TR, BR, BL].
++   * Si `targetAspectRatio` (L/H) est fourni, le respecte exactement ; sinon utilise la longueur
++   * maximale des bords opposés (ou estimation projective si centre fourni).
++   */
++  function computeRectifiedSize(srcQuad, { targetAspectRatio = null, maxDim = 2400 } = {}) {
++    const dist = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
++    const topW = dist(srcQuad[0], srcQuad[1]);
++    const botW = dist(srcQuad[3], srcQuad[2]);
++    const leftH = dist(srcQuad[0], srcQuad[3]);
++    const rightH = dist(srcQuad[1], srcQuad[2]);
++    let w = Math.max(topW, botW);
++    let h = Math.max(leftH, rightH);
++    if (w < 8 || h < 8) throw new Error('Zone de redressement trop petite.');
++
++    if (Number.isFinite(Number(targetAspectRatio)) && Number(targetAspectRatio) > 0) {
++      const ratio = Number(targetAspectRatio);
++      if (w / h >= ratio) h = w / ratio;
++      else w = h * ratio;
++    }
++
++    const scale = Math.min(1, maxDim / Math.max(w, h));
++    return {
++      width: Math.max(16, Math.round(w * scale)),
++      height: Math.max(16, Math.round(h * scale))
++    };
++  }
++
++  /**
++   * Rééchantillonne un buffer RGBA par homographie inverse + interpolation bilinéaire.
++   * Retourne un NOUVEAU Uint8ClampedArray sans jamais modifier `srcData`.
++   */
++  function warpRGBA(srcData, srcW, srcH, srcQuad, outW, outH, { background = [255, 255, 255, 255] } = {}) {
++    const dstQuad = [[0, 0], [outW - 1, 0], [outW - 1, outH - 1], [0, outH - 1]];
++    const H = solveHomography(srcQuad, dstQuad);
++    const Hinv = solveHomography(dstQuad, srcQuad);
++    const out = new Uint8ClampedArray(outW * outH * 4);
++
++    for (let y = 0; y < outH; y++) {
++      for (let x = 0; x < outW; x++) {
++        const [sx, sy] = applyHomography(Hinv, x, y);
++        const dstIdx = (y * outW + x) * 4;
++        if (!Number.isFinite(sx) || !Number.isFinite(sy) || sx < 0 || sy < 0 || sx > srcW - 1 || sy > srcH - 1) {
++          out[dstIdx] = background[0];
++          out[dstIdx + 1] = background[1];
++          out[dstIdx + 2] = background[2];
++          out[dstIdx + 3] = background[3];
++          continue;
++        }
++        const x0 = Math.floor(sx), y0 = Math.floor(sy);
++        const x1 = Math.min(srcW - 1, x0 + 1), y1 = Math.min(srcH - 1, y0 + 1);
++        const fx = sx - x0, fy = sy - y0;
++        const w00 = (1 - fx) * (1 - fy);
++        const w10 = fx * (1 - fy);
++        const w01 = (1 - fx) * fy;
++        const w11 = fx * fy;
++        const i00 = (y0 * srcW + x0) * 4;
++        const i10 = (y0 * srcW + x1) * 4;
++        const i01 = (y1 * srcW + x0) * 4;
++        const i11 = (y1 * srcW + x1) * 4;
++        for (let c = 0; c < 4; c++) {
++          out[dstIdx + c] = Math.round(
++            srcData[i00 + c] * w00 +
++            srcData[i10 + c] * w10 +
++            srcData[i01 + c] * w01 +
++            srcData[i11 + c] * w11
++          );
++        }
++      }
++    }
++    return { data: out, width: outW, height: outH, H, Hinv, dstQuad };
++  }
++
++  /**
++   * Redresse un HTMLImageElement ou HTMLCanvasElement dans un NOUVEAU canvas (source intacte).
++   */
++  function rectifyCanvas(source, srcQuad, options = {}) {
++    if (typeof document === 'undefined') throw new Error('document requis pour rectifyCanvas.');
++    const srcW = source.naturalWidth || source.width;
++    const srcH = source.naturalHeight || source.height;
++    const srcCanvas = document.createElement('canvas');
++    srcCanvas.width = srcW;
++    srcCanvas.height = srcH;
++    const sCtx = srcCanvas.getContext('2d');
++    sCtx.drawImage(source, 0, 0, srcW, srcH);
++    const srcImgData = sCtx.getImageData(0, 0, srcW, srcH);
++
++    const size = computeRectifiedSize(srcQuad, options);
++    const warped = warpRGBA(srcImgData.data, srcW, srcH, srcQuad, size.width, size.height);
++
++    const outCanvas = document.createElement('canvas');
++    outCanvas.width = size.width;
++    outCanvas.height = size.height;
++    const oCtx = outCanvas.getContext('2d');
++    const outImgData = oCtx.createImageData(size.width, size.height);
++    outImgData.data.set(warped.data);
++    oCtx.putImageData(outImgData, 0, 0);
++
++    return {
++      canvas: outCanvas,
++      dataUrl: outCanvas.toDataURL('image/png'),
++      width: size.width,
++      height: size.height,
++      H: warped.H,
++      Hinv: warped.Hinv,
++      srcQuad: srcQuad.map(p => [p[0], p[1]])
++    };
++  }
++
++  /**
++   * Vérifie une seconde cote de contrôle après calibrage principal.
++   * Lève `alert: true` si l'écart relatif entre la distance mesurée et la cote réelle dépasse 1 %.
++   */
++  function evaluateControlDimension({ p1, p2, realMeters, pxPerMeter, tolerance = 0.01 } = {}) {
++    const real = Number(realMeters);
++    const ppm = Number(pxPerMeter);
++    if (!Array.isArray(p1) || !Array.isArray(p2) || p1.length < 2 || p2.length < 2) {
++      throw new Error('Deux points de contrôle sont requis.');
++    }
++    if (!Number.isFinite(real) || real <= 0) throw new Error('Longueur réelle de contrôle invalide.');
++    if (!Number.isFinite(ppm) || ppm <= 0) throw new Error('Le plan doit être calibré avant le contrôle.');
++
++    const pixelDistance = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
++    if (pixelDistance < 2) throw new Error('Points de contrôle trop proches.');
++
++    const measuredMeters = pixelDistance / ppm;
++    const deltaMeters = measuredMeters - real;
++    const relativeError = Math.abs(deltaMeters) / real;
++    const percentError = Math.round(relativeError * 10000) / 100; // ex. 1.45 (%)
++    const alert = relativeError > tolerance;
++    const ok = !alert;
++
++    const message = alert
++      ? `Écart de calibrage de ${percentError.toFixed(2)} % (> ${(tolerance * 100).toFixed(0)} %) : mesuré ${measuredMeters.toFixed(2)} m pour ${real.toFixed(2)} m attendus. Vérifiez le redressement ou la 1ʳᵉ cote.`
++      : `Contrôle conforme (écart ${percentError.toFixed(2)} % ≤ ${(tolerance * 100).toFixed(0)} %) : mesuré ${measuredMeters.toFixed(2)} m pour ${real.toFixed(2)} m.`;
++
++    return {
++      ok,
++      alert,
++      pixelDistance: Math.round(pixelDistance * 100) / 100,
++      measuredMeters: Math.round(measuredMeters * 1000) / 1000,
++      expectedMeters: real,
++      deltaMeters: Math.round(deltaMeters * 1000) / 1000,
++      relativeError: Math.round(relativeError * 100000) / 100000,
++      percentError,
++      tolerancePercent: tolerance * 100,
++      message
++    };
++  }
++
++  return {
++    solveHomography,
++    applyHomography,
++    invert3x3,
++    computeRectifiedSize,
++    warpRGBA,
++    rectifyCanvas,
++    evaluateControlDimension
++  };
++});
+diff --git a/js/planProposalReview.js b/js/planProposalReview.js
+index 3537fc1..015bcb4 100644
+--- a/js/planProposalReview.js
++++ b/js/planProposalReview.js
+@@ -37,11 +37,15 @@
+     if (topology && Array.isArray(topology.errors) && topology.errors.length) {
+       warnings.push(`Validation topologique : ${topology.errors.length} erreur(s) détectée(s) (score ${topology.score}/100).`);
+     }
++    const uncertainCount = toVerify.filter(item => item && item.uncertain === true).length;
++    if (uncertainCount) {
++      warnings.push(`${uncertainCount} élément(s) ou zone(s) floue(s)/non cotée(s) marqué(s) incertain(s) dans « À vérifier ».`);
++    }
+     if (toVerify.length) {
+       warnings.push(`${toVerify.length} élément(s) écarté(s) consigné(s) dans la liste « À vérifier ».`);
+     }
+     warnings.push('Le modèle ne fournit pas de score de confiance par élément. Tous les traits proposés doivent être relus avant application.');
+-    return { warnings, unmatchedOpenings, mappedOpenings, toVerify, topology };
++    return { warnings, unmatchedOpenings, mappedOpenings, toVerify, uncertainCount, topology };
+   }
+ 
+   function renderReview(container, assessment, opts) {
+diff --git a/tests/sketch-calibration.test.cjs b/tests/sketch-calibration.test.cjs
+new file mode 100644
+index 0000000..eead36b
+--- /dev/null
++++ b/tests/sketch-calibration.test.cjs
+@@ -0,0 +1,136 @@
++const test = require('node:test');
++const assert = require('node:assert/strict');
++const PlanHomography = require('../js/planHomography');
++const EditorAI = require('../js/editorAI');
++const PlanProposalReview = require('../js/planProposalReview');
++
++test('Lot 6 — Redressement 4 points (homographie) : coins < 1 px, ratio L/H < 0,5 %, image d’origine intacte', () => {
++  const srcW = 240, srcH = 180;
++  const srcData = new Uint8ClampedArray(srcW * srcH * 4);
++  // Fond blanc
++  srcData.fill(255);
++
++  // Trapèze synthétique représentant une feuille 10 m x 6 m (ratio L/H = 5/3) photographiée en perspective
++  const srcQuad = [
++    [52, 24],   // Haut-gauche
++    [188, 30],  // Haut-droite
++    [220, 150], // Bas-droite
++    [20, 144]   // Bas-gauche
++  ];
++
++  // Placer un point repère rouge au centre projectif du trapèze (qui doit atterrir au centre du rectangle redressé)
++  const targetRatio = 10 / 6;
++  const size = PlanHomography.computeRectifiedSize(srcQuad, { targetAspectRatio: targetRatio });
++  const dstQuad = [[0, 0], [size.width - 1, 0], [size.width - 1, size.height - 1], [0, size.height - 1]];
++  const HinvPreview = PlanHomography.solveHomography(dstQuad, srcQuad);
++  const [srcCx, srcCy] = PlanHomography.applyHomography(HinvPreview, (size.width - 1) / 2, (size.height - 1) / 2);
++
++  // Peindre un disque rouge de rayon 4 px autour du centre projectif dans l'image source
++  for (let y = Math.floor(srcCy) - 4; y <= Math.ceil(srcCy) + 4; y++) {
++    for (let x = Math.floor(srcCx) - 4; x <= Math.ceil(srcCx) + 4; x++) {
++      if (x >= 0 && x < srcW && y >= 0 && y < srcH) {
++        const idx = (y * srcW + x) * 4;
++        srcData[idx] = 220; srcData[idx + 1] = 20; srcData[idx + 2] = 20; srcData[idx + 3] = 255;
++      }
++    }
++  }
++  const originalSnapshot = Buffer.from(srcData);
++
++  const warped = PlanHomography.warpRGBA(srcData, srcW, srcH, srcQuad, size.width, size.height);
++
++  // 1. L'image source n'est jamais modifiée
++  assert.equal(Buffer.compare(Buffer.from(srcData), originalSnapshot), 0, 'Le buffer source doit rester intact');
++
++  // 2. Chaque coin du trapèze se projette sur le coin du rectangle cible à < 1 px
++  srcQuad.forEach((pt, i) => {
++    const [u, v] = PlanHomography.applyHomography(warped.H, pt[0], pt[1]);
++    const err = Math.hypot(u - dstQuad[i][0], v - dstQuad[i][1]);
++    assert.ok(err < 1e-3, `Coin ${i} hors tolérance : erreur ${err} px`);
++  });
++
++  // 3. Ratio L/H respecté à < 0,5 %
++  const actualRatio = warped.width / warped.height;
++  const ratioErr = Math.abs(actualRatio - targetRatio) / targetRatio;
++  assert.ok(ratioErr < 0.005, `Erreur de ratio L/H trop grande : ${(ratioErr * 100).toFixed(3)} %`);
++
++  // 4. Le marqueur rouge au centre projectif se retrouve bien au centre de l'image redressée
++  const midX = Math.round((warped.width - 1) / 2);
++  const midY = Math.round((warped.height - 1) / 2);
++  const midIdx = (midY * warped.width + midX) * 4;
++  assert.ok(warped.data[midIdx] > 180 && warped.data[midIdx + 1] < 80, 'Le repère central doit être rouge après redressement');
++});
++
++test('Lot 6 — Seconde cote de contrôle : conforme ≤ 1 %, alerte explicite > 1 %', () => {
++  // Échelle calibrée : 50 px/m, seconde cote attendue : 6,00 m (= 300 px exacts)
++  const okCheck = PlanHomography.evaluateControlDimension({
++    p1: [100, 100],
++    p2: [402, 100], // 302 px -> 6.04 m -> 0.67 % d'écart
++    realMeters: 6,
++    pxPerMeter: 50
++  });
++  assert.equal(okCheck.ok, true);
++  assert.equal(okCheck.alert, false);
++  assert.ok(okCheck.percentError <= 1);
++
++  const exactLimit = PlanHomography.evaluateControlDimension({
++    p1: [0, 0],
++    p2: [303, 0], // 303 px -> 6.06 m -> 1.00 % exact
++    realMeters: 6,
++    pxPerMeter: 50
++  });
++  assert.equal(exactLimit.ok, true);
++  assert.equal(exactLimit.alert, false);
++
++  const alertCheck = PlanHomography.evaluateControlDimension({
++    p1: [0, 0],
++    p2: [309, 0], // 309 px -> 6.18 m -> 3.00 % > 1 %
++    realMeters: 6,
++    pxPerMeter: 50
++  });
++  assert.equal(alertCheck.ok, false);
++  assert.equal(alertCheck.alert, true);
++  assert.equal(alertCheck.percentError, 3);
++  assert.match(alertCheck.message, /3\.00\s*%/);
++});
++
++test('Lot 6 — Zones floues ou non cotées IA marquées uncertain et remontées dans « À vérifier »', () => {
++  const env = {
++    S: {
++      p: {
++        config: { planImage: { calibrated: true, pxPerMeter: 50, originPx: [0, 0] } },
++        rooms: []
++      },
++      planImg: { width: 800, height: 600 }
++    }
++  };
++  const ai = {
++    scale: { reference: '10,00 m' },
++    walls: [
++      { x1: 0, y1: 0, x2: 500, y2: 0, kind: 'exterior' },
++      { x1: 500, y1: 0, x2: 500, y2: 300, kind: 'exterior' },
++      { x1: 0, y1: 300, x2: 500, y2: 300, kind: 'exterior' },
++      { x1: 0, y1: 0, x2: 0, y2: 300, kind: 'exterior' },
++      { x1: 250, y1: 0, x2: 250, y2: 300, kind: 'interior', uncertain: true, uncertainReason: 'Trait flou sur le croquis' }
++    ],
++    openings: [
++      { kind: 'door', x: 120, y: 300, width: 45, uncertain: true }
++    ],
++    rooms: [
++      { name: 'Séjour', polygon: [[0, 0], [250, 0], [250, 300], [0, 300]], floor: 'parquet', habitable: true },
++      { name: 'Cuisine', polygon: [[250, 0], [500, 0], [500, 300], [250, 300]], floor: 'tiles', habitable: true, uncertain: true }
++    ],
++    uncertainZones: [
++      { label: 'Angle cuisine', reason: 'undimensioned', x: 350, y: 150, width: 120, height: 100 }
++    ]
++  };
++
++  const out = EditorAI.convert(ai, { W: 800, H: 600, factor: 1 }, {}, env);
++  const uncertainItems = out.toVerify.filter(item => item.uncertain === true);
++  assert.ok(uncertainItems.length >= 4, `Attendu ≥ 4 éléments incertains (zone + mur + ouverture + pièce), reçu ${uncertainItems.length}`);
++  assert.ok(out.walls.some(w => w.uncertain === true));
++  assert.ok(out.rooms.some(r => r.uncertain === true));
++
++  const assessment = PlanProposalReview.assessProposal(ai, out);
++  assert.ok(assessment.uncertainCount >= 4);
++  assert.ok(assessment.warnings.some(w => /incertain/i.test(w)));
++});
+-- 
+2.34.1
+

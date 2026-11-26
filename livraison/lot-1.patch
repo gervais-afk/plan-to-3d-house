@@ -1,0 +1,750 @@
+From d7295d0f3c1117f0d67ee684b76e271dfbe81179 Mon Sep 17 00:00:00 2001
+From: ArchiCam Dev <dev@archicam.local>
+Date: Wed, 25 Nov 2026 17:39:40 +0000
+Subject: [PATCH] =?UTF-8?q?Lot=201=20=E2=80=94=20Fiche=20Informations=20du?=
+ =?UTF-8?q?=20projet=20et=20sauvegarde=20de=20meta.description?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ css/editor.css              |  33 +++-
+ editor.html                 |   9 +
+ js/editor.js                | 172 ++++++++++++------
+ tests/project-info.test.cjs | 347 ++++++++++++++++++++++++++++++++++++
+ 4 files changed, 507 insertions(+), 54 deletions(-)
+ create mode 100644 tests/project-info.test.cjs
+
+diff --git a/css/editor.css b/css/editor.css
+index 11b9d80..77477c0 100644
+--- a/css/editor.css
++++ b/css/editor.css
+@@ -166,7 +166,7 @@ kbd {
+ .ed-panel h4 { margin: 0 0 6px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+ .ed-field { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 6px; margin-bottom: 7px; }
+ .ed-field label { color: var(--ink-2); font-size: 12px; }
+-.ed-field input, .ed-field select {
++.ed-field input, .ed-field select, .ed-field textarea {
+   font: inherit;
+   font-size: 12px;
+   border: 1px solid var(--line);
+@@ -176,8 +176,39 @@ kbd {
+   min-width: 0;
+   background: #fff;
+ }
++.ed-field textarea { resize: vertical; min-height: 56px; line-height: 1.45; }
+ .ed-field input[type="checkbox"] { width: auto; justify-self: start; }
+ .ed-field input[type="range"] { padding: 0; }
++.ed-pdf-tag {
++  display: inline-block;
++  margin-top: 2px;
++  padding: 1px 5px;
++  border-radius: 3px;
++  background: var(--accent-soft);
++  color: var(--accent-ink);
++  font-size: 10px;
++  font-weight: 600;
++  letter-spacing: 0.02em;
++  line-height: 1.3;
++}
++.ed-pdf-missing {
++  margin: 0 0 10px;
++  padding: 7px 9px;
++  border-radius: 6px;
++  font-size: 11px;
++  line-height: 1.45;
++  border-left: 3px solid var(--warn);
++  background: rgba(168, 100, 28, 0.08);
++  color: var(--ink);
++}
++.ed-pdf-missing.is-ok {
++  border-left-color: var(--success);
++  background: rgba(29, 107, 68, 0.08);
++  color: var(--success);
++}
++.ed-dialog-project { width: min(560px, calc(100vw - 24px)); overflow-y: auto; }
++.ed-dialog-project .ed-field { grid-template-columns: 165px 1fr; align-items: start; }
++.ed-dialog-project .ed-field label { padding-top: 4px; }
+ .ed-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+ .ed-note { color: var(--ink-2); font-size: 12px; line-height: 1.5; margin: 6px 0; }
+ .ed-note.warn { color: var(--warn); }
+diff --git a/editor.html b/editor.html
+index 21edc49..cf8eb45 100644
+--- a/editor.html
++++ b/editor.html
+@@ -25,6 +25,7 @@
+       <button id="btn-open" title="Ouvrir un projet enregistré">Ouvrir…</button>
+       <button id="btn-import-villa" title="Charger la Villa Serena (js/data.js) comme exemple">Exemple Villa Serena</button>
+       <button id="btn-cabinet" type="button" title="Profil du cabinet">Profil Cabinet</button>
++      <button id="btn-project-info" type="button" title="Informations du projet et cartouche PDF">Informations du projet</button>
+       <label class="ed-btn-file" title="Importer une image ou un PDF de plan">Plan PDF / image…<input id="file-plan" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,.png,.jpg,.jpeg"></label>
+       <button id="btn-ai-read" title="Lecture automatique du plan par IA (OpenRouter)"><svg class="i" aria-hidden="true"><use href="#i-sparkle"></use></svg> Lecture IA</button>
+       <button id="btn-plan-cleanup" type="button" disabled title="Importez d’abord une image de plan">Nettoyage visuel…</button>
+@@ -168,6 +169,14 @@
+     <div class="ed-dialog-actions"><button id="cabinet-close" type="button">Fermer</button><button id="cabinet-save" type="button" class="ed-primary">Enregistrer le profil</button></div>
+   </dialog>
+ 
++  <dialog id="dlg-project-info" class="ed-dialog ed-dialog-project" aria-labelledby="dlg-project-info-title">
++    <h3 id="dlg-project-info-title">Informations du projet</h3>
++    <div id="dlg-project-info-body"></div>
++    <div class="ed-dialog-actions">
++      <button id="dlg-project-info-close" type="button" class="ed-primary">Fermer</button>
++    </div>
++  </dialog>
++
+   <dialog id="dlg-plan-cleanup" class="ed-dialog ed-cleanup" aria-labelledby="dlg-plan-cleanup-title">
+     <h3 id="dlg-plan-cleanup-title">Nettoyage visuel du plan</h3>
+     <p class="ed-note warn"><strong>Présentation uniquement — pas d’interprétation structurelle.</strong> Ce traitement local ne redessine ni ne reconnaît les cotes, axes, libellés, armatures ou lignes porteuses. Le plan original et la géométrie du projet restent inchangés.</p>
+diff --git a/js/editor.js b/js/editor.js
+index fe4d6d7..ab87f76 100644
+--- a/js/editor.js
++++ b/js/editor.js
+@@ -1287,21 +1287,30 @@
+ 
+   function select(s) { S.sel = s; refreshPanel(); draw(); }
+ 
+-  // Génère un formulaire à partir d'un schéma [{key, label, type, options, step}]
+-  function form(title, obj, fields, onChange, extraHtml = '') {
+-    const el = $('ed-props');
+-    el.innerHTML = `<h3>${title}</h3>` + fields.map(f => {
++  // Génère un formulaire à partir d'un schéma [{key, label, type, options, step, pdf, rows}]
++  function form(title, obj, fields, onChange, extraHtml = '', target = $('ed-props'), prependHtml = '') {
++    const el = target || $('ed-props');
++    if (!el) return;
++    el.innerHTML = (title ? `<h3>${title}</h3>` : '') + prependHtml + fields.map(f => {
+       const v = f.get ? f.get(obj) : obj[f.key];
+       let input;
+-      if (f.type === 'select') input = `<select data-key="${f.key}">${Object.entries(f.options).map(([k, l]) => `<option value="${k}" ${String(v) === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
++      if (f.type === 'select') input = `<select data-key="${f.key}">${Object.entries(f.options).map(([k, l]) => `<option value="${k}" ${String(v ?? '') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+       else if (f.type === 'checkbox') input = `<input type="checkbox" data-key="${f.key}" ${v ? 'checked' : ''}>`;
++      else if (f.type === 'textarea') input = `<textarea data-key="${f.key}" rows="${f.rows || 3}">${escapeHtml(v ?? '')}</textarea>`;
+       else if (f.type === 'readonly') input = `<span>${v}</span>`;
+       else input = `<input type="${f.type || 'text'}" data-key="${f.key}" value="${v === undefined || v === null ? '' : String(v).replace(/"/g, '&quot;')}" ${f.step ? `step="${f.step}"` : ''}>`;
+-      return `<div class="ed-field"><label>${f.label}</label>${input}</div>`;
++      const pdfTag = f.pdf ? '<br><span class="ed-pdf-tag" title="Champ repris dans le cartouche des exports PDF">utilisé dans les PDF</span>' : '';
++      return `<div class="ed-field"${f.pdf ? ' data-pdf-field="true"' : ''}><label>${f.label}${pdfTag}</label>${input}</div>`;
+     }).join('') + extraHtml;
+     el.querySelectorAll('[data-key]').forEach(inp => {
++      const f = fields.find(x => x.key === inp.dataset.key);
++      if (f && f.pdf && inp.type !== 'checkbox') {
++        inp.addEventListener('input', () => {
++          const previewMeta = Object.assign({}, S.p.meta, { [f.key]: inp.value });
++          updatePdfMissingBanners(previewMeta);
++        });
++      }
+       inp.addEventListener('change', () => {
+-        const f = fields.find(x => x.key === inp.dataset.key);
+         let val = inp.type === 'checkbox' ? inp.checked : inp.value;
+         if (f.type === 'number') { val = parseFloat(String(val).replace(',', '.')); if (!isFinite(val)) return; }
+         commit();
+@@ -1313,12 +1322,53 @@
+     });
+   }
+ 
++  function pdfMissingInfo(metaOverride) {
++    if (typeof PdfIdentity === 'undefined' || typeof PdfIdentity.missingFields !== 'function') {
++      return { missing: [], message: '' };
++    }
++    return PdfIdentity.missingFields({ meta: metaOverride || S.p.meta }, { cabinet: cabinetProfile });
++  }
++
++  function pdfMissingBannerHtml(metaOverride) {
++    const info = pdfMissingInfo(metaOverride);
++    if (!info.missing.length) {
++      return '<div class="ed-pdf-missing is-ok" data-pdf-missing role="status">Cartouche PDF complet : tous les champs administratifs sont renseignés.</div>';
++    }
++    return `<div class="ed-pdf-missing" data-pdf-missing role="status"><strong>Champs vides du cartouche PDF (${info.missing.length}) :</strong> ${escapeHtml(info.missing.join(', '))}.</div>`;
++  }
++
++  function updatePdfMissingBanners(metaOverride) {
++    const info = pdfMissingInfo(metaOverride);
++    document.querySelectorAll('[data-pdf-missing]').forEach(node => {
++      node.classList.toggle('is-ok', !info.missing.length);
++      if (!info.missing.length) {
++        node.textContent = 'Cartouche PDF complet : tous les champs administratifs sont renseignés.';
++      } else {
++        node.innerHTML = `<strong>Champs vides du cartouche PDF (${info.missing.length}) :</strong> ${escapeHtml(info.missing.join(', '))}.`;
++      }
++    });
++  }
++
++  function syncProjectInfoDialog() {
++    const dlg = $('dlg-project-info');
++    const body = $('dlg-project-info-body');
++    if (dlg && dlg.open && body) projectPanel(body, { inDialog: true });
++  }
++
++  function openProjectInfoDialog() {
++    const dlg = $('dlg-project-info');
++    const body = $('dlg-project-info-body');
++    if (!dlg || !body) return;
++    projectPanel(body, { inDialog: true });
++    if (!dlg.open && typeof dlg.showModal === 'function') dlg.showModal();
++  }
++
+   function refreshPanel() {
+     $('ed-project-name').textContent = S.p.meta.name + (S.dirty ? ' •' : '');
+     const s = S.sel;
+-    if (!s && S.tool === 'camera') return camerasPanel();
+-    if (!s) return projectPanel();
+-    if (s.kind === 'camera') return cameraPanel(s.obj);
++    if (!s && S.tool === 'camera') { camerasPanel(); syncProjectInfoDialog(); return; }
++    if (!s) { projectPanel(); syncProjectInfoDialog(); return; }
++    if (s.kind === 'camera') { cameraPanel(s.obj); syncProjectInfoDialog(); return; }
+     const del = '<div class="ed-row"><button id="btn-del">Supprimer</button></div>';
+     if (s.kind === 'wall') {
+       form('Mur', s.obj, [
+@@ -1409,6 +1459,7 @@
+     }
+     const d = $('btn-del');
+     if (d) d.onclick = deleteSelection;
++    syncProjectInfoDialog();
+   }
+ 
+   function camerasPanel() {
+@@ -1489,11 +1540,12 @@
+   }
+ 
+   // Contrôles d'habitabilité (js/habitability.js) : un avertissement cliquable par point à vérifier.
+-  function renderChecks() {
+-    const list = $('ed-checks-list');
++  function renderChecks(container = $('ed-props')) {
++    const list = container?.querySelector('[data-checks-list]') || $('ed-checks-list');
++    const title = container?.querySelector('[data-checks-title]') || $('ed-checks-title');
+     if (!list || typeof Habitability === 'undefined') return;
+     const warnings = Habitability.check({ config: S.p.config, walls: allLevelItems('walls'), rooms: allLevelItems('rooms') });
+-    $('ed-checks-title').textContent = warnings.length ? `Vérifications (${warnings.length})` : 'Vérifications';
++    if (title) title.textContent = warnings.length ? `Vérifications (${warnings.length})` : 'Vérifications';
+     if (!warnings.length) {
+       const ok = document.createElement('li');
+       ok.className = 'is-ok';
+@@ -1517,61 +1569,66 @@
+     }));
+   }
+ 
+-  function projectPanel() {
++  function projectPanel(target = $('ed-props'), options = {}) {
++    const container = target || $('ed-props');
++    const inDialog = Boolean(options.inDialog || container !== $('ed-props'));
+     const p = S.p;
+     const hab = p.rooms.filter(r => r.habitable).reduce((s, r) => s + roomArea(r), 0);
+     const nOps = p.walls.reduce((s, w) => s + w.openings.length, 0);
+     const pi = p.config.planImage;
+     const sheet = p.meta.sheets?.[S.activeLevel] || {};
+-    const extrasNote = S.extras ? `<div class="ed-field"><label>Garder caméras & abords</label><input type="checkbox" id="chk-extras" ${S.keepExtras ? 'checked' : ''}></div>
++    const idPrefix = inDialog ? 'dlg-proj-' : '';
++    const extrasNote = S.extras ? `<div class="ed-field"><label>Garder caméras & abords</label><input type="checkbox" id="${idPrefix}chk-extras" data-proj="chk-extras" ${S.keepExtras ? 'checked' : ''}></div>
+       <p class="ed-note">Décochez pour régénérer automatiquement le parcours caméra, les vues de rendu, les lampes et le jardin après des modifications importantes.</p>` : '';
+     const warn = !p.walls.some(w => w.openings.some(o => o.type === 'door' && w.type === 'ext')) && p.walls.length
+       ? '<p class="ed-note warn">Aucune porte sur un mur extérieur : l\'entrée de la visite sera devinée.</p>' : '';
+-    form('Projet', p.meta, [
+-      { key: 'name', label: 'Nom du projet', set: (o, v) => { o.name = String(v).toUpperCase(); if (!o.slugLocked) o.slug = slugify(v); } },
++    form(inDialog ? '' : 'Projet', p.meta, [
++      { key: 'name', label: 'Nom du projet', pdf: true, set: (o, v) => { o.name = String(v).toUpperCase(); if (!o.slugLocked) o.slug = slugify(v); } },
+       { key: 'slug', label: 'Dossier', set: (o, v) => { o.slug = slugify(v); o.slugLocked = true; } },
+-      { key: 'subtitle', label: 'Sous-titre' },
+-      { key: 'client', label: 'Client / maître d’ouvrage' },
++      { key: 'subtitle', label: 'Sous-titre', pdf: true },
++      { key: 'description', label: 'Description', type: 'textarea', rows: 3, set: (o, v) => { o.description = String(v).slice(0, 2000); } },
++      { key: 'client', label: 'Client / maître d’ouvrage', pdf: true },
+       { key: 'clientVisible', label: 'Afficher le client sur les couvertures partagées', type: 'checkbox' },
+       { key: 'reference', label: 'Référence projet', set: (o, v) => { o.reference = String(v).slice(0, 80); } },
+       // Cartouche du cahier de plans.
+-      { key: 'architect', label: 'Architecte responsable', set: (o, v) => { o.architect = String(v).slice(0, 120); } },
+-      { key: 'location', label: 'Lieu', set: (o, v) => { o.location = String(v).slice(0, 80); } },
+-      { key: 'phase', label: 'Phase', type: 'select', options: { '': '—', ESQ: 'Esquisse', APS: 'Avant-projet sommaire', APD: 'Avant-projet définitif', PC: 'Permis de construire', DCE: 'Dossier de consultation', EXE: 'Exécution' } },
+-      { key: 'revision', label: 'Indice du dossier', set: (o, v) => { o.revision = String(v).toUpperCase().slice(0, 4); } },
+-      { key: 'issueDate', label: 'Date d’édition', type: 'date' },
++      { key: 'architect', label: 'Architecte responsable', pdf: true, set: (o, v) => { o.architect = String(v).slice(0, 120); } },
++      { key: 'location', label: 'Lieu', pdf: true, set: (o, v) => { o.location = String(v).slice(0, 80); } },
++      { key: 'phase', label: 'Phase', pdf: true, type: 'select', options: { '': '—', ESQ: 'Esquisse', APS: 'Avant-projet sommaire', APD: 'Avant-projet définitif', PC: 'Permis de construire', DCE: 'Dossier de consultation', EXE: 'Exécution' } },
++      { key: 'revision', label: 'Indice du dossier', pdf: true, set: (o, v) => { o.revision = String(v).toUpperCase().slice(0, 4); } },
++      { key: 'issueDate', label: 'Date d’édition', pdf: true, type: 'date' },
+       { key: 'status', label: 'Statut du dossier', set: (o, v) => { o.status = String(v).slice(0, 80); } },
+       // Accueil et signature : parti architectural et contact de l'agence.
+-      { key: 'concept', label: 'Parti architectural', set: (o, v) => { o.concept = String(v).slice(0, 600); } },
++      { key: 'concept', label: 'Parti architectural', type: 'textarea', rows: 2, set: (o, v) => { o.concept = String(v).slice(0, 600); } },
+       { key: 'contact', label: 'Contact agence', set: (o, v) => { o.contact = String(v).slice(0, 120); } }
+     ], null, `
+       <fieldset class="ed-sheet-fields"><legend>Métadonnées manuelles — feuille ${S.activeLevel + 1}</legend>
+-        <div class="ed-field"><label for="sheet-title">Titre du plan</label><input id="sheet-title" maxlength="160" value="${escapeHtml(sheet.title)}"></div>
+-        <div class="ed-field"><label for="sheet-number">Numéro de feuille</label><input id="sheet-number" maxlength="80" value="${escapeHtml(sheet.number)}"></div>
+-        <div class="ed-field"><label for="sheet-level">Niveau indiqué</label><input id="sheet-level" maxlength="80" value="${escapeHtml(sheet.level)}"></div>
+-        <div class="ed-field"><label for="sheet-revision">Révision</label><input id="sheet-revision" maxlength="80" value="${escapeHtml(sheet.revision)}"></div>
+-        <div class="ed-field"><label for="sheet-date">Date</label><input id="sheet-date" type="date" value="${escapeHtml(sheet.date)}"></div>
+-        <div class="ed-field"><label for="sheet-status">Statut</label><input id="sheet-status" maxlength="80" value="${escapeHtml(sheet.status)}"></div>
+-        <div class="ed-field"><label for="sheet-scale">Échelle connue (saisie manuelle)</label><input id="sheet-scale" maxlength="80" placeholder="Ex. 1:100" value="${escapeHtml(sheet.scale)}"></div>
++        <div class="ed-field"><label for="${idPrefix}sheet-title">Titre du plan</label><input id="${idPrefix}sheet-title" data-sheet="title" maxlength="160" value="${escapeHtml(sheet.title)}"></div>
++        <div class="ed-field"><label for="${idPrefix}sheet-number">Numéro de feuille</label><input id="${idPrefix}sheet-number" data-sheet="number" maxlength="80" value="${escapeHtml(sheet.number)}"></div>
++        <div class="ed-field"><label for="${idPrefix}sheet-level">Niveau indiqué</label><input id="${idPrefix}sheet-level" data-sheet="level" maxlength="80" value="${escapeHtml(sheet.level)}"></div>
++        <div class="ed-field"><label for="${idPrefix}sheet-revision">Révision</label><input id="${idPrefix}sheet-revision" data-sheet="revision" maxlength="80" value="${escapeHtml(sheet.revision)}"></div>
++        <div class="ed-field"><label for="${idPrefix}sheet-date">Date</label><input id="${idPrefix}sheet-date" data-sheet="date" type="date" value="${escapeHtml(sheet.date)}"></div>
++        <div class="ed-field"><label for="${idPrefix}sheet-status">Statut</label><input id="${idPrefix}sheet-status" data-sheet="status" maxlength="80" value="${escapeHtml(sheet.status)}"></div>
++        <div class="ed-field"><label for="${idPrefix}sheet-scale">Échelle connue (saisie manuelle)</label><input id="${idPrefix}sheet-scale" data-sheet="scale" maxlength="80" placeholder="Ex. 1:100" value="${escapeHtml(sheet.scale)}"></div>
+         <p class="ed-note">Aucune échelle n’est déduite du nom du fichier. Les champs laissés vides restent absents du cartouche.</p>
+       </fieldset>
+-      <div class="ed-field"><label>Opacité du plan</label><input type="range" id="rng-opacity" min="0" max="1" step="0.05" value="${S.planOpacity}"></div>
+-      <div class="ed-field"><label>Hauteur sous plafond</label><input type="number" id="num-height" step="0.05" value="${p.config.wallHeight}"></div>
++      <div class="ed-field"><label>Opacité du plan</label><input type="range" id="${idPrefix}rng-opacity" data-proj="rng-opacity" min="0" max="1" step="0.05" value="${S.planOpacity}"></div>
++      <div class="ed-field"><label>Hauteur sous plafond</label><input type="number" id="${idPrefix}num-height" data-proj="num-height" step="0.05" value="${p.config.wallHeight}"></div>
+       ${extrasNote}
+       <p class="ed-note">${pi && S.planImg ? `Échelle du plan : <strong>${pi.pxPerMeter} px/m</strong>` : 'Commencez par importer l\'image du plan, puis calibrez l\'échelle (K).'}</p>
+       ${warn}
+-      ${diagnosticHtml()}
++      ${diagnosticHtml(idPrefix)}
+       <div class="ed-stats">
+         <div class="ed-stat"><strong>${p.walls.length}</strong><span>murs</span></div>
+         <div class="ed-stat"><strong>${nOps}</strong><span>ouvertures</span></div>
+         <div class="ed-stat"><strong>${p.rooms.length}</strong><span>pièces</span></div>
+         <div class="ed-stat"><strong>${hab.toFixed(1).replace('.', ',')} m²</strong><span>habitables</span></div>
+       </div>
+-      <div class="ed-row"><button id="btn-fit">Cadrer la vue</button><button id="btn-center">Centrer sur l'origine</button></div>
+-      <section class="ed-checks" aria-labelledby="ed-checks-title"><h4 id="ed-checks-title">Vérifications</h4><ul id="ed-checks-list"></ul>
+-        <p class="ed-note">Repères d'habitabilité indicatifs, non réglementaires : ils signalent, ils ne bloquent pas.</p></section>`);
++      <div class="ed-row"><button id="${idPrefix}btn-fit" data-proj="btn-fit" type="button">Cadrer la vue</button><button id="${idPrefix}btn-center" data-proj="btn-center" type="button">Centrer sur l'origine</button></div>
++      <section class="ed-checks" aria-labelledby="${idPrefix}ed-checks-title"><h4 id="${idPrefix}ed-checks-title" data-checks-title>Vérifications</h4><ul id="${idPrefix}ed-checks-list" data-checks-list></ul>
++        <p class="ed-note">Repères d'habitabilité indicatifs, non réglementaires : ils signalent, ils ne bloquent pas.</p></section>`, container, pdfMissingBannerHtml());
+     ['title', 'number', 'level', 'revision', 'date', 'status', 'scale'].forEach(key => {
+-      const input = $(`sheet-${key}`);
++      const input = container.querySelector(`[data-sheet="${key}"]`);
++      if (!input) return;
+       input.onchange = () => {
+         commit();
+         const sheets = p.meta.sheets || (p.meta.sheets = []);
+@@ -1582,14 +1639,18 @@
+         refreshPanel();
+       };
+     });
+-    renderChecks();
+-    $('rng-opacity').oninput = e => { S.planOpacity = parseFloat(e.target.value); draw(); };
+-    $('num-height').onchange = e => { const v = parseFloat(e.target.value); if (v > 2) { commit(); p.config.wallHeight = v; refreshPanel(); } };
+-    const chk = $('chk-extras');
++    renderChecks(container);
++    const rngOpacity = container.querySelector('[data-proj="rng-opacity"]');
++    if (rngOpacity) rngOpacity.oninput = e => { S.planOpacity = parseFloat(e.target.value); draw(); };
++    const numHeight = container.querySelector('[data-proj="num-height"]');
++    if (numHeight) numHeight.onchange = e => { const v = parseFloat(e.target.value); if (v > 2) { commit(); p.config.wallHeight = v; refreshPanel(); } };
++    const chk = container.querySelector('[data-proj="chk-extras"]');
+     if (chk) chk.onchange = e => { S.keepExtras = e.target.checked; };
+-    $('btn-fit').onclick = () => { fitView(); draw(); };
+-    $('btn-center').onclick = () => { commit(); centerProject(); fitView(); draw(); toast('Projet recentré sur l\'origine'); };
+-    wireDiagnostic();
++    const btnFit = container.querySelector('[data-proj="btn-fit"]');
++    if (btnFit) btnFit.onclick = () => { fitView(); draw(); };
++    const btnCenter = container.querySelector('[data-proj="btn-center"]');
++    if (btnCenter) btnCenter.onclick = () => { commit(); centerProject(); fitView(); draw(); toast('Projet recentré sur l\'origine'); };
++    wireDiagnostic(container);
+   }
+ 
+   // ---------------------------------------------------------------------------
+@@ -1608,7 +1669,7 @@
+     return diagCache.result;
+   }
+   const levelName = level => (level ? 'Étage ' + level : 'RDC');
+-  function diagnosticHtml() {
++  function diagnosticHtml(idPrefix = '') {
+     const d = projectDiagnostic();
+     if (!d) return '';
+     const items = [];
+@@ -1623,13 +1684,14 @@
+       ? `Aucune toiture tracée : la 3D pose une ${d.roof[0].type === 'hip' ? 'toiture 4 pans (pente 27°, débord 60 cm)' : 'toiture-terrasse (dalle sur l’emprise exacte)'} automatique.${d.roof[0].type === 'hip' && d.footprintFill < 0.85 ? ' Attention : l’emprise est découpée, le 4 pans couvrira aussi ses creux.' : ''}`
+       : roofStyle === 'none' ? 'Toiture automatique désactivée.' : '✓ Toiture tracée à la main : elle est utilisée telle quelle.';
+     const options = { auto: 'Automatique (toit-terrasse)', hip: '4 pans', flat: 'Toit-terrasse', none: 'Aucune' };
+-    items.push(`<div class="ed-field"><label for="sel-roof">Toiture automatique</label><select id="sel-roof">${Object.entries(options).map(([k, l]) => `<option value="${k}"${k === roofStyle ? ' selected' : ''}>${l}</option>`).join('')}</select></div><p class="ed-note">${roofNote}</p>`);
++    items.push(`<div class="ed-field"><label for="${idPrefix}sel-roof">Toiture automatique</label><select id="${idPrefix}sel-roof" data-proj="sel-roof">${Object.entries(options).map(([k, l]) => `<option value="${k}"${k === roofStyle ? ' selected' : ''}>${l}</option>`).join('')}</select></div><p class="ed-note">${roofNote}</p>`);
+     return `<fieldset class="ed-sheet-fields ed-diagnostic"><legend>Diagnostic du projet</legend>${items.join('')}</fieldset>`;
+   }
+-  function wireDiagnostic() {
+-    const roof = $('sel-roof');
++  function wireDiagnostic(container = $('ed-props')) {
++    const scope = container || document;
++    const roof = scope.querySelector('[data-proj="sel-roof"]') || $('sel-roof');
+     if (roof) roof.onchange = e => { commit(); if (e.target.value === 'auto') delete S.p.config.roofStyle; else S.p.config.roofStyle = e.target.value; refreshPanel(); };
+-    document.querySelectorAll('[data-add-void]').forEach(button => button.addEventListener('click', () => {
++    scope.querySelectorAll('[data-add-void]').forEach(button => button.addEventListener('click', () => {
+       const v = projectDiagnostic()?.voids[+button.dataset.addVoid];
+       const rooms = v && S.levelData[v.level] ? S.levelData[v.level].rooms : null;
+       if (!rooms) return;
+@@ -1698,7 +1760,7 @@
+     const stairwells = JSON.parse(JSON.stringify(allLevelItems('stairwells')));
+     const out = {
+       meta: { name: p.meta.name, slug: p.meta.slug, subtitle: p.meta.subtitle || '', client: p.meta.client || '', clientVisible: p.meta.clientVisible === true, updated,
+-        ...Object.fromEntries(['architect', 'location', 'phase', 'revision', 'reference', 'issueDate', 'status', 'concept', 'contact'].filter(key => p.meta[key]).map(key => [key, String(p.meta[key])])),
++        ...Object.fromEntries(['architect', 'location', 'phase', 'revision', 'reference', 'issueDate', 'status', 'concept', 'contact', 'description'].filter(key => p.meta[key]).map(key => [key, String(p.meta[key])])),
+         ...(Array.isArray(p.meta.sheets) ? { sheets: p.meta.sheets.map(sheet => Object.fromEntries(['title', 'number', 'level', 'revision', 'date', 'status', 'scale'].filter(key => sheet?.[key]).map(key => [key, String(sheet[key])]))) } : {}) },
+       config: { wallHeight: p.config.wallHeight, floorHeight: p.config.floorHeight || 3 },
+       levels: [levelMeta(0), levelMeta(1)],
+@@ -1990,6 +2052,10 @@
+     finally { button.disabled = false; }
+   };
+   $('dlg-cabinet').addEventListener('close', () => { pendingCabinetLogo = undefined; });
++  const btnProjectInfo = $('btn-project-info');
++  if (btnProjectInfo) btnProjectInfo.onclick = openProjectInfoDialog;
++  const btnProjectInfoClose = $('dlg-project-info-close');
++  if (btnProjectInfoClose) btnProjectInfoClose.onclick = () => $('dlg-project-info')?.close();
+   void fetchCabinetProfile();
+   buildLibrary();
+   window.addEventListener('resize', resize);
+@@ -1999,5 +2065,5 @@
+   toast('Importez l\'image d\'un plan, ou ouvrez l\'exemple Villa Serena');
+   window.__editor = S; // débogage
+   // API interne pour les modules complémentaires (lecture IA, caméras…)
+-  window.EditorAPI = { S, commit, refreshPanel, draw, toast, fitView, setTool, select, FURNITURE, OPENINGS, wallLen, projectOnWall, slugify, r2, round, allLevelItems, toProjectJson };
++  window.EditorAPI = { S, commit, refreshPanel, draw, toast, fitView, setTool, select, loadProject, projectPanel, openProjectInfoDialog, FURNITURE, OPENINGS, wallLen, projectOnWall, slugify, r2, round, allLevelItems, toProjectJson };
+ })();
+diff --git a/tests/project-info.test.cjs b/tests/project-info.test.cjs
+new file mode 100644
+index 0000000..97fc62e
+--- /dev/null
++++ b/tests/project-info.test.cjs
+@@ -0,0 +1,347 @@
++const test = require('node:test');
++const assert = require('node:assert/strict');
++const fs = require('node:fs');
++const path = require('node:path');
++const vm = require('node:vm');
++
++const ROOT = path.resolve(__dirname, '..');
++const PdfIdentity = require('../js/pdfIdentity.js');
++const CostEstimate = require('../js/costEstimate.js');
++const Habitability = require('../js/habitability.js');
++
++/** Mini DOM suffisant pour exécuter js/editor.js dans node:vm sans navigateur. */
++function createEditorSandbox() {
++  const byId = new Map();
++
++  function parseHtmlControls(html, container) {
++    container._children = [];
++    container._controls = [];
++    container._missingNodes = [];
++
++    const missingMatch = /<div[^>]*data-pdf-missing[^>]*>([\s\S]*?)<\/div>/i.exec(html);
++    if (missingMatch) {
++      const node = makeEl('div');
++      node.dataset.pdfMissing = '';
++      node.innerHTML = missingMatch[1];
++      node.textContent = missingMatch[1].replace(/<[^>]+>/g, '')
++        .replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
++      node.classList.toggle('is-ok', /class="[^"]*\bis-ok\b/.test(missingMatch[0]));
++      container._missingNodes.push(node);
++    }
++
++    const fieldRe = /<(input|select|textarea)\b([^>]*)>(?:([\s\S]*?)<\/\1>)?/gi;
++    let m;
++    while ((m = fieldRe.exec(html)) !== null) {
++      const tag = m[1].toLowerCase();
++      const attrs = m[2];
++      const inner = m[3] || '';
++      const el = makeEl(tag);
++      const idM = /\bid="([^"]*)"/.exec(attrs);
++      if (idM) { el.id = idM[1]; byId.set(el.id, el); }
++      const keyM = /\bdata-key="([^"]*)"/.exec(attrs);
++      if (keyM) el.dataset.key = keyM[1];
++      const sheetM = /\bdata-sheet="([^"]*)"/.exec(attrs);
++      if (sheetM) el.dataset.sheet = sheetM[1];
++      const projM = /\bdata-proj="([^"]*)"/.exec(attrs);
++      if (projM) el.dataset.proj = projM[1];
++      const typeM = /\btype="([^"]*)"/.exec(attrs);
++      if (typeM) el.type = typeM[1];
++      if (tag === 'textarea') {
++        el.value = inner
++          .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
++          .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
++      } else if (tag === 'select') {
++        const selM = /<option\b[^>]*value="([^"]*)"[^>]*\bselected\b/i.exec(inner);
++        el.value = selM ? selM[1] : '';
++      } else if (el.type === 'checkbox') {
++        el.checked = /\bchecked\b/.test(attrs);
++      } else {
++        const valM = /\bvalue="([^"]*)"/.exec(attrs);
++        el.value = valM ? valM[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&') : '';
++      }
++      container._controls.push(el);
++    }
++
++    const btnRe = /<button\b([^>]*)>([\s\S]*?)<\/button>/gi;
++    while ((m = btnRe.exec(html)) !== null) {
++      const el = makeEl('button');
++      const idM = /\bid="([^"]*)"/.exec(m[1]);
++      if (idM) { el.id = idM[1]; byId.set(el.id, el); }
++      const projM = /\bdata-proj="([^"]*)"/.exec(m[1]);
++      if (projM) el.dataset.proj = projM[1];
++      container._controls.push(el);
++    }
++
++    const checksTitle = makeEl('h4');
++    checksTitle.dataset.checksTitle = '';
++    const checksList = makeEl('ul');
++    checksList.dataset.checksList = '';
++    container._checksTitle = checksTitle;
++    container._checksList = checksList;
++  }
++
++  function makeEl(tag = 'div', id = '') {
++    const classes = new Set();
++    const listeners = new Map();
++    const el = {
++      tagName: tag.toUpperCase(),
++      id,
++      type: '',
++      value: '',
++      checked: false,
++      disabled: false,
++      hidden: false,
++      open: false,
++      textContent: '',
++      style: {},
++      dataset: {},
++      _innerHTML: '',
++      _controls: [],
++      _missingNodes: [],
++      classList: {
++        add: c => classes.add(c),
++        remove: c => classes.delete(c),
++        toggle: (c, force) => {
++          if (force === undefined) { if (classes.has(c)) classes.delete(c); else classes.add(c); }
++          else if (force) classes.add(c); else classes.delete(c);
++        },
++        contains: c => classes.has(c)
++      },
++      addEventListener(type, fn) {
++        if (!listeners.has(type)) listeners.set(type, []);
++        listeners.get(type).push(fn);
++      },
++      dispatchEvent(evt) {
++        const type = typeof evt === 'string' ? evt : evt.type;
++        const payload = typeof evt === 'string' ? { type, target: el } : Object.assign({ target: el }, evt);
++        (listeners.get(type) || []).forEach(fn => fn(payload));
++        if (typeof el['on' + type] === 'function') el['on' + type](payload);
++      },
++      click() { el.dispatchEvent('click'); },
++      showModal() { el.open = true; },
++      close() { el.open = false; el.dispatchEvent('close'); },
++      setAttribute() {},
++      removeAttribute() {},
++      getAttribute() { return null; },
++      contains() { return false; },
++      append() {},
++      appendChild(child) { return child; },
++      replaceChildren() {},
++      getBoundingClientRect() { return { left: 0, top: 0, width: 900, height: 600 }; },
++      querySelector(sel) {
++        if (sel === '[data-checks-list]') return el._checksList || null;
++        if (sel === '[data-checks-title]') return el._checksTitle || null;
++        if (sel === '[data-pdf-missing]') return el._missingNodes[0] || null;
++        if (sel === '[data-lib]') return makeEl('button');
++        const dm = /^\[data-(key|sheet|proj)="([^"]+)"\]$/.exec(sel);
++        if (dm) {
++          const prop = dm[1];
++          return el._controls.find(c => c.dataset[prop] === dm[2]) || null;
++        }
++        return null;
++      },
++      querySelectorAll(sel) {
++        if (sel === '[data-key]') return el._controls.filter(c => c.dataset.key !== undefined);
++        if (sel === '[data-pdf-missing]') return el._missingNodes.slice();
++        if (sel === '[data-add-void]') return [];
++        if (sel === '[data-lib]') return [makeEl('button')];
++        return [];
++      }
++    };
++    Object.defineProperty(el, 'innerHTML', {
++      get() { return el._innerHTML; },
++      set(val) {
++        el._innerHTML = String(val);
++        parseHtmlControls(el._innerHTML, el);
++      }
++    });
++    if (id) byId.set(id, el);
++    return el;
++  }
++
++  const noop = () => {};
++  const ctx2d = new Proxy({ measureText: () => ({ width: 20 }) }, {
++    get(target, prop) { return prop in target ? target[prop] : noop; }
++  });
++
++  const canvas = makeEl('canvas', 'ed-canvas');
++  canvas.width = 900;
++  canvas.height = 600;
++  canvas.clientWidth = 900;
++  canvas.clientHeight = 600;
++  canvas.getContext = () => ctx2d;
++
++  const ids = [
++    'ed-stage', 'ed-drop-overlay', 'ed-hint', 'ed-coords', 'ed-scale',
++    'ed-props', 'ed-library', 'ed-project-name', 'ed-save-state', 'ed-toast',
++    'ed-ghost-toggle', 'btn-new', 'btn-open', 'btn-import-villa', 'btn-cabinet',
++    'btn-project-info', 'file-plan', 'btn-ai-read', 'btn-plan-cleanup', 'btn-undo',
++    'btn-redo', 'btn-save', 'btn-export-json', 'btn-preview',
++    'dlg-open', 'dlg-open-list', 'dlg-open-status', 'dlg-open-close', 'file-json',
++    'dlg-cabinet', 'cabinet-name', 'cabinet-architect', 'cabinet-logo',
++    'cabinet-logo-preview', 'cabinet-remove-logo', 'cabinet-status', 'cabinet-close', 'cabinet-save',
++    'dlg-project-info', 'dlg-project-info-body', 'dlg-project-info-close'
++  ];
++  ids.forEach(id => makeEl(id.startsWith('dlg-') ? 'dialog' : 'div', id));
++
++  const document = {
++    getElementById: id => byId.get(id) || null,
++    createElement: tag => makeEl(tag),
++    querySelector: sel => {
++      if (sel === '[data-pdf-missing]') {
++        return [...byId.values()].flatMap(e => e._missingNodes)[0] || null;
++      }
++      return null;
++    },
++    querySelectorAll: sel => {
++      if (sel === '[data-pdf-missing]') {
++        return [...byId.values()].flatMap(e => e._missingNodes);
++      }
++      return [];
++    },
++    body: makeEl('body')
++  };
++
++  const windowObj = {
++    devicePixelRatio: 1,
++    addEventListener: noop,
++    removeEventListener: noop,
++    confirm: () => true,
++    open: () => null,
++    HOUSE_DATA: { meta: {}, config: {}, walls: [], rooms: [] }
++  };
++
++  const sandbox = {
++    window: windowObj,
++    document,
++    PdfIdentity,
++    CostEstimate,
++    Habitability,
++    Image: class { set src(_) {} },
++    localStorage: { getItem: () => null, setItem: noop },
++    fetch: async () => ({ ok: false }),
++    setTimeout, clearTimeout,
++    console
++  };
++  sandbox.globalThis = sandbox;
++
++  const coreCode = fs.readFileSync(path.join(ROOT, 'js', 'houseDataCore.js'), 'utf8');
++  vm.runInNewContext(coreCode, sandbox, { filename: 'js/houseDataCore.js' });
++  sandbox.HouseAuto = windowObj.HouseAuto || sandbox.HouseAuto || {
++    geometryVersion: () => '00000000',
++    diagnose: () => ({ unreachable: [], voids: [], roof: [], footprintFill: 1 }),
++    stairFits: () => true
++  };
++  const code = fs.readFileSync(path.join(ROOT, 'js', 'editor.js'), 'utf8');
++  vm.runInNewContext(code, sandbox, { filename: 'js/editor.js' });
++  return { api: windowObj.EditorAPI, document, byId };
++}
++
++test('editor.html expose le bouton « Informations du projet » et son dialogue', () => {
++  const html = fs.readFileSync(path.join(ROOT, 'editor.html'), 'utf8');
++  assert.match(html, /id="btn-project-info"[^>]*>Informations du projet<\/button>/);
++  assert.match(html, /<dialog id="dlg-project-info"[^>]*>/);
++  assert.match(html, /id="dlg-project-info-body"/);
++});
++
++test('aller-retour de residence-verandas : meta.description survit et aucun champ administratif n’est inventé', () => {
++  const { api } = createEditorSandbox();
++  const original = JSON.parse(fs.readFileSync(path.join(ROOT, 'projects', 'residence-verandas', 'project.json'), 'utf8'));
++
++  api.loadProject(original, { keepExtras: true });
++  const saved = api.toProjectJson('2026-11-25T10:00:00.000Z');
++
++  assert.equal(saved.meta.name, original.meta.name);
++  assert.equal(saved.meta.slug, original.meta.slug);
++  assert.equal(saved.meta.subtitle, original.meta.subtitle);
++  assert.equal(saved.meta.description, original.meta.description);
++  assert.equal(saved.meta.client, '');
++  assert.equal(saved.meta.clientVisible, false);
++  for (const absent of ['architect', 'location', 'phase', 'revision', 'reference', 'issueDate', 'status', 'concept', 'contact']) {
++    assert.equal(saved.meta[absent], undefined, `le champ absent ${absent} ne doit pas être inventé`);
++  }
++});
++
++test('aller-retour complet : tous les champs meta survivent sans perte ni déformation', () => {
++  const { api } = createEditorSandbox();
++  const fullProject = {
++    meta: {
++      name: 'VILLA ACACIA',
++      slug: 'villa-acacia',
++      subtitle: 'Maison R+1 avec patio central',
++      client: 'M. & Mme Mbarga',
++      clientVisible: true,
++      reference: 'ARC-2026-014',
++      architect: 'Atelier Nkoa',
++      location: 'Yaoundé — Bastos',
++      phase: 'APS',
++      revision: 'B',
++      issueDate: '2026-10-15',
++      status: 'En validation client',
++      concept: 'Double orientation nord-sud\nVentilation traversante naturelle',
++      contact: 'atelier@nkoa-archi.cm',
++      description: 'Ligne 1 : rez-de-chaussée ouvert sur terrasse.\nLigne 2 : étage nuit protégé par brise-soleil.'
++    },
++    config: { wallHeight: 2.9, floorHeight: 3 },
++    walls: [{ from: [0, 0], to: [6, 0], thick: 0.25, type: 'ext', level: 0, openings: [] }],
++    rooms: [{ id: 'sejour', name: 'SÉJOUR', level: 0, bounds: { xMin: 0, xMax: 6, zMin: 0, zMax: 4 }, floorType: 'parquet', habitable: true, desc: '' }]
++  };
++
++  api.loadProject(fullProject);
++  const first = api.toProjectJson('2026-11-25T10:00:00.000Z');
++  api.loadProject(first);
++  const second = api.toProjectJson('2026-11-25T10:05:00.000Z');
++
++  for (const field of ['name', 'subtitle', 'client', 'clientVisible', 'reference', 'architect', 'location', 'phase', 'revision', 'issueDate', 'status', 'concept', 'contact', 'description']) {
++    assert.equal(first.meta[field], fullProject.meta[field], `premier aller-retour sur meta.${field}`);
++    assert.equal(second.meta[field], fullProject.meta[field], `second aller-retour sur meta.${field}`);
++  }
++});
++
++test('la fiche « Informations du projet » s’ouvre dans un dialogue même lorsqu’un mur est sélectionné', () => {
++  const { api, byId } = createEditorSandbox();
++  const original = JSON.parse(fs.readFileSync(path.join(ROOT, 'projects', 'residence-verandas', 'project.json'), 'utf8'));
++  api.loadProject(original, { keepExtras: true });
++
++  const wall = api.S.p.walls[0];
++  assert.ok(wall, 'au moins un mur doit être présent');
++  api.select({ kind: 'wall', obj: wall });
++  assert.equal(api.S.sel.kind, 'wall');
++  assert.match(byId.get('ed-props').innerHTML, /<h3>Mur<\/h3>/);
++
++  byId.get('btn-project-info').click();
++  const dlg = byId.get('dlg-project-info');
++  const body = byId.get('dlg-project-info-body');
++  assert.equal(dlg.open, true, 'le dialogue doit être ouvert');
++  assert.equal(api.S.sel.kind, 'wall', 'la sélection du mur doit rester intacte');
++
++  const descInput = body.querySelector('[data-key="description"]');
++  assert.ok(descInput, 'le champ Description doit être présent dans la fiche');
++  assert.equal(descInput.tagName, 'TEXTAREA');
++  assert.equal(descInput.value, original.meta.description);
++
++  assert.match(body.innerHTML, /utilisé dans les PDF/, 'les champs du cartouche portent le repère « utilisé dans les PDF »');
++});
++
++test('missingFields se met à jour dès la saisie du maître d’ouvrage dans la fiche', () => {
++  const { api, byId } = createEditorSandbox();
++  const original = JSON.parse(fs.readFileSync(path.join(ROOT, 'projects', 'residence-verandas', 'project.json'), 'utf8'));
++  api.loadProject(original, { keepExtras: true });
++
++  byId.get('btn-project-info').click();
++  const body = byId.get('dlg-project-info-body');
++  const bannerBefore = body.querySelector('[data-pdf-missing]');
++  assert.ok(bannerBefore, 'la liste des champs vides doit être affichée');
++  assert.match(bannerBefore.textContent, /Maître d'ouvrage/);
++
++  const clientInput = body.querySelector('[data-key="client"]');
++  assert.ok(clientInput, 'le champ client doit être présent');
++  clientInput.value = 'Mme Fouda';
++  clientInput.dispatchEvent('change');
++
++  assert.equal(api.S.p.meta.client, 'Mme Fouda');
++  const bannerAfter = body.querySelector('[data-pdf-missing]');
++  assert.doesNotMatch(bannerAfter.textContent, /Maître d'ouvrage/);
++  const check = PdfIdentity.missingFields({ meta: api.S.p.meta });
++  assert.ok(!check.missing.includes("Maître d'ouvrage"));
++});
+-- 
+2.34.1
+

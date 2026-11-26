@@ -2,11 +2,16 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { execFile } = require('node:child_process');
 const { randomUUID, createHash } = require('node:crypto');
 const feedbackStore = require('./feedbackStore');
 const decisionStore = require('./decisionStore');
 const presentationStore = require('./presentationStore');
 const cabinetStore = require('./cabinetStore');
+let planchesStore = null;
+try { planchesStore = require('./planchesStore'); } catch { /* fixtures isolées sans planchesStore.js */ }
+let variantsStore = null;
+try { variantsStore = require('./variantsStore'); } catch { /* fixtures isolées sans variantsStore.js */ }
 const { createPortal, safePath } = require('./privatePortal');
 let DeliverableGate = null;
 try { DeliverableGate = require('./js/deliverableGate'); } catch { /* fixtures isolées sans js/deliverableGate.js */ }
@@ -24,8 +29,28 @@ const TYPES = {
 };
 
 // Médias isolés par projet : projects/<slug>/generated/{renders,images,videos,manifest.json}
+function availableProjectSlugs() {
+  if (!fs.existsSync(PROJECTS)) return [];
+  return fs.readdirSync(PROJECTS, { withFileTypes: true })
+    .filter(d => d.isDirectory() && /^[a-z0-9-]{1,60}$/i.test(d.name) && fs.existsSync(path.join(PROJECTS, d.name, 'project.json')))
+    .map(d => ({ slug: d.name.toLowerCase(), updated: fs.statSync(path.join(PROJECTS, d.name, 'project.json')).mtimeMs }))
+    .sort((a, b) => b.updated - a.updated)
+    .map(item => item.slug);
+}
+
+function defaultProjectSlug() {
+  const slugs = availableProjectSlugs();
+  const configured = process.env.PORTAL_DEFAULT_PROJECT;
+  if (configured && /^[a-z0-9-]{1,60}$/i.test(configured) && slugs.includes(configured.toLowerCase())) {
+    return configured.toLowerCase();
+  }
+  if (slugs.length) return slugs[0];
+  throw new Error('Aucun projet disponible dans le dossier projects/.');
+}
+
 function projectSlug(value) {
-  const slug = String(value || 'residence-verandas');
+  const raw = value === undefined || value === null ? '' : String(value).trim();
+  const slug = raw || defaultProjectSlug();
   if (!/^[a-z0-9-]{1,60}$/i.test(slug)) throw new Error('projet invalide');
   return slug.toLowerCase();
 }
@@ -378,7 +403,95 @@ function saveGenerated(req, res, url) {
   });
 }
 
-// Enregistre une vidéo capturée localement par MediaRecorder (sans appel IA).
+// Transcode un flux WebM capturé par MediaRecorder en MP4 H.264 universel (iPhone/WhatsApp/Safari) si ffmpeg est présent.
+function transcodeWebmToMp4(inputPath, outputPath) {
+  return new Promise((resolve) => {
+    execFile('ffmpeg', [
+      '-y', '-loglevel', 'error',
+      '-i', inputPath,
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21',
+      '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+      '-an', outputPath
+    ], { timeout: 90000 }, (err) => {
+      if (err || !fs.existsSync(outputPath) || !fs.statSync(outputPath).size) {
+        fs.rm(outputPath, { force: true }, () => {});
+        return resolve(false);
+      }
+      resolve(true);
+    });
+  });
+}
+
+// Moteur de rendu vidéo FFmpeg côté serveur : assemble les vues réelles du projet en MP4 H.264 (1280×720).
+function renderProjectVideo(req, res, url) {
+  let slug;
+  let media;
+  try { slug = projectSlug(url.searchParams.get('project')); media = ensureProjectMedia(slug); }
+  catch (error) { return sendJson(res, 400, { error: error.message }); }
+
+  const candidates = [];
+  const collectDir = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const name of fs.readdirSync(dir).sort()) {
+      if (/\.(?:jpe?g|png|webp)$/i.test(name)) candidates.push(path.join(dir, name));
+    }
+  };
+  collectDir(media.images);
+  collectDir(media.renders);
+  collectDir(path.join(PROJECTS, slug, 'planches', 'edition-art'));
+  const frames = candidates.slice(0, 6);
+  if (!frames.length) return sendJson(res, 400, { error: 'Aucune image disponible dans ce projet pour générer une vidéo.' });
+
+  const id = `visite-ffmpeg-${new Date().toISOString().replace(/[-:.]/g, '')}`;
+  const dir = media.videos;
+  fs.mkdirSync(dir, { recursive: true });
+  const target = path.join(dir, `${id}.mp4`);
+  const secPerImage = 3;
+  const args = ['-y', '-loglevel', 'error'];
+  frames.forEach(file => args.push('-loop', '1', '-t', String(secPerImage), '-i', file));
+  const filterParts = frames.map((_, i) =>
+    `[${i}:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=#1d2620,setsar=1,fps=25,fade=t=in:st=0:d=0.45,fade=t=out:st=${(secPerImage - 0.45).toFixed(2)}:d=0.45[v${i}]`
+  );
+  const concatInputs = frames.map((_, i) => `[v${i}]`).join('');
+  filterParts.push(`${concatInputs}concat=n=${frames.length}:v=1:a=0[vout]`);
+  args.push(
+    '-filter_complex', filterParts.join(';'),
+    '-map', '[vout]',
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22',
+    '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+    target
+  );
+
+  execFile('ffmpeg', args, { timeout: 120000 }, (err) => {
+    if (err || !fs.existsSync(target) || !fs.statSync(target).size) {
+      fs.rm(target, { force: true }, () => {});
+      return sendJson(res, 500, { error: `Moteur FFmpeg indisponible ou erreur de rendu (${err?.message || 'échec'}).` });
+    }
+    try {
+      const size = fs.statSync(target).size;
+      const file = `${media.prefix}videos/${id}.mp4`;
+      const manifestPath = media.manifest;
+      let manifest = { version: 1, items: [] };
+      if (fs.existsSync(manifestPath)) manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      if (!manifest || !Array.isArray(manifest.items)) manifest = { version: 1, items: [] };
+      const item = {
+        id, type: 'video', file, mimeType: 'video/mp4', format: 'mp4',
+        label: 'Film de présentation (FFmpeg)',
+        duration: frames.length * secPerImage,
+        generator: 'FFmpeg H.264',
+        sourceLabel: 'Rendu vidéo FFmpeg',
+        createdAt: new Date().toISOString(), size
+      };
+      manifest.items.push(item);
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+      return sendJson(res, 200, { ok: true, item, framesUsed: frames.length });
+    } catch (error) {
+      return sendJson(res, 500, { error: error.message });
+    }
+  });
+}
+
+// Enregistre une vidéo capturée localement par MediaRecorder (sans appel IA) et la transcode en MP4 H.264 si possible.
 function saveVideo(req, res, url) {
   let slug;
   let media;
@@ -393,7 +506,6 @@ function saveVideo(req, res, url) {
   }
 
   const dir = media.videos;
-  const file = `${media.prefix}videos/${id}.${ext}`;
   const target = path.join(dir, `${id}.${ext}`);
   const temp = target + '.tmp';
   const maxBytes = 250 * 1024 * 1024;
@@ -422,7 +534,7 @@ function saveVideo(req, res, url) {
   req.on('end', () => { if (!rejected) output.end(); });
   req.on('error', error => reject(400, error.message));
   output.on('error', error => reject(500, error.message));
-  output.on('finish', () => {
+  output.on('finish', async () => {
     if (rejected) return;
     if (!size) return reject(400, 'Vidéo vide.');
     try {
@@ -431,17 +543,36 @@ function saveVideo(req, res, url) {
       if (fs.existsSync(manifestPath)) manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
       if (!manifest || !Array.isArray(manifest.items)) throw new Error('Manifeste invalide.');
       fs.renameSync(temp, target);
+
+      let finalExt = ext;
+      let finalMime = mime;
+      let finalSize = size;
+      let transcoded = false;
+      if (ext === 'webm') {
+        const mp4Target = path.join(dir, `${id}.mp4`);
+        if (await transcodeWebmToMp4(target, mp4Target)) {
+          fs.rm(target, { force: true }, () => {});
+          finalExt = 'mp4';
+          finalMime = 'video/mp4';
+          finalSize = fs.statSync(mp4Target).size;
+          transcoded = true;
+        }
+      }
+
+      const file = `${media.prefix}videos/${id}.${finalExt}`;
       const duration = Math.max(0, Math.min(3600, Number(req.headers['x-video-duration']) || 0));
       const item = {
-        id, type: 'video', file, mimeType: mime, label: 'Visite cinématique',
-        duration: Math.round(duration), generator: 'MediaRecorder local', createdAt: new Date().toISOString(), size
+        id, type: 'video', file, mimeType: finalMime, format: finalExt, label: 'Visite cinématique',
+        duration: Math.round(duration),
+        generator: transcoded ? 'MediaRecorder + FFmpeg H.264' : 'MediaRecorder local',
+        createdAt: new Date().toISOString(), size: finalSize
       };
       const index = manifest.items.findIndex(existing => existing && existing.id === id);
       if (index >= 0) manifest.items[index] = item;
       else manifest.items.push(item);
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify({ ok: true, item }));
+      res.end(JSON.stringify({ ok: true, item, transcoded }));
     } catch (error) {
       reject(500, error.message);
     }
@@ -564,14 +695,19 @@ function projectCover(slug) {
     const explicit = items.find(item => item.cover === true) || items.find(item => item.catalog !== false);
     if (explicit) return explicit.file;
   } catch { /* pas de manifeste : on cherche une capture */ }
-  const fallback = ['generated/renders/facade.jpg', 'generated/renders/vue-aerienne.jpg', 'plan.jpg']
+  const fallback = ['generated/renders/facade.jpg', 'generated/renders/vue-aerienne.jpg', 'plan.jpg', 'plan.png']
     .find(file => fs.existsSync(path.join(base, file)));
-  return fallback ? prefix + fallback : null;
+  if (fallback) return prefix + fallback;
+  try {
+    const project = JSON.parse(fs.readFileSync(path.join(base, 'project.json'), 'utf8'));
+    const planUrl = project?.config?.planImage?.url;
+    if (validFile(planUrl)) return planUrl;
+  } catch { /* project.json illisible */ }
+  return null;
 }
 
 function listProjects(res, only) {
   fs.mkdirSync(PROJECTS, { recursive: true });
-  const defaultSlug = portal.enabled ? process.env.PORTAL_DEFAULT_PROJECT || projectSlug() : projectSlug();
   const items = fs.readdirSync(PROJECTS, { withFileTypes: true })
     .filter(d => (!only || d.name === only) && d.isDirectory() && /^[a-z0-9-]{1,60}$/i.test(d.name) && fs.existsSync(path.join(PROJECTS, d.name, 'project.json')))
     .map(d => {
@@ -581,9 +717,14 @@ function listProjects(res, only) {
         name = meta.name || d.name;
         subtitle = typeof meta.subtitle === 'string' ? meta.subtitle.slice(0, 120) : '';
       } catch (e) { /* nom par défaut */ }
-      return { slug: d.name, name, subtitle, cover: projectCover(d.name), default: d.name === defaultSlug, updated: fs.statSync(path.join(PROJECTS, d.name, 'project.json')).mtimeMs };
+      return { slug: d.name, name, subtitle, cover: projectCover(d.name), default: false, updated: fs.statSync(path.join(PROJECTS, d.name, 'project.json')).mtimeMs };
     })
     .sort((a, b) => b.updated - a.updated);
+  const configured = portal.enabled && process.env.PORTAL_DEFAULT_PROJECT ? process.env.PORTAL_DEFAULT_PROJECT.toLowerCase() : null;
+  const defaultSlug = (configured && items.some(item => item.slug.toLowerCase() === configured))
+    ? configured
+    : (items[0]?.slug.toLowerCase() || null);
+  items.forEach(item => { item.default = item.slug.toLowerCase() === defaultSlug; });
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(items));
 }
@@ -654,6 +795,22 @@ function cabinetApi(req, res) {
     try { return sendJson(res, 200, cabinetStore.save(ROOT, body)); }
     catch (error) { return sendJson(res, error.status || 500, { error: error.status ? error.message : 'Enregistrement du profil impossible.' }); }
   });
+}
+
+function cabinetLogoApi(req, res) {
+  if (!['GET', 'HEAD'].includes(req.method)) return sendJson(res, 405, { error: 'Méthode non autorisée.' });
+  const logo = typeof cabinetStore.readLogo === 'function' ? cabinetStore.readLogo(ROOT) : null;
+  if (!logo) {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'private, no-store' });
+    return res.end('Logo absent');
+  }
+  res.writeHead(200, {
+    'Content-Type': 'image/png',
+    'Content-Length': logo.length,
+    'X-Content-Type-Options': 'nosniff',
+    'Cache-Control': 'private, no-store'
+  });
+  return res.end(req.method === 'HEAD' ? undefined : logo);
 }
 
 function saveProject(req, res) {
@@ -1053,20 +1210,26 @@ function videoStatus(req, res, url) {
   })().catch(error => sendJson(res, 502, { error: error.message }));
 }
 
-function clientFeedback(req, res, url) {
+function clientFeedback(req, res, url, access) {
   const project = url.searchParams.get('project');
   const channel = req.headers['x-feedback-channel'];
   const respondError = error => sendJson(res, error.status || 500, { error: error.status ? error.message : 'Stockage des retours indisponible.' });
+  if (req.method === 'GET' && url.searchParams.get('list') === '1') {
+    if (portal.enabled && access?.session?.role !== 'architect') {
+      return sendJson(res, 403, { error: 'Liste des dossiers réservée à l’architecte.' });
+    }
+    try { return sendJson(res, 200, { channels: feedbackStore.listChannels(PROJECTS, project) }); }
+    catch (error) { return respondError(error); }
+  }
   if (req.method === 'GET') {
     try { return sendJson(res, 200, { notes: feedbackStore.open(PROJECTS, project, channel).notes }); }
     catch (error) { return respondError(error); }
   }
   const review = req.method === 'PATCH';
   if (!review && req.method !== 'POST') return sendJson(res, 405, { error: 'Méthode non autorisée.' });
-  if (review && !portal.enabled) return sendJson(res, 403, { error: 'Le suivi des décisions requiert le portail privé.' });
   if (req.headers['content-type']?.split(';')[0] !== 'application/json') return sendJson(res, 415, { error: 'JSON requis.' });
   return readBody(req, res, 8192, data => {
-    const role = portal.enabled ? portal.roleForProject(req, project) : null;
+    const role = portal.enabled ? portal.roleForProject(req, project) : 'architect';
     if (portal.enabled && !(role === 'architect' || (!review && role === 'comment'))) return sendJson(res, 403, { error: 'Accès non autorisé.' });
     try {
       const item = (review ? feedbackStore.review : feedbackStore.append)(PROJECTS, project, channel, data);
@@ -1104,6 +1267,99 @@ function clientDecisions(req, res, url) {
   });
 }
 
+function planchesApi(req, res, url, urlPath, access) {
+  if (!planchesStore) return sendJson(res, 501, { error: 'Module planches indisponible.' });
+  if (portal.enabled && access?.session?.role !== 'architect') {
+    return sendJson(res, 403, { error: 'Accès réservé à l’architecte.' });
+  }
+  const match = /^\/api\/projects\/([^/]+)\/planches(?:\/([^/]+))?$/.exec(urlPath);
+  if (!match) return sendJson(res, 404, { error: 'Route planches introuvable.' });
+  const slug = match[1];
+  const idFromPath = match[2] || '';
+  const respondError = error => sendJson(res, error.status || 500, {
+    error: error.status ? error.message : 'Stockage des planches indisponible.'
+  });
+
+  if (req.method === 'GET') {
+    if (idFromPath) return sendJson(res, 404, { error: 'Route planches introuvable.' });
+    try { return sendJson(res, 200, { slug: slug.toLowerCase(), items: planchesStore.list(PROJECTS, slug) }); }
+    catch (error) { return respondError(error); }
+  }
+  if (req.method === 'POST') {
+    if (idFromPath) return sendJson(res, 405, { error: 'Méthode non autorisée sur cette ressource.' });
+    if (req.headers['content-type']?.split(';')[0] !== 'application/json') {
+      return sendJson(res, 415, { error: 'JSON requis.' });
+    }
+    return readBody(req, res, 60 * 1024 * 1024, body => {
+      try {
+        const items = planchesStore.save(PROJECTS, slug, body);
+        return sendJson(res, 201, { slug: slug.toLowerCase(), items });
+      } catch (error) { return respondError(error); }
+    });
+  }
+  if (req.method === 'PATCH') {
+    if (req.headers['content-type']?.split(';')[0] !== 'application/json') {
+      return sendJson(res, 415, { error: 'JSON requis.' });
+    }
+    return readBody(req, res, 32 * 1024, body => {
+      const id = idFromPath || body?.id || '';
+      try {
+        const item = planchesStore.update(PROJECTS, slug, id, body);
+        return sendJson(res, 200, { slug: slug.toLowerCase(), item });
+      } catch (error) { return respondError(error); }
+    });
+  }
+  if (req.method === 'DELETE') {
+    const id = idFromPath || url.searchParams.get('id') || '';
+    try { return sendJson(res, 200, planchesStore.remove(PROJECTS, slug, id)); }
+    catch (error) { return respondError(error); }
+  }
+  return sendJson(res, 405, { error: 'Méthode non autorisée.' });
+}
+
+function variantsApi(req, res, url, urlPath, access) {
+  if (!variantsStore) return sendJson(res, 501, { error: 'Module variantes indisponible.' });
+  const match = /^\/api\/projects\/([^/]+)\/variants(?:\/([^/]+))?$/.exec(urlPath);
+  if (!match) return sendJson(res, 404, { error: 'Route variantes introuvable.' });
+  const slug = match[1];
+  const slotFromPath = match[2] || '';
+  const respondError = error => sendJson(res, error.status || 500, {
+    error: error.status ? error.message : 'Stockage des variantes indisponible.'
+  });
+
+  if (req.method === 'GET') {
+    if (portal.enabled && access?.session?.role !== 'architect' && access?.session?.project !== slug.toLowerCase()) {
+      return sendJson(res, 403, { error: 'Accès non autorisé à ce projet.' });
+    }
+    try {
+      if (slotFromPath) return sendJson(res, 200, { slug: slug.toLowerCase(), item: variantsStore.get(PROJECTS, slug, slotFromPath) });
+      return sendJson(res, 200, { slug: slug.toLowerCase(), variants: variantsStore.list(PROJECTS, slug) });
+    } catch (error) { return respondError(error); }
+  }
+
+  if (portal.enabled && access?.session?.role !== 'architect') {
+    return sendJson(res, 403, { error: 'Modification des variantes réservée à l’architecte.' });
+  }
+  if (req.method === 'POST') {
+    if (req.headers['content-type']?.split(';')[0] !== 'application/json') {
+      return sendJson(res, 415, { error: 'JSON requis.' });
+    }
+    return readBody(req, res, 2 * 1024 * 1024, body => {
+      const slot = slotFromPath || body?.slot || '';
+      try {
+        const item = variantsStore.save(PROJECTS, slug, slot, body);
+        return sendJson(res, 201, { slug: slug.toLowerCase(), item });
+      } catch (error) { return respondError(error); }
+    });
+  }
+  if (req.method === 'DELETE') {
+    const slot = slotFromPath || url.searchParams.get('slot') || '';
+    try { return sendJson(res, 200, variantsStore.remove(PROJECTS, slug, slot)); }
+    catch (error) { return respondError(error); }
+  }
+  return sendJson(res, 405, { error: 'Méthode non autorisée.' });
+}
+
 http.createServer((req, res) => {
   let requestUrl, requestedPath;
   try {
@@ -1122,9 +1378,10 @@ http.createServer((req, res) => {
   const urlPath = '/' + relative;
   const access = portal.enabled ? portal.guard(req, res, requestUrl, relative) : {};
   if (!access) return;
-  if (urlPath === '/api/client-feedback') return clientFeedback(req, res, requestUrl);
+  if (urlPath === '/api/client-feedback') return clientFeedback(req, res, requestUrl, access);
   if (urlPath === '/api/client-decisions') return clientDecisions(req, res, requestUrl);
   if (urlPath === '/api/cabinet/profile') return cabinetApi(req, res);
+  if (urlPath === '/api/cabinet/logo') return cabinetLogoApi(req, res);
   if (urlPath.startsWith('/api/presentation/')) return presentationApi(req, res, requestUrl, urlPath);
   if (req.method === 'GET' && urlPath === '/api/ai/status') return aiStatus(res);
   if (req.method === 'POST' && urlPath === '/api/ai/chat') return aiChat(req, res);
@@ -1138,9 +1395,16 @@ http.createServer((req, res) => {
   if (req.method === 'POST' && urlPath === '/api/save-generated') return saveGenerated(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/gallery/flags') return galleryFlags(req, res, requestUrl, access);
   if (req.method === 'POST' && urlPath === '/api/save-video') return saveVideo(req, res, requestUrl);
+  if (req.method === 'POST' && urlPath === '/api/render-video') return renderProjectVideo(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/save-sequence-frame') return saveSequenceFrame(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/save-sequence-manifest') return saveSequenceManifest(req, res, requestUrl);
   if (req.method === 'GET' && urlPath === '/api/gallery/media') return galleryMedia(res, requestUrl, access);
+  if (urlPath.startsWith('/api/projects/') && /^\/api\/projects\/[^/]+\/planches(?:\/[^/]+)?$/.test(urlPath)) {
+    return planchesApi(req, res, requestUrl, urlPath, access);
+  }
+  if (urlPath.startsWith('/api/projects/') && /^\/api\/projects\/[^/]+\/variants(?:\/[^/]+)?$/.test(urlPath)) {
+    return variantsApi(req, res, requestUrl, urlPath, access);
+  }
   if (req.method === 'GET' && urlPath === '/api/projects') return listProjects(res, access.only);
   if (req.method === 'POST' && urlPath === '/api/save-project') return saveProject(req, res);
   if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405); return res.end(); }

@@ -44,7 +44,10 @@
   };
   const HINTS = {
     select: 'Cliquez un élément pour le modifier · glissez pour le déplacer · glissez une extrémité de mur pour l\'ajuster',
-    calibrate: 'Cliquez les deux extrémités d\'une cote connue du plan, puis saisissez sa longueur réelle',
+    annotate: 'Cliquez sur une pièce ou un mur pour épingler une remarque (synchronisée avec la 3D et le portail client)',
+    calibrate: 'Cliquez les deux extrémités d\'une cote connue du plan (loupe active), puis saisissez sa longueur réelle',
+    'verify-scale': 'Contrôle : cliquez les deux extrémités d\'une 2ᵉ cote connue (loupe active) pour vérifier l\'échelle (alerte > 1 %)',
+    rectify: 'Redressement 4 points : cliquez les 4 coins du cadre/plan dans l\'ordre (haut-gauche, haut-droite, bas-droite, bas-gauche)',
     'wall-ext': 'Cliquez point après point · Échap ou double-clic pour terminer · Alt : mur en biais',
     'wall-int': 'Cliquez point après point · Échap ou double-clic pour terminer · Alt : cloison en biais',
     door: 'Cliquez sur un mur pour poser une porte · ensuite H inverse les gonds, J le sens d\'ouverture',
@@ -60,6 +63,8 @@
     furniture: 'Choisissez un meuble à droite puis cliquez pour le poser · R : +15° · Maj+R : −15°',
     camera: 'Glissez une caméra pour la déplacer, son losange pour l\'orienter · clic dans le vide : nouvelle étape · Suppr : retirer'
   };
+  const customOverlays = [];
+  const customClickHandlers = [];
 
   // ---------------------------------------------------------------------------
   // ÉTAT
@@ -101,10 +106,23 @@
   function switchLevel(level, markDirty = false) {
     level = Number(level) || 0;
     if (level < 0 || level > 1 || level === S.activeLevel || !S.p) return;
+    if (S.p.config.planImages && typeof S.p.config.planImages === 'object') {
+      S.p.config.planImages[String(S.activeLevel)] = S.p.config.planImage || null;
+      if (S.planDataUrl) {
+        S.levelPlanDataUrls = S.levelPlanDataUrls || {};
+        S.levelPlanDataUrls[String(S.activeLevel)] = S.planDataUrl;
+      }
+    }
     LEVEL_ARRAYS.forEach(key => { S.levelData[S.activeLevel][key] = S.p[key] || []; });
     if (!S.levelData[level]) S.levelData[level] = Object.fromEntries(LEVEL_ARRAYS.map(key => [key, []]));
     S.activeLevel = level;
     LEVEL_ARRAYS.forEach(key => { S.p[key] = S.levelData[level][key] || (S.levelData[level][key] = []); });
+    if (S.p.config.planImages && typeof S.p.config.planImages === 'object') {
+      const nextPlan = S.p.config.planImages[String(level)] || null;
+      S.p.config.planImage = nextPlan;
+      S.planDataUrl = (S.levelPlanDataUrls && S.levelPlanDataUrls[String(level)]) || null;
+      loadPlanImage(nextPlan && nextPlan.url);
+    }
     // Les snapshots d'annulation ne contiennent que l'étage actif ; ne pas les rejouer
     // après un changement de niveau sur les tableaux d'un autre étage.
     S.undo = []; S.redo = [];
@@ -232,7 +250,12 @@
     p.meta = Object.assign(p.meta, src.meta || {});
     if (!p.meta.architect && cabinetProfile.architect) p.meta.architect = cabinetProfile.architect;
     if (typeof p.meta.clientVisible !== 'boolean') p.meta.clientVisible = false;
-    p.config = Object.assign(p.config, { wallHeight: (src.config && src.config.wallHeight) || 2.8, floorHeight: (src.config && src.config.floorHeight) || 3, planImage: src.config && src.config.planImage || null });
+    p.config = Object.assign(p.config, {
+      wallHeight: (src.config && src.config.wallHeight) || 2.8,
+      floorHeight: (src.config && src.config.floorHeight) || 3,
+      planImage: src.config && src.config.planImage || null,
+      ...(src.config && src.config.planImages && typeof src.config.planImages === 'object' ? { planImages: JSON.parse(JSON.stringify(src.config.planImages)) } : {})
+    });
     if (['hip', 'flat', 'none'].includes(src.config?.roofStyle)) p.config.roofStyle = src.config.roofStyle;
     if (src.config && src.config.elevationEnd) p.config.elevationEnd = src.config.elevationEnd;
     p.walls = (src.walls || []).map(w => {
@@ -292,6 +315,10 @@
       b.setAttribute('aria-pressed', String(active));
     });
     S.planDataUrl = null;
+    S.levelPlanDataUrls = {};
+    if (p.config.planImages && !p.config.planImage && p.config.planImages['0']) {
+      p.config.planImage = p.config.planImages['0'];
+    }
     loadPlanImage(p.config.planImage && p.config.planImage.url);
     fitView();
     refreshPanel();
@@ -320,29 +347,357 @@
     S.planDataUrl = dataUrl;
     const prev = S.p.config.planImage || {};
     S.p.config.planImage = { url: dataUrl, pxPerMeter: prev.pxPerMeter || 50, originPx: null };
+    if (S.p.config.planImages && typeof S.p.config.planImages === 'object') {
+      S.p.config.planImages[String(S.activeLevel)] = S.p.config.planImage;
+      S.levelPlanDataUrls = S.levelPlanDataUrls || {};
+      S.levelPlanDataUrls[String(S.activeLevel)] = dataUrl;
+    }
     loadPlanImage(dataUrl);
     setTool('calibrate');
     toast(`${sourceLabel} — calibrez maintenant l'échelle sur une cote connue`);
   }
 
-  async function renderPdfPage(file) {
-    if (!window.pdfjsLib) throw new Error('PDF.js n’est pas disponible. Vérifiez la connexion Internet puis rechargez l’éditeur.');
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
-    const page = await pdf.getPage(1);
-    const base = page.getViewport({ scale: 1 });
-    const scale = Math.min(4, 3600 / Math.max(base.width, base.height));
-    const viewport = page.getViewport({ scale });
-    const raster = document.createElement('canvas');
-    raster.width = Math.round(viewport.width);
-    raster.height = Math.round(viewport.height);
-    const context = raster.getContext('2d', { alpha: false });
-    context.fillStyle = '#fff';
-    context.fillRect(0, 0, raster.width, raster.height);
-    await page.render({ canvasContext: context, viewport, background: 'rgb(255,255,255)' }).promise;
-    const dataUrl = raster.toDataURL('image/png');
-    pdf.destroy();
-    return { dataUrl, width: raster.width, height: raster.height };
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error(`Lecture impossible : ${file?.name || 'fichier'}`));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function readPdfAllPages(file, onStatus = () => {}) {
+    if (typeof PlanBook !== 'undefined' && typeof PlanBook.readSheets === 'function') {
+      return PlanBook.readSheets([file], onStatus);
+    }
+    if (!window.pdfjsLib) throw new Error('PDF.js local est introuvable (assets/vendor/pdf.min.js).');
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'assets/vendor/pdf.worker.min.js';
+    const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+    const pages = [];
+    try {
+      for (let n = 1; n <= pdf.numPages; n++) {
+        onStatus(`Lecture de « ${file.name} » — page ${n}/${pdf.numPages}…`);
+        const page = await pdf.getPage(n);
+        const base = page.getViewport({ scale: 1 });
+        const viewport = page.getViewport({ scale: Math.min(4, 2600 / Math.max(base.width, base.height)) });
+        const raster = document.createElement('canvas');
+        raster.width = Math.round(viewport.width);
+        raster.height = Math.round(viewport.height);
+        const context = raster.getContext('2d', { alpha: false });
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, raster.width, raster.height);
+        await page.render({ canvasContext: context, viewport, background: 'rgb(255,255,255)' }).promise;
+        let text = '';
+        try { text = (await page.getTextContent()).items.map(item => item.str).join(' '); } catch { /* page scannée */ }
+        const data = raster.toDataURL('image/jpeg', 0.86);
+        const guess = typeof SheetClassifier !== 'undefined'
+          ? SheetClassifier.classify({ text, fileName: file.name })
+          : { type: 'autre', level: null, label: file.name, discipline: 'annexe', confidence: 'none', reasons: [], scale: '' };
+        pages.push({
+          name: file.name, page: n, total: pdf.numPages, width: raster.width, height: raster.height,
+          paperMm: { w: base.width * 25.4 / 72, h: base.height * 25.4 / 72 },
+          data, thumb: data, text, guess, type: guess.type, level: guess.level, label: guess.label,
+          include: true, replaceGenerated: true
+        });
+      }
+    } finally {
+      pdf.destroy();
+    }
+    return pages;
+  }
+
+  /**
+   * Prépare l'affectation des pages d'un PDF multi-pages :
+   * - chaque plan de distribution identifié avec un niveau (0 = RDC, 1 = Étage 1…) est affecté à ce niveau ;
+   * - toute autre page (plan de masse, façade, coupe, structure, doublon…) est proposée en planche de référence ;
+   * - aucune supposition silencieuse : les pages douteuses ou en conflit sont marquées needsVerification.
+   */
+  function planPdfImport(pages) {
+    const claimedLevels = new Set();
+    return (pages || []).map((raw, idx) => {
+      const guess = raw.guess || (typeof SheetClassifier !== 'undefined'
+        ? SheetClassifier.classify({ text: raw.text || '', fileName: raw.name || '' })
+        : { type: raw.type || 'autre', level: raw.level ?? null, label: raw.label || `Page ${idx + 1}`, discipline: 'annexe', confidence: 'none', reasons: [], scale: '' });
+      const type = raw.type || guess.type || 'autre';
+      const level = raw.level !== undefined ? raw.level : guess.level;
+      let action = 'reference';
+      let targetLevel = null;
+      let needsVerification = guess.confidence === 'low' || guess.confidence === 'none';
+      let verifyReason = needsVerification ? 'Type ou niveau incertain — à vérifier' : '';
+
+      if (type === 'distribution' && Number.isInteger(level) && level >= 0 && level <= 1) {
+        if (!claimedLevels.has(level)) {
+          claimedLevels.add(level);
+          action = 'level';
+          targetLevel = level;
+        } else {
+          action = 'reference';
+          needsVerification = true;
+          verifyReason = `Doublon détecté pour le niveau ${level} — à vérifier`;
+        }
+      } else if (type === 'distribution' && (level === null || level === undefined)) {
+        action = 'reference';
+        needsVerification = true;
+        verifyReason = 'Niveau non détecté dans le cartouche — à choisir';
+      }
+
+      return {
+        ...raw,
+        page: raw.page || idx + 1,
+        total: raw.total || (pages ? pages.length : 1),
+        guess,
+        type,
+        level,
+        label: raw.label || guess.label || `Page ${idx + 1}`,
+        action,
+        targetLevel,
+        needsVerification,
+        verifyReason
+      };
+    });
+  }
+
+  /**
+   * Applique la sélection issue de la galerie PDF multi-pages :
+   * - affecte chaque plan de distribution à son niveau dans config.planImages (et config.planImage pour le niveau actif) ;
+   * - enregistre les planches de référence (et le PDF source) via POST api/projects/:slug/planches (Lot 3).
+   */
+  async function applyPdfImportSelection(items, { file = null, pdfDataUrl = null, fetchFn = typeof fetch === 'function' ? fetch : null } = {}) {
+    const selected = (items || []).filter(item => item && item.action !== 'ignore');
+    const levelItems = selected.filter(item => item.action === 'level' && Number.isInteger(item.targetLevel) && item.targetLevel >= 0);
+    const refItems = selected.filter(item => item.action === 'reference');
+    const toVerify = selected.filter(item => item.needsVerification).map(item => ({ page: item.page, label: item.label, reason: item.verifyReason || 'À vérifier' }));
+
+    let savedByPage = new Map();
+    let savedPlanches = [];
+    const slug = slugify(S.p?.meta?.slug || S.p?.meta?.name || '');
+    const toArchive = selected; // Archive le PDF d'origine + toutes les pages retenues (niveaux + références)
+    if (toArchive.length && fetchFn && slug) {
+      const pdfPayload = pdfDataUrl || (file ? await fileToDataUrl(file).catch(() => null) : null);
+      if (pdfPayload) {
+        try {
+          const response = await fetchFn(`api/projects/${encodeURIComponent(slug)}/planches`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: file?.name || toArchive[0]?.name || 'dossier.pdf',
+              pdf: pdfPayload,
+              pages: toArchive.map(p => ({
+                page: p.page,
+                total: p.total,
+                image: p.data || p.image,
+                width: p.width,
+                height: p.height,
+                paperMm: p.paperMm || null,
+                text: p.text || '',
+                guess: p.guess,
+                type: p.action === 'level' ? 'distribution' : p.type,
+                level: p.action === 'level' ? p.targetLevel : p.level,
+                scale: p.scale || p.guess?.scale || '',
+                label: p.label,
+                include: true,
+                replaceGenerated: p.action === 'level'
+              }))
+            })
+          });
+          if (response && response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            if (Array.isArray(payload.items)) {
+              savedPlanches = payload.items;
+              payload.items.forEach((saved, idx) => {
+                const srcPage = toArchive[idx];
+                if (srcPage) savedByPage.set(srcPage.page, saved);
+              });
+            }
+          }
+        } catch {
+          // Mode hors-ligne ou projet non encore enregistré sur disque : l'affectation locale continue.
+        }
+      }
+    }
+
+    commit();
+    S.p.config.planImages = S.p.config.planImages && typeof S.p.config.planImages === 'object'
+      ? { ...S.p.config.planImages }
+      : {};
+    S.levelPlanDataUrls = S.levelPlanDataUrls || {};
+
+    const levels = {};
+    for (const item of levelItems) {
+      const key = String(item.targetLevel);
+      const saved = savedByPage.get(item.page);
+      const prev = S.p.config.planImages[key] || {};
+      const url = saved?.imageUrl || item.data || item.image;
+      S.p.config.planImages[key] = {
+        url,
+        pxPerMeter: prev.pxPerMeter || 50,
+        originPx: null,
+        calibrated: false,
+        sourcePage: item.page,
+        sourceName: item.name || ''
+      };
+      if (!saved?.imageUrl && typeof url === 'string' && url.startsWith('data:')) {
+        S.levelPlanDataUrls[key] = url;
+      } else {
+        delete S.levelPlanDataUrls[key];
+      }
+      levels[item.targetLevel] = S.p.config.planImages[key];
+    }
+
+    const assignedLevelKeys = Object.keys(levels).map(Number).sort((a, b) => a - b);
+    if (assignedLevelKeys.length) {
+      const targetActive = levels[S.activeLevel] ? S.activeLevel : assignedLevelKeys[0];
+      if (targetActive !== S.activeLevel) {
+        switchLevel(targetActive);
+      } else {
+        S.p.config.planImage = S.p.config.planImages[String(targetActive)];
+        S.planDataUrl = S.levelPlanDataUrls[String(targetActive)] || null;
+        loadPlanImage(S.p.config.planImage?.url);
+      }
+      setTool('calibrate');
+    }
+
+    const references = refItems.map(item => {
+      const saved = savedByPage.get(item.page);
+      return {
+        page: item.page,
+        type: item.type,
+        level: item.level,
+        label: item.label,
+        id: saved?.id || null,
+        imageUrl: saved?.imageUrl || null
+      };
+    });
+
+    refreshPanel();
+    draw();
+    return { levels, references, savedPlanches, toVerify };
+  }
+
+  function openPdfImportDialog(file, pages) {
+    const dlg = $('dlg-pdf-import');
+    const gallery = $('pdf-import-gallery');
+    const summary = $('pdf-import-summary');
+    const status = $('pdf-import-status');
+    const applyBtn = $('pdf-import-apply');
+    const plan = planPdfImport(pages);
+
+    if (!dlg || !gallery) {
+      // Repli si la fenêtre n'existe pas dans le DOM
+      void applyPdfImportSelection(plan, { file });
+      return;
+    }
+
+    const renderGallery = () => {
+      const levelCount = plan.filter(p => p.action === 'level').length;
+      const refCount = plan.filter(p => p.action === 'reference').length;
+      const verifyCount = plan.filter(p => p.needsVerification && p.action !== 'ignore').length;
+      summary.textContent = `${plan.length} page${plan.length > 1 ? 's' : ''} lue${plan.length > 1 ? 's' : ''} : ${levelCount} plan${levelCount > 1 ? 's' : ''} de niveau, ${refCount} planche${refCount > 1 ? 's' : ''} de référence${verifyCount ? ` (${verifyCount} à vérifier)` : ''}.`;
+      gallery.replaceChildren(...plan.map(item => {
+        const card = document.createElement('div');
+        card.className = 'ed-pdf-card' + (item.action === 'ignore' ? ' is-ignored' : '');
+        const img = document.createElement('img');
+        img.src = item.thumb || item.data;
+        img.alt = `Page ${item.page}`;
+        const head = document.createElement('div');
+        head.className = 'ed-pdf-card-head';
+        const strong = document.createElement('strong');
+        strong.textContent = `Page ${item.page}/${item.total}`;
+        const meta = document.createElement('span');
+        meta.className = 'ed-pdf-card-meta';
+        meta.textContent = `${item.label}${item.guess?.scale ? ` · ${item.guess.scale}` : ''}`;
+        head.append(strong, meta);
+        card.append(img, head);
+
+        if (item.needsVerification) {
+          const warn = document.createElement('div');
+          warn.className = 'ed-pdf-card-warn';
+          warn.textContent = `À vérifier : ${item.verifyReason || 'classement incertain'}`;
+          card.append(warn);
+        }
+
+        const roleLabel = document.createElement('label');
+        roleLabel.textContent = 'Affectation';
+        const roleSelect = document.createElement('select');
+        [
+          ['level', 'Plan de niveau'],
+          ['reference', 'Planche de référence'],
+          ['ignore', 'Ignorer']
+        ].forEach(([val, txt]) => {
+          const opt = document.createElement('option');
+          opt.value = val; opt.textContent = txt;
+          roleSelect.append(opt);
+        });
+        roleSelect.value = item.action;
+        roleSelect.onchange = () => {
+          item.action = roleSelect.value;
+          if (item.action === 'level' && !Number.isInteger(item.targetLevel)) item.targetLevel = 0;
+          if (item.action !== 'level') item.targetLevel = null;
+          item.needsVerification = false;
+          renderGallery();
+        };
+        roleLabel.append(roleSelect);
+        card.append(roleLabel);
+
+        if (item.action === 'level') {
+          const lvlLabel = document.createElement('label');
+          lvlLabel.textContent = 'Niveau';
+          const lvlSelect = document.createElement('select');
+          [['0', 'Rez-de-chaussée (0)'], ['1', 'Étage 1 (1)']].forEach(([val, txt]) => {
+            const opt = document.createElement('option');
+            opt.value = val; opt.textContent = txt;
+            lvlSelect.append(opt);
+          });
+          lvlSelect.value = String(item.targetLevel ?? 0);
+          lvlSelect.onchange = () => {
+            item.targetLevel = Number(lvlSelect.value);
+            item.level = item.targetLevel;
+            renderGallery();
+          };
+          lvlLabel.append(lvlSelect);
+          card.append(lvlLabel);
+
+          if (typeof window !== 'undefined' && window.EditorAI && typeof window.EditorAI.openVectorDialog === 'function') {
+            const vecBtn = document.createElement('button');
+            vecBtn.type = 'button';
+            vecBtn.className = 'ed-pdf-vec-btn';
+            vecBtn.textContent = 'Extraire vectoriel (0 $)';
+            vecBtn.onclick = () => {
+              dlg.close();
+              void window.EditorAI.openVectorDialog(item.page);
+            };
+            card.append(vecBtn);
+          }
+        }
+        return card;
+      }));
+    };
+
+    status.textContent = '';
+    renderGallery();
+    const close = () => dlg.close();
+    const closeBtn = $('pdf-import-close');
+    const cancelBtn = $('pdf-import-cancel');
+    if (closeBtn) closeBtn.onclick = close;
+    if (cancelBtn) cancelBtn.onclick = close;
+    if (applyBtn) {
+      applyBtn.disabled = false;
+      applyBtn.onclick = async () => {
+        applyBtn.disabled = true;
+        status.textContent = 'Import des planches et enregistrement des références…';
+        try {
+          const result = await applyPdfImportSelection(plan, { file });
+          const nLevels = Object.keys(result.levels).length;
+          const nRefs = result.references.length;
+          dlg.close();
+          toast(`PDF importé : ${nLevels} niveau${nLevels > 1 ? 'x' : ''} affecté${nLevels > 1 ? 's' : ''}, ${nRefs} planche${nRefs > 1 ? 's' : ''} en référence.`);
+        } catch (err) {
+          status.textContent = `Import impossible : ${err.message}`;
+          applyBtn.disabled = false;
+        }
+      };
+    }
+    if (typeof dlg.showModal === 'function') dlg.showModal();
   }
 
   async function importPlanFile(file) {
@@ -350,9 +705,14 @@
     const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
     if (isPdf) {
       try {
-        toast('Rendu de la première page du PDF en haute résolution…');
-        const rendered = await renderPdfPage(file);
-        importPlanDataUrl(rendered.dataUrl, `PDF rendu (${rendered.width} × ${rendered.height} px)`);
+        toast('Lecture de toutes les pages du PDF…');
+        try {
+          S.lastPdfBuffer = await file.arrayBuffer();
+          S.lastPdfName = file.name || 'plan.pdf';
+        } catch { /* lecture buffer facultative */ }
+        const pages = await readPdfAllPages(file, message => toast(message));
+        if (!pages.length) throw new Error('Aucune page lisible dans ce PDF.');
+        openPdfImportDialog(file, pages);
       } catch (error) {
         toast(`Import PDF impossible : ${error.message}`, true);
       }
@@ -423,6 +783,7 @@
 
   function draw() {
     if (!S.p) return;
+    if (typeof syncStatusBar === 'function') syncStatusBar();
     const rect = canvas.getBoundingClientRect();
     const W = rect.width, H = rect.height, k = S.view.scale;
     ctx.clearRect(0, 0, W, H);
@@ -628,22 +989,126 @@
     });
 
     if (S.tool === 'camera' || (S.sel && S.sel.kind === 'camera')) drawCameras();
+    if (S.reviewOverlay) drawReviewOverlay();
     drawDraft();
+  }
+
+  function setReviewOverlay(overlay) {
+    S.reviewOverlay = overlay || null;
+    if (!overlay) S.reviewFocus = null;
+    draw();
+  }
+
+  function focusWorldPoint(x, z, targetScale = 95) {
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+    const rect = canvas.getBoundingClientRect();
+    const scale = Math.max(S.view.scale, Number(targetScale) || 95);
+    S.view.scale = Math.min(240, Math.max(12, scale));
+    S.view.x = rect.width / 2 - x * S.view.scale;
+    S.view.y = rect.height / 2 - z * S.view.scale;
+    S.reviewFocus = { x, z };
+    draw();
+  }
+
+  function drawReviewOverlay() {
+    const ov = S.reviewOverlay;
+    if (!ov) return;
+    const k = S.view.scale;
+    const COLORS = {
+      green: { stroke: '#15803d', fill: 'rgba(21,128,61,0.16)' },
+      orange: { stroke: '#d97706', fill: 'rgba(217,119,6,0.20)' },
+      red: { stroke: '#dc2626', fill: 'rgba(220,38,38,0.22)' },
+      muted: { stroke: '#6b7280', fill: 'rgba(107,114,128,0.10)' }
+    };
+    ctx.save();
+    (ov.rooms || []).forEach(r => {
+      const palette = COLORS[r.color] || COLORS.green;
+      ctx.fillStyle = palette.fill;
+      ctx.strokeStyle = palette.stroke;
+      ctx.lineWidth = r.color === 'green' ? 1.5 : 2.2;
+      ctx.setLineDash(r.color === 'green' ? [5, 3] : [3, 3]);
+      if (r.poly && r.poly.length >= 3) {
+        ctx.beginPath();
+        r.poly.forEach((p, idx) => { const s = toScreen(p[0], p[1]); idx ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y); });
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      } else if (r.bounds) {
+        const p1 = toScreen(r.bounds.xMin, r.bounds.zMin);
+        const p2 = toScreen(r.bounds.xMax, r.bounds.zMax);
+        ctx.fillRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+        ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+      }
+    });
+    ctx.setLineDash([]);
+    (ov.walls || []).forEach(w => {
+      if (!w.from || !w.to) return;
+      const palette = COLORS[w.color] || COLORS.green;
+      const a = toScreen(w.from[0], w.from[1]);
+      const b = toScreen(w.to[0], w.to[1]);
+      ctx.strokeStyle = palette.stroke;
+      ctx.lineWidth = Math.max(3.5, (w.thick || 0.2) * k);
+      ctx.lineCap = 'round';
+      ctx.globalAlpha = w.color === 'muted' ? 0.35 : 0.85;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    });
+    ctx.globalAlpha = 1;
+    (ov.markers || []).forEach(m => {
+      if (!m.position || !Number.isFinite(m.position.x) || !Number.isFinite(m.position.z)) return;
+      const palette = COLORS[m.color] || COLORS.orange;
+      const s = toScreen(m.position.x, m.position.z);
+      ctx.fillStyle = palette.fill;
+      ctx.strokeStyle = palette.stroke;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      label(m.label || m.type, s.x, s.y - 16, 10, palette.stroke, 700);
+    });
+    if (S.reviewFocus && Number.isFinite(S.reviewFocus.x) && Number.isFinite(S.reviewFocus.z)) {
+      const f = toScreen(S.reviewFocus.x, S.reviewFocus.z);
+      ctx.strokeStyle = '#dc2626';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, 20, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
   }
 
   function drawDraft() {
     const k = S.view.scale;
     const h = S.hover;
-    if (S.draft && (S.draft.kind === 'wall' || S.draft.kind === 'calibrate') && h) {
-      const a = S.draft.kind === 'calibrate' ? S.draft.screenA : toScreen(S.draft.from.x, S.draft.from.z);
-      const bpt = S.draft.kind === 'calibrate' ? h.screen : toScreen(h.snap.x, h.snap.z);
-      ctx.strokeStyle = S.draft.kind === 'calibrate' ? '#d97706' : 'rgba(23,121,110,0.9)';
-      ctx.lineWidth = S.draft.kind === 'calibrate' ? 2 : Math.max(3, (S.tool === 'wall-ext' ? 0.25 : 0.15) * k);
+    if (S.draft && (S.draft.kind === 'wall' || S.draft.kind === 'calibrate' || S.draft.kind === 'verify-scale') && h) {
+      const isCal = S.draft.kind === 'calibrate' || S.draft.kind === 'verify-scale';
+      const a = isCal ? S.draft.screenA : toScreen(S.draft.from.x, S.draft.from.z);
+      const bpt = isCal ? h.screen : toScreen(h.snap.x, h.snap.z);
+      ctx.strokeStyle = S.draft.kind === 'verify-scale' ? '#2563eb' : (S.draft.kind === 'calibrate' ? '#d97706' : 'rgba(23,121,110,0.9)');
+      ctx.lineWidth = isCal ? 2 : Math.max(3, (S.tool === 'wall-ext' ? 0.25 : 0.15) * k);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(bpt.x, bpt.y); ctx.stroke();
       if (S.draft.kind === 'wall') {
         const L = Math.hypot(h.snap.x - S.draft.from.x, h.snap.z - S.draft.from.z);
         label(`${L.toFixed(2)} m`, (a.x + bpt.x) / 2, (a.y + bpt.y) / 2 - 14, 12, '#9a6f2a');
       }
+    }
+    if (S.draft && S.draft.kind === 'rectify' && S.draft.pts.length) {
+      ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 2;
+      ctx.fillStyle = 'rgba(37,99,235,0.10)';
+      ctx.beginPath();
+      S.draft.pts.forEach((p, i) => { const s = toScreen(p.x, p.z); i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y); });
+      if (h) ctx.lineTo(h.screen.x, h.screen.y);
+      ctx.stroke();
+      S.draft.pts.forEach((p, idx) => {
+        const s = toScreen(p.x, p.z);
+        ctx.fillStyle = '#2563eb';
+        ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, Math.PI * 2); ctx.fill();
+        label(`C${idx + 1}`, s.x + 10, s.y - 10, 11, '#1d4ed8');
+      });
     }
     if (S.draft && S.draft.kind === 'poly' && S.draft.pts.length) {
       ctx.strokeStyle = '#9a6f2a'; ctx.lineWidth = 1.5;
@@ -694,6 +1159,55 @@
       ctx.strokeStyle = '#9a6f2a'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(s.x, s.y, 4, 0, Math.PI * 2); ctx.stroke();
     }
+    // Loupe de précision lors du calibrage, du contrôle 2e cote ou du redressement 4 points
+    if (h && S.planImg && S.p?.config?.planImage && ['calibrate', 'verify-scale', 'rectify'].includes(S.tool)) {
+      drawCalibrationLoupe(h);
+    }
+    for (const fn of customOverlays) {
+      try { fn(ctx, toScreen, S); } catch { /* overlay isolé */ }
+    }
+  }
+
+  function drawCalibrationLoupe(h) {
+    const pi = S.p.config.planImage;
+    if (!pi || !pi.originPx || !pi.pxPerMeter || !S.planImg) return;
+    const imgX = h.world.x * pi.pxPerMeter + pi.originPx[0];
+    const imgY = h.world.z * pi.pxPerMeter + pi.originPx[1];
+    const radius = 58;
+    const zoom = 3;
+    const rect = canvas.getBoundingClientRect();
+    let cx = h.screen.x + radius + 24;
+    let cy = h.screen.y - radius - 24;
+    if (cx + radius + 8 > rect.width) cx = h.screen.x - radius - 24;
+    if (cy - radius - 8 < 0) cy = h.screen.y + radius + 24;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.clip();
+    const srcHalf = (radius / zoom) * (pi.pxPerMeter / Math.max(1, S.view.scale));
+    ctx.drawImage(
+      S.planImg,
+      imgX - srcHalf, imgY - srcHalf, srcHalf * 2, srcHalf * 2,
+      cx - radius, cy - radius, radius * 2, radius * 2
+    );
+    ctx.strokeStyle = '#d97706';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - radius, cy); ctx.lineTo(cx + radius, cy);
+    ctx.moveTo(cx, cy - radius); ctx.lineTo(cx, cy + radius);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = '#1b2320';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   // ---------------------------------------------------------------------------
@@ -1058,8 +1572,83 @@
     pi.originPx = [pxA.x - aw.x * newK, pxA.y - aw.z * newK];
     pi.pxPerMeter = Math.round(newK * 100) / 100;
     pi.calibrated = true;
-    toast(`Échelle : ${pi.pxPerMeter} px/m — tracez maintenant les murs extérieurs (M)`);
+    delete pi.controlCheck;
+    refreshPanel();
+    toast(`Échelle : ${pi.pxPerMeter} px/m — vérifiez sur une 2ᵉ cote de contrôle ou tracez les murs (M)`);
     setTool('wall-ext');
+  }
+
+  function finishScaleControl(a, b, explicitMeters = null) {
+    const pi = S.p.config.planImage;
+    if (!pi || !pi.calibrated || !S.planImg) { toast('Calibrez d’abord le plan sur une 1ʳᵉ cote (K).', true); return null; }
+    if (typeof PlanHomography === 'undefined') { toast('Module PlanHomography indisponible.', true); return null; }
+    const p1 = [a.x * pi.pxPerMeter + pi.originPx[0], a.z * pi.pxPerMeter + pi.originPx[1]];
+    const p2 = [b.x * pi.pxPerMeter + pi.originPx[0], b.z * pi.pxPerMeter + pi.originPx[1]];
+    const raw = explicitMeters !== null ? String(explicitMeters) : prompt('Longueur réelle de la 2ᵉ cote de contrôle (en mètres) ?', '');
+    const m = parseFloat((raw || '').replace(',', '.'));
+    if (!(m > 0)) { toast('Contrôle annulé', true); return null; }
+    const check = PlanHomography.evaluateControlDimension({ p1, p2, realMeters: m, pxPerMeter: pi.pxPerMeter, tolerance: 0.01 });
+    commit();
+    pi.controlCheck = check;
+    refreshPanel();
+    toast(check.message, check.alert);
+    setTool('select');
+    return check;
+  }
+
+  function finishRectification(worldPts) {
+    const pi = S.p.config.planImage;
+    if (!pi || !S.planImg || typeof PlanHomography === 'undefined') {
+      toast('Importez un plan avant de redresser la perspective.', true);
+      return null;
+    }
+    const srcQuad = worldPts.map(pt => [
+      pt.x * pi.pxPerMeter + pi.originPx[0],
+      pt.z * pi.pxPerMeter + pi.originPx[1]
+    ]);
+    try {
+      const rect = PlanHomography.rectifyCanvas(S.planImg, srcQuad);
+      commit();
+      // Conserver l'image source intacte pour permettre la restauration à tout moment.
+      const originalUrl = pi.originalUrl || pi.url;
+      S.planDataUrl = rect.dataUrl;
+      S.p.config.planImage = {
+        url: rect.dataUrl,
+        originalUrl,
+        rectified: true,
+        pxPerMeter: pi.pxPerMeter || 50,
+        originPx: null,
+        calibrated: false
+      };
+      if (S.p.config.planImages && typeof S.p.config.planImages === 'object') {
+        S.p.config.planImages[String(S.activeLevel)] = S.p.config.planImage;
+        S.levelPlanDataUrls = S.levelPlanDataUrls || {};
+        S.levelPlanDataUrls[String(S.activeLevel)] = rect.dataUrl;
+      }
+      loadPlanImage(rect.dataUrl);
+      setTool('calibrate');
+      toast(`Plan redressé (${rect.width} × ${rect.height} px, original conservé) — calibrez maintenant l'échelle (K).`);
+      return rect;
+    } catch (err) {
+      toast(`Redressement impossible : ${err.message}`, true);
+      return null;
+    }
+  }
+
+  function restoreOriginalPlanImage() {
+    const pi = S.p.config.planImage;
+    if (!pi || !pi.originalUrl) return false;
+    commit();
+    const orig = pi.originalUrl;
+    S.planDataUrl = orig.startsWith('data:') ? orig : null;
+    S.p.config.planImage = { url: orig, pxPerMeter: pi.pxPerMeter || 50, originPx: null, calibrated: false };
+    if (S.p.config.planImages && typeof S.p.config.planImages === 'object') {
+      S.p.config.planImages[String(S.activeLevel)] = S.p.config.planImage;
+    }
+    loadPlanImage(orig);
+    refreshPanel();
+    toast('Image du plan d’origine restaurée.');
+    return true;
   }
 
   // ---------------------------------------------------------------------------
@@ -1083,6 +1672,9 @@
       return;
     }
     if (e.button !== 0) return;
+    for (const fn of customClickHandlers) {
+      if (fn(P, e) === true) return;
+    }
     switch (S.tool) {
       case 'select': {
         const ep = endpointAt(P.world);
@@ -1105,6 +1697,19 @@
       case 'calibrate':
         if (!S.draft) S.draft = { kind: 'calibrate', screenA: P.screen, worldA: P.world };
         else { const a = S.draft.worldA; finishCalibration(a, P.world); S.draft = null; }
+        break;
+      case 'verify-scale':
+        if (!S.draft) S.draft = { kind: 'verify-scale', screenA: P.screen, worldA: P.world };
+        else { const a = S.draft.worldA; finishScaleControl(a, P.world); S.draft = null; }
+        break;
+      case 'rectify':
+        if (!S.draft || S.draft.kind !== 'rectify') S.draft = { kind: 'rectify', pts: [] };
+        S.draft.pts.push(P.world);
+        if (S.draft.pts.length >= 4) {
+          const corners = S.draft.pts.slice(0, 4);
+          S.draft = null;
+          finishRectification(corners);
+        }
         break;
       case 'wall-ext':
       case 'wall-int':
@@ -1242,7 +1847,54 @@
     draw();
   }, { passive: false });
 
-  const TOOL_KEYS = { KeyV: 'select', KeyK: 'calibrate', KeyM: 'wall-ext', KeyC: 'wall-int', KeyD: 'door', KeyF: 'window', KeyB: 'open', KeyA: 'room', KeyW: 'room-auto', KeyP: 'room-poly', KeyO: 'column', KeyU: 'slab', KeyG: 'pergola', KeyE: 'furniture', KeyT: 'camera' };
+  // Barre d'état interactive : état du calage d'échelle (clic → outil K) et opacité directe du calque plan
+  const edScaleCal = $('ed-scale-cal');
+  const edOpacityWrap = $('ed-opacity-wrap');
+  const edQuickOpacity = $('ed-quick-opacity');
+  const btnBackProject = $('btn-back-project');
+  function syncStatusBar() {
+    if (btnBackProject) {
+      const slug = S.p?.slug;
+      btnBackProject.href = slug ? `accueil.html?project=${encodeURIComponent(slug)}` : 'accueil.html';
+    }
+    const pi = S.p?.config?.planImage;
+    if (edScaleCal) {
+      const ok = !!(pi && pi.calibrated === true && Number.isFinite(pi.pxPerMeter) && pi.pxPerMeter > 0);
+      edScaleCal.textContent = ok
+        ? `Échelle calibrée · ${pi.pxPerMeter.toFixed(1)} px/m ✓`
+        : (S.planImg ? 'Échelle : à calibrer (K)' : 'Aucun plan importé');
+      edScaleCal.classList.toggle('is-calibrated', ok);
+      edScaleCal.classList.toggle('is-warn', !ok && !!S.planImg);
+    }
+    if (edOpacityWrap && edQuickOpacity) {
+      edOpacityWrap.hidden = !S.planImg;
+      edQuickOpacity.value = String(S.planOpacity);
+    }
+  }
+  edScaleCal?.addEventListener('click', () => {
+    if (!S.planImg) { $('file-plan')?.click(); return; }
+    setTool('calibrate');
+    toast('Cliquez deux extrémités d’une cote connue sur le plan (K)');
+  });
+  edQuickOpacity?.addEventListener('input', e => {
+    S.planOpacity = parseFloat(e.target.value);
+    const panelRng = document.querySelector('[data-proj="rng-opacity"]');
+    if (panelRng) panelRng.value = String(S.planOpacity);
+    draw();
+  });
+
+  // Fermeture automatique des menus déroulants de la barre d'outils au clic extérieur ou sur une action
+  const toolbarMenus = [...(document.querySelectorAll?.('.ed-menu') || [])];
+  document.addEventListener?.('click', e => {
+    for (const menu of toolbarMenus) {
+      if (!menu.open) continue;
+      if (!menu.contains?.(e.target) || e.target?.closest?.('.ed-menu-panel button')) {
+        menu.open = false;
+      }
+    }
+  });
+
+  const TOOL_KEYS = { KeyV: 'select', KeyN: 'annotate', KeyK: 'calibrate', KeyM: 'wall-ext', KeyC: 'wall-int', KeyD: 'door', KeyF: 'window', KeyB: 'open', KeyA: 'room', KeyW: 'room-auto', KeyP: 'room-poly', KeyO: 'column', KeyU: 'slab', KeyG: 'pergola', KeyE: 'furniture', KeyT: 'camera' };
 
   window.addEventListener('keydown', e => {
     if (e.defaultPrevented || document.querySelector('dialog[open]')) return;
@@ -1287,21 +1939,30 @@
 
   function select(s) { S.sel = s; refreshPanel(); draw(); }
 
-  // Génère un formulaire à partir d'un schéma [{key, label, type, options, step}]
-  function form(title, obj, fields, onChange, extraHtml = '') {
-    const el = $('ed-props');
-    el.innerHTML = `<h3>${title}</h3>` + fields.map(f => {
+  // Génère un formulaire à partir d'un schéma [{key, label, type, options, step, pdf, rows}]
+  function form(title, obj, fields, onChange, extraHtml = '', target = $('ed-props'), prependHtml = '') {
+    const el = target || $('ed-props');
+    if (!el) return;
+    el.innerHTML = (title ? `<h3>${title}</h3>` : '') + prependHtml + fields.map(f => {
       const v = f.get ? f.get(obj) : obj[f.key];
       let input;
-      if (f.type === 'select') input = `<select data-key="${f.key}">${Object.entries(f.options).map(([k, l]) => `<option value="${k}" ${String(v) === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+      if (f.type === 'select') input = `<select data-key="${f.key}">${Object.entries(f.options).map(([k, l]) => `<option value="${k}" ${String(v ?? '') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
       else if (f.type === 'checkbox') input = `<input type="checkbox" data-key="${f.key}" ${v ? 'checked' : ''}>`;
+      else if (f.type === 'textarea') input = `<textarea data-key="${f.key}" rows="${f.rows || 3}">${escapeHtml(v ?? '')}</textarea>`;
       else if (f.type === 'readonly') input = `<span>${v}</span>`;
       else input = `<input type="${f.type || 'text'}" data-key="${f.key}" value="${v === undefined || v === null ? '' : String(v).replace(/"/g, '&quot;')}" ${f.step ? `step="${f.step}"` : ''}>`;
-      return `<div class="ed-field"><label>${f.label}</label>${input}</div>`;
+      const pdfTag = f.pdf ? '<br><span class="ed-pdf-tag" title="Champ repris dans le cartouche des exports PDF">utilisé dans les PDF</span>' : '';
+      return `<div class="ed-field"${f.pdf ? ' data-pdf-field="true"' : ''}><label>${f.label}${pdfTag}</label>${input}</div>`;
     }).join('') + extraHtml;
     el.querySelectorAll('[data-key]').forEach(inp => {
+      const f = fields.find(x => x.key === inp.dataset.key);
+      if (f && f.pdf && inp.type !== 'checkbox') {
+        inp.addEventListener('input', () => {
+          const previewMeta = Object.assign({}, S.p.meta, { [f.key]: inp.value });
+          updatePdfMissingBanners(previewMeta);
+        });
+      }
       inp.addEventListener('change', () => {
-        const f = fields.find(x => x.key === inp.dataset.key);
         let val = inp.type === 'checkbox' ? inp.checked : inp.value;
         if (f.type === 'number') { val = parseFloat(String(val).replace(',', '.')); if (!isFinite(val)) return; }
         commit();
@@ -1313,12 +1974,53 @@
     });
   }
 
+  function pdfMissingInfo(metaOverride) {
+    if (typeof PdfIdentity === 'undefined' || typeof PdfIdentity.missingFields !== 'function') {
+      return { missing: [], message: '' };
+    }
+    return PdfIdentity.missingFields({ meta: metaOverride || S.p.meta }, { cabinet: cabinetProfile });
+  }
+
+  function pdfMissingBannerHtml(metaOverride) {
+    const info = pdfMissingInfo(metaOverride);
+    if (!info.missing.length) {
+      return '<div class="ed-pdf-missing is-ok" data-pdf-missing role="status">Cartouche PDF complet : tous les champs administratifs sont renseignés.</div>';
+    }
+    return `<div class="ed-pdf-missing" data-pdf-missing role="status"><strong>Champs vides du cartouche PDF (${info.missing.length}) :</strong> ${escapeHtml(info.missing.join(', '))}.</div>`;
+  }
+
+  function updatePdfMissingBanners(metaOverride) {
+    const info = pdfMissingInfo(metaOverride);
+    document.querySelectorAll('[data-pdf-missing]').forEach(node => {
+      node.classList.toggle('is-ok', !info.missing.length);
+      if (!info.missing.length) {
+        node.textContent = 'Cartouche PDF complet : tous les champs administratifs sont renseignés.';
+      } else {
+        node.innerHTML = `<strong>Champs vides du cartouche PDF (${info.missing.length}) :</strong> ${escapeHtml(info.missing.join(', '))}.`;
+      }
+    });
+  }
+
+  function syncProjectInfoDialog() {
+    const dlg = $('dlg-project-info');
+    const body = $('dlg-project-info-body');
+    if (dlg && dlg.open && body) projectPanel(body, { inDialog: true });
+  }
+
+  function openProjectInfoDialog() {
+    const dlg = $('dlg-project-info');
+    const body = $('dlg-project-info-body');
+    if (!dlg || !body) return;
+    projectPanel(body, { inDialog: true });
+    if (!dlg.open && typeof dlg.showModal === 'function') dlg.showModal();
+  }
+
   function refreshPanel() {
     $('ed-project-name').textContent = S.p.meta.name + (S.dirty ? ' •' : '');
     const s = S.sel;
-    if (!s && S.tool === 'camera') return camerasPanel();
-    if (!s) return projectPanel();
-    if (s.kind === 'camera') return cameraPanel(s.obj);
+    if (!s && S.tool === 'camera') { camerasPanel(); syncProjectInfoDialog(); return; }
+    if (!s) { projectPanel(); syncProjectInfoDialog(); return; }
+    if (s.kind === 'camera') { cameraPanel(s.obj); syncProjectInfoDialog(); return; }
     const del = '<div class="ed-row"><button id="btn-del">Supprimer</button></div>';
     if (s.kind === 'wall') {
       form('Mur', s.obj, [
@@ -1409,6 +2111,7 @@
     }
     const d = $('btn-del');
     if (d) d.onclick = deleteSelection;
+    syncProjectInfoDialog();
   }
 
   function camerasPanel() {
@@ -1489,11 +2192,12 @@
   }
 
   // Contrôles d'habitabilité (js/habitability.js) : un avertissement cliquable par point à vérifier.
-  function renderChecks() {
-    const list = $('ed-checks-list');
+  function renderChecks(container = $('ed-props')) {
+    const list = container?.querySelector('[data-checks-list]') || $('ed-checks-list');
+    const title = container?.querySelector('[data-checks-title]') || $('ed-checks-title');
     if (!list || typeof Habitability === 'undefined') return;
     const warnings = Habitability.check({ config: S.p.config, walls: allLevelItems('walls'), rooms: allLevelItems('rooms') });
-    $('ed-checks-title').textContent = warnings.length ? `Vérifications (${warnings.length})` : 'Vérifications';
+    if (title) title.textContent = warnings.length ? `Vérifications (${warnings.length})` : 'Vérifications';
     if (!warnings.length) {
       const ok = document.createElement('li');
       ok.className = 'is-ok';
@@ -1517,61 +2221,68 @@
     }));
   }
 
-  function projectPanel() {
+  function projectPanel(target = $('ed-props'), options = {}) {
+    const container = target || $('ed-props');
+    const inDialog = Boolean(options.inDialog || container !== $('ed-props'));
     const p = S.p;
     const hab = p.rooms.filter(r => r.habitable).reduce((s, r) => s + roomArea(r), 0);
     const nOps = p.walls.reduce((s, w) => s + w.openings.length, 0);
     const pi = p.config.planImage;
     const sheet = p.meta.sheets?.[S.activeLevel] || {};
-    const extrasNote = S.extras ? `<div class="ed-field"><label>Garder caméras & abords</label><input type="checkbox" id="chk-extras" ${S.keepExtras ? 'checked' : ''}></div>
+    const idPrefix = inDialog ? 'dlg-proj-' : '';
+    const extrasNote = S.extras ? `<div class="ed-field"><label>Garder caméras & abords</label><input type="checkbox" id="${idPrefix}chk-extras" data-proj="chk-extras" ${S.keepExtras ? 'checked' : ''}></div>
       <p class="ed-note">Décochez pour régénérer automatiquement le parcours caméra, les vues de rendu, les lampes et le jardin après des modifications importantes.</p>` : '';
     const warn = !p.walls.some(w => w.openings.some(o => o.type === 'door' && w.type === 'ext')) && p.walls.length
       ? '<p class="ed-note warn">Aucune porte sur un mur extérieur : l\'entrée de la visite sera devinée.</p>' : '';
-    form('Projet', p.meta, [
-      { key: 'name', label: 'Nom du projet', set: (o, v) => { o.name = String(v).toUpperCase(); if (!o.slugLocked) o.slug = slugify(v); } },
+    form(inDialog ? '' : 'Projet', p.meta, [
+      { key: 'name', label: 'Nom du projet', pdf: true, set: (o, v) => { o.name = String(v).toUpperCase(); if (!o.slugLocked) o.slug = slugify(v); } },
       { key: 'slug', label: 'Dossier', set: (o, v) => { o.slug = slugify(v); o.slugLocked = true; } },
-      { key: 'subtitle', label: 'Sous-titre' },
-      { key: 'client', label: 'Client / maître d’ouvrage' },
+      { key: 'subtitle', label: 'Sous-titre', pdf: true },
+      { key: 'description', label: 'Description', type: 'textarea', rows: 3, set: (o, v) => { o.description = String(v).slice(0, 2000); } },
+      { key: 'client', label: 'Client / maître d’ouvrage', pdf: true },
       { key: 'clientVisible', label: 'Afficher le client sur les couvertures partagées', type: 'checkbox' },
       { key: 'reference', label: 'Référence projet', set: (o, v) => { o.reference = String(v).slice(0, 80); } },
       // Cartouche du cahier de plans.
-      { key: 'architect', label: 'Architecte responsable', set: (o, v) => { o.architect = String(v).slice(0, 120); } },
-      { key: 'location', label: 'Lieu', set: (o, v) => { o.location = String(v).slice(0, 80); } },
-      { key: 'phase', label: 'Phase', type: 'select', options: { '': '—', ESQ: 'Esquisse', APS: 'Avant-projet sommaire', APD: 'Avant-projet définitif', PC: 'Permis de construire', DCE: 'Dossier de consultation', EXE: 'Exécution' } },
-      { key: 'revision', label: 'Indice du dossier', set: (o, v) => { o.revision = String(v).toUpperCase().slice(0, 4); } },
-      { key: 'issueDate', label: 'Date d’édition', type: 'date' },
+      { key: 'architect', label: 'Architecte responsable', pdf: true, set: (o, v) => { o.architect = String(v).slice(0, 120); } },
+      { key: 'location', label: 'Lieu', pdf: true, set: (o, v) => { o.location = String(v).slice(0, 80); } },
+      { key: 'phase', label: 'Phase', pdf: true, type: 'select', options: { '': '—', ESQ: 'Esquisse', APS: 'Avant-projet sommaire', APD: 'Avant-projet définitif', PC: 'Permis de construire', DCE: 'Dossier de consultation', EXE: 'Exécution' } },
+      { key: 'revision', label: 'Indice du dossier', pdf: true, set: (o, v) => { o.revision = String(v).toUpperCase().slice(0, 4); } },
+      { key: 'issueDate', label: 'Date d’édition', pdf: true, type: 'date' },
       { key: 'status', label: 'Statut du dossier', set: (o, v) => { o.status = String(v).slice(0, 80); } },
       // Accueil et signature : parti architectural et contact de l'agence.
-      { key: 'concept', label: 'Parti architectural', set: (o, v) => { o.concept = String(v).slice(0, 600); } },
+      { key: 'concept', label: 'Parti architectural', type: 'textarea', rows: 2, set: (o, v) => { o.concept = String(v).slice(0, 600); } },
       { key: 'contact', label: 'Contact agence', set: (o, v) => { o.contact = String(v).slice(0, 120); } }
     ], null, `
       <fieldset class="ed-sheet-fields"><legend>Métadonnées manuelles — feuille ${S.activeLevel + 1}</legend>
-        <div class="ed-field"><label for="sheet-title">Titre du plan</label><input id="sheet-title" maxlength="160" value="${escapeHtml(sheet.title)}"></div>
-        <div class="ed-field"><label for="sheet-number">Numéro de feuille</label><input id="sheet-number" maxlength="80" value="${escapeHtml(sheet.number)}"></div>
-        <div class="ed-field"><label for="sheet-level">Niveau indiqué</label><input id="sheet-level" maxlength="80" value="${escapeHtml(sheet.level)}"></div>
-        <div class="ed-field"><label for="sheet-revision">Révision</label><input id="sheet-revision" maxlength="80" value="${escapeHtml(sheet.revision)}"></div>
-        <div class="ed-field"><label for="sheet-date">Date</label><input id="sheet-date" type="date" value="${escapeHtml(sheet.date)}"></div>
-        <div class="ed-field"><label for="sheet-status">Statut</label><input id="sheet-status" maxlength="80" value="${escapeHtml(sheet.status)}"></div>
-        <div class="ed-field"><label for="sheet-scale">Échelle connue (saisie manuelle)</label><input id="sheet-scale" maxlength="80" placeholder="Ex. 1:100" value="${escapeHtml(sheet.scale)}"></div>
+        <div class="ed-field"><label for="${idPrefix}sheet-title">Titre du plan</label><input id="${idPrefix}sheet-title" data-sheet="title" maxlength="160" value="${escapeHtml(sheet.title)}"></div>
+        <div class="ed-field"><label for="${idPrefix}sheet-number">Numéro de feuille</label><input id="${idPrefix}sheet-number" data-sheet="number" maxlength="80" value="${escapeHtml(sheet.number)}"></div>
+        <div class="ed-field"><label for="${idPrefix}sheet-level">Niveau indiqué</label><input id="${idPrefix}sheet-level" data-sheet="level" maxlength="80" value="${escapeHtml(sheet.level)}"></div>
+        <div class="ed-field"><label for="${idPrefix}sheet-revision">Révision</label><input id="${idPrefix}sheet-revision" data-sheet="revision" maxlength="80" value="${escapeHtml(sheet.revision)}"></div>
+        <div class="ed-field"><label for="${idPrefix}sheet-date">Date</label><input id="${idPrefix}sheet-date" data-sheet="date" type="date" value="${escapeHtml(sheet.date)}"></div>
+        <div class="ed-field"><label for="${idPrefix}sheet-status">Statut</label><input id="${idPrefix}sheet-status" data-sheet="status" maxlength="80" value="${escapeHtml(sheet.status)}"></div>
+        <div class="ed-field"><label for="${idPrefix}sheet-scale">Échelle connue (saisie manuelle)</label><input id="${idPrefix}sheet-scale" data-sheet="scale" maxlength="80" placeholder="Ex. 1:100" value="${escapeHtml(sheet.scale)}"></div>
         <p class="ed-note">Aucune échelle n’est déduite du nom du fichier. Les champs laissés vides restent absents du cartouche.</p>
       </fieldset>
-      <div class="ed-field"><label>Opacité du plan</label><input type="range" id="rng-opacity" min="0" max="1" step="0.05" value="${S.planOpacity}"></div>
-      <div class="ed-field"><label>Hauteur sous plafond</label><input type="number" id="num-height" step="0.05" value="${p.config.wallHeight}"></div>
+      <div class="ed-field"><label>Opacité du plan</label><input type="range" id="${idPrefix}rng-opacity" data-proj="rng-opacity" min="0" max="1" step="0.05" value="${S.planOpacity}"></div>
+      <div class="ed-field"><label>Hauteur sous plafond</label><input type="number" id="${idPrefix}num-height" data-proj="num-height" step="0.05" value="${p.config.wallHeight}"></div>
       ${extrasNote}
-      <p class="ed-note">${pi && S.planImg ? `Échelle du plan : <strong>${pi.pxPerMeter} px/m</strong>` : 'Commencez par importer l\'image du plan, puis calibrez l\'échelle (K).'}</p>
+      <p class="ed-note">${pi && S.planImg ? `Échelle du plan : <strong>${pi.pxPerMeter} px/m</strong>${pi.calibrated ? ' (calibré)' : ' (non calibré)'}${pi.rectified ? ' · redressé' : ''}` : 'Commencez par importer l\'image du plan, puis calibrez l\'échelle (K).'}</p>
+      ${pi && pi.controlCheck ? `<p class="ed-note ${pi.controlCheck.alert ? 'warn' : ''}">${escapeHtml(pi.controlCheck.message)}</p>` : ''}
+      ${pi && S.planImg ? `<div class="ed-row"><button type="button" data-proj="btn-rectify">Redresser perspective (4 pts)</button>${pi.calibrated ? '<button type="button" data-proj="btn-verify-scale">Contrôler sur 2ᵉ cote</button>' : ''}${pi.originalUrl ? '<button type="button" data-proj="btn-restore-plan">Plan d’origine</button>' : ''}</div>` : ''}
       ${warn}
-      ${diagnosticHtml()}
+      ${diagnosticHtml(idPrefix)}
       <div class="ed-stats">
         <div class="ed-stat"><strong>${p.walls.length}</strong><span>murs</span></div>
         <div class="ed-stat"><strong>${nOps}</strong><span>ouvertures</span></div>
         <div class="ed-stat"><strong>${p.rooms.length}</strong><span>pièces</span></div>
         <div class="ed-stat"><strong>${hab.toFixed(1).replace('.', ',')} m²</strong><span>habitables</span></div>
       </div>
-      <div class="ed-row"><button id="btn-fit">Cadrer la vue</button><button id="btn-center">Centrer sur l'origine</button></div>
-      <section class="ed-checks" aria-labelledby="ed-checks-title"><h4 id="ed-checks-title">Vérifications</h4><ul id="ed-checks-list"></ul>
-        <p class="ed-note">Repères d'habitabilité indicatifs, non réglementaires : ils signalent, ils ne bloquent pas.</p></section>`);
+      <div class="ed-row"><button id="${idPrefix}btn-fit" data-proj="btn-fit" type="button">Cadrer la vue</button><button id="${idPrefix}btn-center" data-proj="btn-center" type="button">Centrer sur l'origine</button></div>
+      <section class="ed-checks" aria-labelledby="${idPrefix}ed-checks-title"><h4 id="${idPrefix}ed-checks-title" data-checks-title>Vérifications</h4><ul id="${idPrefix}ed-checks-list" data-checks-list></ul>
+        <p class="ed-note">Repères d'habitabilité indicatifs, non réglementaires : ils signalent, ils ne bloquent pas.</p></section>`, container, pdfMissingBannerHtml());
     ['title', 'number', 'level', 'revision', 'date', 'status', 'scale'].forEach(key => {
-      const input = $(`sheet-${key}`);
+      const input = container.querySelector(`[data-sheet="${key}"]`);
+      if (!input) return;
       input.onchange = () => {
         commit();
         const sheets = p.meta.sheets || (p.meta.sheets = []);
@@ -1582,14 +2293,29 @@
         refreshPanel();
       };
     });
-    renderChecks();
-    $('rng-opacity').oninput = e => { S.planOpacity = parseFloat(e.target.value); draw(); };
-    $('num-height').onchange = e => { const v = parseFloat(e.target.value); if (v > 2) { commit(); p.config.wallHeight = v; refreshPanel(); } };
-    const chk = $('chk-extras');
+    renderChecks(container);
+    const rngOpacity = container.querySelector('[data-proj="rng-opacity"]');
+    if (rngOpacity) rngOpacity.oninput = e => {
+      S.planOpacity = parseFloat(e.target.value);
+      const quick = $('ed-quick-opacity');
+      if (quick) quick.value = String(S.planOpacity);
+      draw();
+    };
+    const numHeight = container.querySelector('[data-proj="num-height"]');
+    if (numHeight) numHeight.onchange = e => { const v = parseFloat(e.target.value); if (v > 2) { commit(); p.config.wallHeight = v; refreshPanel(); } };
+    const chk = container.querySelector('[data-proj="chk-extras"]');
     if (chk) chk.onchange = e => { S.keepExtras = e.target.checked; };
-    $('btn-fit').onclick = () => { fitView(); draw(); };
-    $('btn-center').onclick = () => { commit(); centerProject(); fitView(); draw(); toast('Projet recentré sur l\'origine'); };
-    wireDiagnostic();
+    const btnFit = container.querySelector('[data-proj="btn-fit"]');
+    if (btnFit) btnFit.onclick = () => { fitView(); draw(); };
+    const btnCenter = container.querySelector('[data-proj="btn-center"]');
+    if (btnCenter) btnCenter.onclick = () => { commit(); centerProject(); fitView(); draw(); toast('Projet recentré sur l\'origine'); };
+    const btnRectify = container.querySelector('[data-proj="btn-rectify"]');
+    if (btnRectify) btnRectify.onclick = () => { if (inDialog) $('dlg-project-info')?.close(); setTool('rectify'); toast('Cliquez les 4 coins du cadre/plan (haut-gauche → sens horaire).'); };
+    const btnVerifyScale = container.querySelector('[data-proj="btn-verify-scale"]');
+    if (btnVerifyScale) btnVerifyScale.onclick = () => { if (inDialog) $('dlg-project-info')?.close(); setTool('verify-scale'); toast('Cliquez les 2 extrémités d’une 2ᵉ cote connue (loupe active).'); };
+    const btnRestorePlan = container.querySelector('[data-proj="btn-restore-plan"]');
+    if (btnRestorePlan) btnRestorePlan.onclick = () => restoreOriginalPlanImage();
+    wireDiagnostic(container);
   }
 
   // ---------------------------------------------------------------------------
@@ -1608,7 +2334,7 @@
     return diagCache.result;
   }
   const levelName = level => (level ? 'Étage ' + level : 'RDC');
-  function diagnosticHtml() {
+  function diagnosticHtml(idPrefix = '') {
     const d = projectDiagnostic();
     if (!d) return '';
     const items = [];
@@ -1623,13 +2349,14 @@
       ? `Aucune toiture tracée : la 3D pose une ${d.roof[0].type === 'hip' ? 'toiture 4 pans (pente 27°, débord 60 cm)' : 'toiture-terrasse (dalle sur l’emprise exacte)'} automatique.${d.roof[0].type === 'hip' && d.footprintFill < 0.85 ? ' Attention : l’emprise est découpée, le 4 pans couvrira aussi ses creux.' : ''}`
       : roofStyle === 'none' ? 'Toiture automatique désactivée.' : '✓ Toiture tracée à la main : elle est utilisée telle quelle.';
     const options = { auto: 'Automatique (toit-terrasse)', hip: '4 pans', flat: 'Toit-terrasse', none: 'Aucune' };
-    items.push(`<div class="ed-field"><label for="sel-roof">Toiture automatique</label><select id="sel-roof">${Object.entries(options).map(([k, l]) => `<option value="${k}"${k === roofStyle ? ' selected' : ''}>${l}</option>`).join('')}</select></div><p class="ed-note">${roofNote}</p>`);
+    items.push(`<div class="ed-field"><label for="${idPrefix}sel-roof">Toiture automatique</label><select id="${idPrefix}sel-roof" data-proj="sel-roof">${Object.entries(options).map(([k, l]) => `<option value="${k}"${k === roofStyle ? ' selected' : ''}>${l}</option>`).join('')}</select></div><p class="ed-note">${roofNote}</p>`);
     return `<fieldset class="ed-sheet-fields ed-diagnostic"><legend>Diagnostic du projet</legend>${items.join('')}</fieldset>`;
   }
-  function wireDiagnostic() {
-    const roof = $('sel-roof');
+  function wireDiagnostic(container = $('ed-props')) {
+    const scope = container || document;
+    const roof = scope.querySelector('[data-proj="sel-roof"]') || $('sel-roof');
     if (roof) roof.onchange = e => { commit(); if (e.target.value === 'auto') delete S.p.config.roofStyle; else S.p.config.roofStyle = e.target.value; refreshPanel(); };
-    document.querySelectorAll('[data-add-void]').forEach(button => button.addEventListener('click', () => {
+    scope.querySelectorAll('[data-add-void]').forEach(button => button.addEventListener('click', () => {
       const v = projectDiagnostic()?.voids[+button.dataset.addVoid];
       const rooms = v && S.levelData[v.level] ? S.levelData[v.level].rooms : null;
       if (!rooms) return;
@@ -1698,7 +2425,7 @@
     const stairwells = JSON.parse(JSON.stringify(allLevelItems('stairwells')));
     const out = {
       meta: { name: p.meta.name, slug: p.meta.slug, subtitle: p.meta.subtitle || '', client: p.meta.client || '', clientVisible: p.meta.clientVisible === true, updated,
-        ...Object.fromEntries(['architect', 'location', 'phase', 'revision', 'reference', 'issueDate', 'status', 'concept', 'contact'].filter(key => p.meta[key]).map(key => [key, String(p.meta[key])])),
+        ...Object.fromEntries(['architect', 'location', 'phase', 'revision', 'reference', 'issueDate', 'status', 'concept', 'contact', 'description'].filter(key => p.meta[key]).map(key => [key, String(p.meta[key])])),
         ...(Array.isArray(p.meta.sheets) ? { sheets: p.meta.sheets.map(sheet => Object.fromEntries(['title', 'number', 'level', 'revision', 'date', 'status', 'scale'].filter(key => sheet?.[key]).map(key => [key, String(sheet[key])]))) } : {}) },
       config: { wallHeight: p.config.wallHeight, floorHeight: p.config.floorHeight || 3 },
       levels: [levelMeta(0), levelMeta(1)],
@@ -1731,6 +2458,21 @@
     if (p.estimate && typeof CostEstimate !== 'undefined') out.estimate = CostEstimate.settings(p.estimate);
     const pi = p.config.planImage;
     if (pi && pi.url) out.config.planImage = { url: pi.url.startsWith('data:') ? '' : pi.url, pxPerMeter: pi.pxPerMeter, originPx: pi.originPx, calibrated: !!pi.calibrated };
+    if (p.config.planImages && typeof p.config.planImages === 'object') {
+      const cleaned = {};
+      for (const [lvl, entry] of Object.entries(p.config.planImages)) {
+        if (!entry || !entry.url) continue;
+        cleaned[lvl] = {
+          url: entry.url.startsWith('data:') ? '' : entry.url,
+          pxPerMeter: entry.pxPerMeter,
+          originPx: entry.originPx,
+          calibrated: !!entry.calibrated,
+          ...(entry.sourcePage ? { sourcePage: entry.sourcePage } : {}),
+          ...(entry.sourceName ? { sourceName: entry.sourceName } : {})
+        };
+      }
+      if (Object.keys(cleaned).length) out.config.planImages = cleaned;
+    }
     if (S.extras && S.keepExtras) Object.assign(out, JSON.parse(JSON.stringify(S.extras)));
     else if (S.extras && S.extras.assets) out.assets = S.extras.assets;
     return out;
@@ -1990,14 +2732,87 @@
     finally { button.disabled = false; }
   };
   $('dlg-cabinet').addEventListener('close', () => { pendingCabinetLogo = undefined; });
+  const btnProjectInfo = $('btn-project-info');
+  if (btnProjectInfo) btnProjectInfo.onclick = openProjectInfoDialog;
+  const btnProjectInfoClose = $('dlg-project-info-close');
+  if (btnProjectInfoClose) btnProjectInfoClose.onclick = () => $('dlg-project-info')?.close();
+  const btnDeliverables = $('btn-deliverables');
+  const dlgDeliverables = $('dlg-deliverables');
+  const btnDeliverablesClose = $('dlg-deliverables-close');
+  if (btnDeliverablesClose && dlgDeliverables) btnDeliverablesClose.onclick = () => dlgDeliverables.close();
+  if (btnDeliverables && dlgDeliverables) {
+    btnDeliverables.onclick = () => {
+      if (typeof DeliverableChecklist === 'undefined') return;
+      const slug = S.p?.meta?.slug || slugify(S.p?.meta?.name || '');
+      DeliverableChecklist.openDashboard({
+        dialogEl: dlgDeliverables,
+        bodyEl: $('dlg-deliverables-body'),
+        statusEl: $('dlg-deliverables-status'),
+        slug,
+        project: toProjectJson(),
+        cabinet: cabinetProfile,
+        onExport: async docId => {
+          const stEl = $('dlg-deliverables-status');
+          if (docId === 'aps') { dlgDeliverables.close(); $('btn-aps')?.click(); return; }
+          if (docId === 'catalog') { dlgDeliverables.close(); $('btn-export-premium')?.click(); return; }
+          if (docId === 'book' && typeof PlanBook !== 'undefined' && typeof PlanBook.exportBook === 'function') {
+            if (stEl) stEl.textContent = 'Assemblage du cahier de plans A3…';
+            await PlanBook.exportBook({ data: toProjectJson(), studio: null, cabinet: cabinetProfile });
+            if (stEl) stEl.textContent = 'Cahier de plans A3 exporté.';
+            return;
+          }
+          if (docId === 'synthesis' && typeof PlanBook !== 'undefined' && typeof PlanBook.exportSynthesisBoard === 'function') {
+            if (stEl) stEl.textContent = 'Export de la planche de synthèse A3…';
+            await PlanBook.exportSynthesisBoard({ data: toProjectJson(), studio: null });
+            if (stEl) stEl.textContent = 'Planche de synthèse A3 exportée.';
+            return;
+          }
+          if (slug) location.assign(`index.html?project=${encodeURIComponent(slug)}`);
+          else if (stEl) stEl.textContent = 'Enregistrez d’abord le projet pour lancer cet export depuis la visite 3D.';
+        }
+      });
+    };
+  }
+  async function openProjectBySlug(rawSlug) {
+    const slug = slugify(rawSlug || '');
+    if (!slug) return false;
+    try {
+      const reply = await fetch(`projects/${encodeURIComponent(slug)}/project.json`, { cache: 'no-store' });
+      if (!reply.ok) throw new Error('not-found');
+      const data = await reply.json();
+      data.meta = { ...data.meta, slug, slugLocked: true };
+      loadProject(data, { keepExtras: true });
+      try { localStorage.setItem('lastProject', slug); } catch { /* stockage facultatif */ }
+      toast('Projet ouvert : ' + (data.meta.name || slug));
+      return true;
+    } catch {
+      if (slug === 'villa-serena' && window.HOUSE_DATA) {
+        const villa = JSON.parse(JSON.stringify(window.HOUSE_DATA));
+        villa.meta = { name: 'VILLA SERENA', slug: 'villa-serena', slugLocked: true, subtitle: 'Villa contemporaine de plain-pied — plan d’origine : Eng Dollar' };
+        loadProject(villa, { keepExtras: true });
+        toast('Villa Serena chargée');
+        return true;
+      }
+      return false;
+    }
+  }
   void fetchCabinetProfile();
   buildLibrary();
   window.addEventListener('resize', resize);
   loadProject(emptyProject());
   setTool('select');
   resize();
-  toast('Importez l\'image d\'un plan, ou ouvrez l\'exemple Villa Serena');
+  const initialSlug = new URLSearchParams(location.search).get('project') || new URLSearchParams(location.search).get('p');
+  if (initialSlug) {
+    void openProjectBySlug(initialSlug).then(ok => {
+      if (!ok) toast('Projet introuvable — ouvrez un dossier ou importez un plan', true);
+    });
+  } else {
+    toast('Importez l\'image d\'un plan, ou ouvrez l\'exemple Villa Serena');
+  }
   window.__editor = S; // débogage
   // API interne pour les modules complémentaires (lecture IA, caméras…)
-  window.EditorAPI = { S, commit, refreshPanel, draw, toast, fitView, setTool, select, FURNITURE, OPENINGS, wallLen, projectOnWall, slugify, r2, round, allLevelItems, toProjectJson };
+  const addOverlayRenderer = fn => { if (typeof fn === 'function') customOverlays.push(fn); };
+  const addCanvasClickHandler = fn => { if (typeof fn === 'function') customClickHandlers.push(fn); };
+  window.EditorAPI = { S, commit, refreshPanel, draw, toast, fitView, setTool, select, switchLevel, loadProject, openProjectBySlug, projectPanel, openProjectInfoDialog, planPdfImport, applyPdfImportSelection, finishRectification, finishScaleControl, restoreOriginalPlanImage, setReviewOverlay, focusWorldPoint, addOverlayRenderer, addCanvasClickHandler, toScreen, toWorld, nearestWall, FURNITURE, OPENINGS, wallLen, projectOnWall, slugify, r2, round, allLevelItems, toProjectJson };
 })();

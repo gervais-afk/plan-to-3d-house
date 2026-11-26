@@ -45,13 +45,59 @@ function open(projects, project, channel) {
   return { storage, file, notes: readItems(file) };
 }
 
+const wallIdPattern = /^[a-zA-Z0-9_:-]{1,64}$/;
+
+function listChannels(projects, project) {
+  if (typeof project !== 'string' || !schema.projectPattern.test(project)) {
+    throw fail(400, 'Projet invalide.');
+  }
+  const dir = path.join(projects, project);
+  if (!fs.existsSync(path.join(dir, 'project.json'))) throw fail(404, 'Projet introuvable.');
+  const storage = path.join(dir, directoryName);
+  if (!fs.existsSync(storage)) return [];
+  const files = fs.readdirSync(storage).filter(name => /^[0-9a-f]{32}\.json$/.test(name));
+  const out = [];
+  for (const name of files) {
+    const channel = name.slice(0, 32);
+    const notes = readItems(path.join(storage, name));
+    let openCount = 0, answeredCount = 0, closedCount = 0;
+    let lastDate = '';
+    for (const n of notes) {
+      if (n.status === 'answered') answeredCount++;
+      else if (n.status === 'closed') closedCount++;
+      else openCount++;
+      if (n.date && n.date > lastDate) lastDate = n.date;
+    }
+    out.push({ channel, total: notes.length, open: openCount, answered: answeredCount, closed: closedCount, lastDate });
+  }
+  return out.sort((a, b) => String(b.lastDate).localeCompare(String(a.lastDate)));
+}
+
 function append(projects, project, channel, data) {
   const { storage, file, notes } = open(projects, project, channel);
   const text = schema.label(data?.text, 700);
   const pose = schema.pose(data?.pose);
   if (!text || !pose || !schema.point(data?.point)) throw fail(400, 'Texte ou point invalide.');
   if (notes.length >= maxNotes) throw fail(409, 'Dossier plein (100 remarques).');
-  const item = { id: randomUUID(), text, pose, point: data.point, room: schema.label(data.room, 120), date: new Date().toISOString(), status: 'open', revision: 0 };
+  const wallId = typeof data?.wallId === 'string' && wallIdPattern.test(data.wallId) ? data.wallId : '';
+  const wallLabel = schema.label(data?.wallLabel, 120);
+  const rawLevel = Number(data?.level);
+  const level = Number.isInteger(rawLevel) && rawLevel >= 0 && rawLevel <= 10 ? rawLevel : 0;
+  const source = data?.source === '2d' ? '2d' : '3d';
+  const item = {
+    id: randomUUID(),
+    text,
+    pose,
+    point: data.point,
+    room: schema.label(data.room, 120),
+    ...(wallId ? { wallId } : {}),
+    ...(wallLabel ? { wallLabel } : {}),
+    level,
+    source,
+    date: new Date().toISOString(),
+    status: 'open',
+    revision: 0
+  };
   writeItems(storage, file, [...notes, item]);
   return item;
 }
@@ -73,4 +119,4 @@ function review(projects, project, channel, data) {
   return updated;
 }
 
-module.exports = { directoryName, open, append, review, channelStorage, readItems, writeItems, fail };
+module.exports = { directoryName, open, append, review, listChannels, channelStorage, readItems, writeItems, fail };

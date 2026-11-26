@@ -19,8 +19,8 @@ const viewerFiles = new Set(['js/portal-context.js', 'js/houseDataCore.js', 'js/
   'js/scene.js', 'js/variantState.js', 'js/solarStudy.js', 'js/realism.js', 'js/assets.js', 'js/presentationPlan.js',
   'js/renderStudio.js', 'js/aiSequence.js', 'js/scrollTour.js', 'js/walkController.js', 'js/minimap.js', 'js/solarOptions.js',
   'js/clientFinishes.js', 'js/clientTools.js', 'js/clientVariants.js', 'js/clientFeedback.js', 'js/clientBrochure.js',
-  'js/aiPrompt.js', 'js/fidelityCheck.js', 'js/deliverableGate.js', 'js/app.js', 'js/workspace.js', 'css/workspace.css', 'js/clientDecisions.js', 'css/style.css', 'css/clientTools.css',
-  'css/tokens.css', 'css/motion.css', 'js/icons.js', 'js/motion.js', 'js/presentMode.js', 'js/viewOrder.js', 'js/costEstimate.js', 'js/sheetClassifier.js', 'js/woodGrain.js', 'js/planBook.js', 'assets/vendor/jspdf-4.2.1.umd.min.js', 'js/home.js', 'js/coverImage.js', 'css/accueil.css', 'css/presentation.css', 'assets/fonts/manrope.woff2', 'assets/fonts/source-serif-4.woff2']);
+  'js/aiPrompt.js', 'js/fidelityCheck.js', 'js/deliverableGate.js', 'js/deliverableChecklist.js', 'js/pdfIdentity.js', 'js/gateReviewUI.js', 'js/app.js', 'js/workspace.js', 'css/workspace.css', 'js/clientDecisions.js', 'css/style.css', 'css/clientTools.css',
+  'css/tokens.css', 'css/motion.css', 'js/icons.js', 'js/motion.js', 'js/presentMode.js', 'js/viewOrder.js', 'js/costEstimate.js', 'js/xlsxExport.js', 'js/technicalDrawings.js', 'js/variantComparator.js', 'js/sheetClassifier.js', 'js/woodGrain.js', 'js/planBook.js', 'assets/vendor/jspdf-4.2.1.umd.min.js', 'assets/vendor/pdf.min.js', 'assets/vendor/pdf.worker.min.js', 'assets/vendor/three/three.min.js', 'assets/vendor/three/GLTFLoader.js', 'assets/vendor/three/RGBELoader.js', 'assets/vendor/three/RoomEnvironment.js', 'js/home.js', 'js/coverImage.js', 'css/accueil.css', 'css/presentation.css', 'assets/fonts/manrope.woff2', 'assets/fonts/source-serif-4.woff2']);
 const publicFiles = new Set(['portal.html', 'js/portal.js', 'css/portal.css', 'css/tokens.css', 'assets/fonts/manrope.woff2', 'assets/fonts/source-serif-4.woff2']);
 
 function safePath(relative) {
@@ -32,8 +32,7 @@ function allowClientFile(relative, session) {
   if (viewerFiles.has(relative)) return true;
   if (/^assets\/models\/[\w./-]+\.(?:gltf|glb|bin|jpe?g|png|webp)$/i.test(relative)) return true; // bibliothèque CC0 uniquement
   const parts = relative.split('/');
-  if (relative === 'assets/cabinet/logo.png') return true;
-  if (session.project === 'residence-verandas' && relative === 'projects/residence-verandas/planches/cahier.pdf') return true;
+  if (parts[0] === 'projects' && parts[1] === session.project && parts[2] === 'planches' && safePath(relative) && /\.pdf$/i.test(relative)) return true;
   return parts[0] === 'projects' && parts[1] === session.project && safePath(relative) &&
     (/^projects\/[^/]+\/project\.json$/.test(relative) || /\.(?:jpe?g|png|webp|hdr|glb|gltf|bin|mp4|webm)$/i.test(relative));
 }
@@ -265,6 +264,7 @@ function createPortal({ root, projects, send, read, env = process.env, now = Dat
     if (/^projects\/[^/]+\/generated\/drafts(?:\/|\.json$)/i.test(relative)) { deny(res, session); return false; }
     if (relative.startsWith(`projects/${session.project}/generated/`) && !canReadPublishedMedia(relative, session.project)) { deny(res, session); return false; }
     if (urlPath === '/api/cabinet/profile' && req.method === 'GET') return { session };
+    if (urlPath === '/api/cabinet/logo' && reading) return { session };
     if (urlPath.startsWith('/api/presentation/')) {
       if (relative === 'api/presentation/settings' && req.method === 'GET' && url.searchParams.get('project') === session.project) return { session };
       deny(res, session);
@@ -282,6 +282,7 @@ function createPortal({ root, projects, send, read, env = process.env, now = Dat
       if (relative === 'api/client-feedback') { deny(res, session); return false; }
     }
     if (relative === 'api/projects' && req.method === 'GET') return { session, only: session.project };
+    if (relative === `api/projects/${session.project}/variants` && req.method === 'GET') return { session };
     if (url.searchParams.get('project') === session.project &&
       ((relative === 'api/gallery/media' && req.method === 'GET') || (['api/client-feedback', 'api/client-decisions'].includes(relative) &&
         (req.method === 'GET' || (req.method === 'POST' && session.role === 'comment'))))) return { session };

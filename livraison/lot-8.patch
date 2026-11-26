@@ -1,0 +1,889 @@
+From 397d6c7baa5749dee6d4334eea032d27fb15d162 Mon Sep 17 00:00:00 2001
+From: ArchiCam Dev <dev@archicam.local>
+Date: Wed, 25 Nov 2026 18:38:02 +0000
+Subject: [PATCH] =?UTF-8?q?Lot=208=20=E2=80=94=20Tableau=20de=20bord=20?=
+ =?UTF-8?q?=C2=AB=20Livrables=20=C2=BB?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ accueil.html                         |  12 +
+ css/editor.css                       |  20 ++
+ css/style.css                        |  21 ++
+ editor.html                          |  11 +
+ index.html                           |  13 +
+ js/app.js                            |  34 +++
+ js/deliverableChecklist.js           | 372 +++++++++++++++++++++++++++
+ js/editor.js                         |  37 +++
+ js/home.js                           |  25 ++
+ js/workspace.js                      |   6 +-
+ privatePortal.js                     |   2 +-
+ tests/deliverable-checklist.test.cjs | 154 +++++++++++
+ 12 files changed, 704 insertions(+), 3 deletions(-)
+ create mode 100644 js/deliverableChecklist.js
+ create mode 100644 tests/deliverable-checklist.test.cjs
+
+diff --git a/accueil.html b/accueil.html
+index b8b2ea3..ca0ecc7 100644
+--- a/accueil.html
++++ b/accueil.html
+@@ -44,6 +44,7 @@
+         <select id="home-project"></select>
+       </div>
+       <a class="nav-link" id="home-account" href="portal.html" hidden>Espace privé</a>
++      <button type="button" class="nav-link" id="home-deliverables" hidden>Livrables</button>
+       <a class="nav-link" id="home-editor" href="editor.html" hidden>Éditeur <span aria-hidden="true">↗</span></a>
+     </nav>
+   </header>
+@@ -193,6 +194,17 @@
+     </div>
+   </main>
+   <footer class="footer shell"><span>ARCHICAM STUDIO</span><span class="footer-signature" id="footer-signature" hidden><span id="footer-architect"></span> <a id="footer-contact" hidden></a></span><span>Le cockpit architectural immersif.</span><a class="footer-link" id="footer-editor" href="editor.html">ESPACE ATELIER</a></footer>
++  <dialog id="dlg-home-deliverables" class="rg-publish-dialog dlv-dialog" aria-labelledby="dlg-home-deliverables-title">
++    <form method="dialog" class="dlv-form">
++      <p class="rg-publish-kicker">DOSSIER ARCHITECTURAL</p>
++      <h2 id="dlg-home-deliverables-title">Tableau de bord — Livrables</h2>
++      <p id="dlg-home-deliverables-status" class="rg-publish-caption" role="status"></p>
++      <div id="dlg-home-deliverables-body"></div>
++      <div class="rg-publish-actions">
++        <button id="dlg-home-deliverables-close" type="submit" value="close" class="btn-toggle btn-small">Fermer</button>
++      </div>
++    </form>
++  </dialog>
+   </div>
+   <p id="workspace-status" class="workspace-status" role="status" hidden></p>
+ </body>
+diff --git a/css/editor.css b/css/editor.css
+index 8f89301..1f99c7f 100644
+--- a/css/editor.css
++++ b/css/editor.css
+@@ -371,3 +371,23 @@ button:disabled { opacity: .6; cursor: default; }
+ .ed-pdf-card label { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 6px; font-size: 11px; }
+ .ed-pdf-card select { width: 100%; min-width: 0; font-size: 11px; }
+ 
++
++/* Tableau de bord Livrables (éditeur) */
++.dlv-dialog { width: min(680px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
++.dlv-summary { margin: 4px 0 10px; font-size: 13px; }
++.dlv-steps { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
++.dlv-step { padding: 9px 11px; border: 1px solid var(--line); border-left: 4px solid #6b7280; border-radius: 7px; background: var(--paper-2); }
++.dlv-step.is-done { border-left-color: #15803d; }
++.dlv-step.is-partial { border-left-color: #d97706; }
++.dlv-step-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 700; font-size: 12px; }
++.dlv-badge { padding: 2px 7px; border-radius: 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
++.dlv-badge.is-done { background: rgba(21,128,61,0.14); color: #15803d; }
++.dlv-badge.is-partial { background: rgba(217,119,6,0.16); color: #b45309; }
++.dlv-badge.is-todo { background: rgba(107,114,128,0.15); color: #4b5563; }
++.dlv-step-summary { margin: 4px 0 0; font-size: 11px; color: var(--ink-2); }
++.dlv-missing { margin: 5px 0 0; padding-left: 16px; font-size: 11px; color: var(--warn); }
++.dlv-docs-title { margin: 12px 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
++.dlv-docs-grid { display: grid; gap: 7px; }
++.dlv-doc-card { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: #fff; }
++.dlv-doc-card strong { display: block; font-size: 12px; }
++.dlv-doc-card small { display: block; font-size: 11px; color: var(--ink-2); margin-top: 2px; }
+diff --git a/css/style.css b/css/style.css
+index f9f2642..8379924 100644
+--- a/css/style.css
++++ b/css/style.css
+@@ -978,3 +978,24 @@ body.fps-active .crosshair {
+ 
+ /* Arrivée depuis l’accueil : la couverture s’ouvre sur la maquette (css/motion.css). */
+ #webgl-container { view-transition-name: plan3d-hero; }
++
++/* Tableau de bord Livrables (5 étapes + 5 documents) */
++.dlv-dialog { width: min(680px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
++.dlv-summary { margin: 4px 0 10px; font-size: 0.92rem; }
++.dlv-steps { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
++.dlv-step { padding: 10px 12px; border: 1px solid var(--rule, #d6d3cb); border-left: 4px solid var(--rule, #9ca3af); border-radius: 8px; background: var(--surface, #faf8f4); }
++.dlv-step.is-done { border-left-color: #15803d; }
++.dlv-step.is-partial { border-left-color: #d97706; }
++.dlv-step.is-todo { border-left-color: #6b7280; }
++.dlv-step-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 700; font-size: 0.86rem; }
++.dlv-badge { padding: 2px 7px; border-radius: 4px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
++.dlv-badge.is-done { background: rgba(21,128,61,0.14); color: #15803d; }
++.dlv-badge.is-partial { background: rgba(217,119,6,0.16); color: #b45309; }
++.dlv-badge.is-todo { background: rgba(107,114,128,0.15); color: #4b5563; }
++.dlv-step-summary { margin: 4px 0 0; font-size: 0.8rem; color: var(--muted, #4b5563); }
++.dlv-missing { margin: 5px 0 0; padding-left: 16px; font-size: 0.78rem; color: #b45309; }
++.dlv-docs-title { margin: 12px 0 8px; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.06em; }
++.dlv-docs-grid { display: grid; gap: 8px; }
++.dlv-doc-card { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid var(--rule, #d6d3cb); border-radius: 8px; background: #fff; }
++.dlv-doc-card strong { display: block; font-size: 0.84rem; }
++.dlv-doc-card small { display: block; font-size: 0.76rem; color: var(--muted, #4b5563); margin-top: 2px; }
+diff --git a/editor.html b/editor.html
+index e9f93dd..d01e262 100644
+--- a/editor.html
++++ b/editor.html
+@@ -38,6 +38,7 @@
+       <button id="btn-sublimate" type="button" title="Photoréaliser par IA (OpenRouter) les vues enregistrées dans la visite 3D">✨ Sublimer avec l'IA</button>
+       <button id="btn-export-premium" type="button" title="Exporter un catalogue PDF premium">🎨 Catalogue Premium</button>
+       <button id="btn-advanced" type="button" title="Outils avancés : export BIM, analyse structurelle, bioclimatique…"><svg class="i" aria-hidden="true"><use href="#i-sparkle"></use></svg> Outils avancés</button>
++      <button id="btn-deliverables" type="button" title="Tableau de bord d’avancement et des 5 livrables">Livrables</button>
+       <button id="btn-preview" title="Enregistrer puis ouvrir la visite 3D de ce projet"><svg class="i" aria-hidden="true"><use href="#i-eye"></use></svg> Lancer la visite 3D</button>
+     </div>
+   </header>
+@@ -375,6 +376,15 @@
+     </div>
+   </dialog>
+ 
++  <dialog id="dlg-deliverables" class="ed-dialog ed-dialog-wide dlv-dialog" aria-labelledby="dlg-deliverables-title">
++    <h3 id="dlg-deliverables-title">Tableau de bord — Livrables</h3>
++    <p id="dlg-deliverables-status" class="ed-note" role="status"></p>
++    <div id="dlg-deliverables-body"></div>
++    <div class="ed-dialog-actions">
++      <button id="dlg-deliverables-close" type="button" class="ed-primary">Fermer</button>
++    </div>
++  </dialog>
++
+   <div id="ed-toast" class="ed-toast" role="status"></div>
+ 
+   <script src="js/icons.js"></script>
+@@ -408,6 +418,7 @@
+   <script src="js/aiPrompt.js"></script>
+   <script src="js/fidelityCheck.js"></script>
+   <script src="js/deliverableGate.js"></script>
++  <script src="js/deliverableChecklist.js"></script>
+   <script src="js/aiEnhance.js"></script>
+   <script src="js/apsGenerator.js"></script>
+   <script src="js/editor.js"></script>
+diff --git a/index.html b/index.html
+index 48e5099..1dc158d 100644
+--- a/index.html
++++ b/index.html
+@@ -85,6 +85,7 @@
+           <button id="btn-plan-compare" type="button" class="btn-toggle btn-small" aria-pressed="false">Comparer plan / 3D</button>
+           <button id="btn-clearance-guides" type="button" class="btn-toggle btn-small" aria-pressed="false" aria-describedby="clearance-note" title="Repères indicatifs — gabarits d’encombrement visuels et non normatifs">Gabarits indicatifs</button>
+           <span id="clearance-note" class="sr-only">Repères indicatifs : bandes théoriques de 90 centimètres autour de certains meubles et arcs simplifiés de portes. Ils ne valident pas la conformité des circulations.</span>
++          <button id="btn-deliverables" type="button" class="btn-toggle btn-small" aria-haspopup="dialog">Livrables</button>
+           <button id="btn-present" type="button" class="btn-toggle btn-small" aria-pressed="false" title="Plein écran sans outils ; flèches pour avancer, Échap pour quitter"><svg class="i" aria-hidden="true"><use href="#i-present"></use></svg> <span>Présenter</span></button>
+           <a id="portal-account" href="portal.html" class="btn-toggle btn-small" hidden>Espace privé</a>
+         </div>
+@@ -445,6 +446,18 @@
+     </form>
+   </dialog>
+ 
++  <dialog id="dlg-deliverables" class="rg-publish-dialog dlv-dialog" aria-labelledby="dlg-deliverables-title">
++    <form method="dialog" class="dlv-form">
++      <p class="rg-publish-kicker">DOSSIER ARCHITECTURAL</p>
++      <h2 id="dlg-deliverables-title">Tableau de bord — Livrables</h2>
++      <p id="dlg-deliverables-status" class="rg-publish-caption" role="status"></p>
++      <div id="dlg-deliverables-body"></div>
++      <div class="rg-publish-actions">
++        <button id="dlg-deliverables-close" type="submit" value="close" class="btn-toggle btn-small">Fermer</button>
++      </div>
++    </form>
++  </dialog>
++
+   </section>
+   </template>
+ </body>
+diff --git a/js/app.js b/js/app.js
+index 4e5862f..623dda8 100644
+--- a/js/app.js
++++ b/js/app.js
+@@ -1697,6 +1697,40 @@ window.startProjectViewer = () => {
+     ? ` ${excluded.length} rendu${excluded.length > 1 ? 's' : ''} écarté${excluded.length > 1 ? 's' : ''} (Porte E) : ${excluded.map(e => `${e.label} (${e.reason})`).join(', ')}.`
+     : '';
+ 
++  // ---------- Tableau de bord « Livrables » (5 étapes + 5 exports) ----------
++  const deliverablesBtn = document.getElementById('btn-deliverables');
++  const deliverablesDlg = document.getElementById('dlg-deliverables');
++  if (deliverablesBtn) {
++    deliverablesBtn.hidden = invited;
++    deliverablesBtn.addEventListener('click', () => {
++      if (invited || typeof DeliverableChecklist === 'undefined' || !deliverablesDlg) return;
++      const slug = PROJECT_SLUG || HOUSE_DATA?.meta?.slug || '';
++      DeliverableChecklist.openDashboard({
++        dialogEl: deliverablesDlg,
++        bodyEl: document.getElementById('dlg-deliverables-body'),
++        statusEl: document.getElementById('dlg-deliverables-status'),
++        slug,
++        project: HOUSE_DATA,
++        onExport: async docId => {
++          const stEl = document.getElementById('dlg-deliverables-status');
++          if (docId === 'brochure') { deliverablesDlg.close(); pdfButton?.click(); return; }
++          if (docId === 'catalog') { deliverablesDlg.close(); catalogButton?.click(); return; }
++          if (docId === 'book') { deliverablesDlg.close(); document.getElementById('book-pdf')?.click(); return; }
++          if (docId === 'synthesis' && typeof PlanBook !== 'undefined' && typeof PlanBook.exportSynthesisBoard === 'function') {
++            if (stEl) stEl.textContent = 'Export de la planche de synthèse A3…';
++            await assetsReady;
++            await PlanBook.exportSynthesisBoard({ data: HOUSE_DATA, studio, screen: screenForDelivery, onStatus: msg => { if (stEl) stEl.textContent = msg; } });
++            if (stEl) stEl.textContent = 'Planche de synthèse A3 téléchargée.';
++            return;
++          }
++          if (docId === 'aps') {
++            location.assign(`editor.html${slug ? `?project=${encodeURIComponent(slug)}` : ''}`);
++          }
++        }
++      });
++    });
++  }
++
+   // ---------- Catalogue des intérieurs : ouvert aux clients ----------
+   catalogButton.addEventListener('click', async () => {
+     if (exportingPDF) return;
+diff --git a/js/deliverableChecklist.js b/js/deliverableChecklist.js
+new file mode 100644
+index 0000000..a5b5357
+--- /dev/null
++++ b/js/deliverableChecklist.js
+@@ -0,0 +1,372 @@
++/**
++ * Tableau de bord « Livrables » : évalue l'état d'avancement du dossier en 5 étapes
++ * (plan calibré, maquette vérifiée, vues capturées, rendus IA Porte E, documents/cartouche)
++ * et déclenche les 5 générateurs existants sans rien inventer.
++ */
++(function (root, factory) {
++  const api = factory(root);
++  if (typeof module === 'object' && module.exports) module.exports = api;
++  if (typeof window !== 'undefined') window.DeliverableChecklist = api;
++})(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
++  'use strict';
++
++  function resolveDep(overrides, key, globalName, relPath) {
++    if (overrides && overrides[key]) return overrides[key];
++    if (root && root[globalName]) return root[globalName];
++    if (typeof require === 'function' && relPath) {
++      try { return require(relPath); } catch { return null; }
++    }
++    return null;
++  }
++
++  function allWalls(project) {
++    if (!project) return [];
++    const base = Array.isArray(project.walls) ? project.walls : [];
++    const levels = project.levels && typeof project.levels === 'object' ? Object.values(project.levels) : [];
++    const extra = levels.flatMap(l => (l && Array.isArray(l.walls) ? l.walls : []));
++    return base.length ? base : extra;
++  }
++
++  function allRooms(project) {
++    if (!project) return [];
++    const base = Array.isArray(project.rooms) ? project.rooms : [];
++    const levels = project.levels && typeof project.levels === 'object' ? Object.values(project.levels) : [];
++    const extra = levels.flatMap(l => (l && Array.isArray(l.rooms) ? l.rooms : []));
++    return base.length ? base : extra;
++  }
++
++  /**
++   * Évalue l'état des 5 étapes et des 5 livrables à partir de l'état réel du projet.
++   */
++  function evaluate({ project = null, cabinet = null, media = null, planches = [], deps = null } = {}) {
++    const PdfIdentity = resolveDep(deps, 'PdfIdentity', 'PdfIdentity', './pdfIdentity.js');
++    const DeliverableGate = resolveDep(deps, 'DeliverableGate', 'DeliverableGate', './deliverableGate.js');
++
++    const safeProject = project || {};
++    const cfg = safeProject.config || {};
++    const pi = cfg.planImage || null;
++    const walls = allWalls(safeProject);
++    const rooms = allRooms(safeProject);
++    const safeMedia = media || { renders: [], images: [], videos: [] };
++    const renders = Array.isArray(safeMedia.renders) ? safeMedia.renders : [];
++    const images = Array.isArray(safeMedia.images) ? safeMedia.images : [];
++    const savedPlanches = Array.isArray(planches) ? planches : [];
++
++    // 1. Plan importé et calibré
++    const hasPlanUrl = Boolean(pi && typeof pi.url === 'string' && pi.url.trim());
++    const hasCalibrated = Boolean(pi && pi.calibrated === true && Number(pi.pxPerMeter) > 0);
++    const controlAlert = Boolean(pi && pi.controlCheck && pi.controlCheck.alert === true);
++    const planMissing = [];
++    if (!hasPlanUrl) planMissing.push('Aucun plan source importé.');
++    if (hasPlanUrl && !hasCalibrated) planMissing.push('Échelle du plan non calibrée sur une cote réelle.');
++    if (controlAlert) {
++      const pct = Number(pi.controlCheck.errorPct);
++      planMissing.push(`Alerte 2ᵉ cote de contrôle (écart ${Number.isFinite(pct) ? pct.toFixed(2) : '> 1'} %).`);
++    }
++    const planStatus = !hasPlanUrl ? 'todo' : (hasCalibrated && !controlAlert ? 'done' : 'partial');
++    const planStep = {
++      id: 'plan',
++      index: 1,
++      label: 'Plan importé et calibré',
++      status: planStatus,
++      summary: planStatus === 'done'
++        ? `Calibré (${Number(pi.pxPerMeter).toFixed(1)} px/m)`
++        : planStatus === 'partial'
++          ? (hasCalibrated ? 'Calibré mais 2ᵉ cote en alerte' : 'Importé, calibration requise')
++          : 'Aucun plan source',
++      missing: planMissing
++    };
++
++    // 2. Maquette vérifiée
++    const hasExtWall = walls.some(w => w && w.type === 'ext');
++    const hasDoor = walls.some(w => w && Array.isArray(w.openings) && w.openings.some(o => o && o.type === 'door'));
++    const modelMissing = [];
++    if (!walls.length) modelMissing.push('Aucun mur tracé.');
++    else if (!hasExtWall) modelMissing.push('Aucun mur extérieur identifié.');
++    if (!rooms.length) modelMissing.push('Aucune pièce définie.');
++    if (walls.length && !hasDoor) modelMissing.push('Aucune porte placée dans la maquette.');
++    const modelStatus = !walls.length && !rooms.length
++      ? 'todo'
++      : (walls.length > 0 && hasExtWall && rooms.length > 0 && hasDoor ? 'done' : 'partial');
++    const modelStep = {
++      id: 'model',
++      index: 2,
++      label: 'Maquette vérifiée',
++      status: modelStatus,
++      summary: modelStatus === 'todo'
++        ? 'Maquette vide'
++        : `${walls.length} mur(s), ${rooms.length} pièce(s)`,
++      missing: modelMissing
++    };
++
++    // 3. Vues capturées
++    const totalViews = renders.length + images.length;
++    const viewsMissing = [];
++    if (renders.length === 0 && images.length === 0) viewsMissing.push('Aucune vue 3D capturée (ouvrir la Galerie dans la visite 3D).');
++    else if (totalViews < 2) viewsMissing.push('Une seule vue disponible : capturez au moins 2 vues pour illustrer les documents.');
++    const viewsStatus = totalViews === 0 ? 'todo' : totalViews >= 2 ? 'done' : 'partial';
++    const viewsStep = {
++      id: 'views',
++      index: 3,
++      label: 'Vues capturées',
++      status: viewsStatus,
++      summary: totalViews
++        ? `${renders.length} capture(s) 3D · ${images.length} image(s)`
++        : 'Aucune capture enregistrée',
++      missing: viewsMissing
++    };
++
++    // 4. Rendus IA validés (Porte E)
++    const aiRenders = DeliverableGate && typeof DeliverableGate.isAiRender === 'function'
++      ? images.filter(img => DeliverableGate.isAiRender(img))
++      : images.filter(img => Boolean(img && (img.ai || img.model || /photor/i.test(String(img.id || '')))));
++    const aiEvaluations = aiRenders.map(img => {
++      const decision = DeliverableGate && typeof DeliverableGate.evaluate === 'function'
++        ? DeliverableGate.evaluate(img)
++        : { eligible: img?.fidelity?.verdict === 'faithful', reason: 'Contrôle géométrique requis' };
++      return { img, decision };
++    });
++    const blockedAi = aiEvaluations.filter(e => !e.decision.eligible);
++    const eligibleAi = aiEvaluations.filter(e => e.decision.eligible);
++    const aiMissing = [];
++    blockedAi.forEach(e => {
++      aiMissing.push(`${e.img.label || e.img.id || 'Rendu IA'} : ${e.decision.reason}`);
++    });
++    let aiStatus = 'todo';
++    let aiSummary = 'En attente de vues';
++    if (aiRenders.length > 0) {
++      aiStatus = blockedAi.length === 0 ? 'done' : 'partial';
++      aiSummary = blockedAi.length === 0
++        ? `${eligibleAi.length}/${aiRenders.length} rendu(s) IA conformes (Porte E)`
++        : `${blockedAi.length}/${aiRenders.length} rendu(s) IA bloqué(s) par la Porte E`;
++    } else if (totalViews > 0) {
++      aiStatus = 'done';
++      aiSummary = 'Aucun rendu IA en attente (vues 3D locales prêtes)';
++    } else {
++      aiMissing.push('Aucune vue disponible pour contrôle Porte E.');
++    }
++    const aiStep = {
++      id: 'ai-gate',
++      index: 4,
++      label: 'Rendus IA validés (Porte E)',
++      status: aiStatus,
++      summary: aiSummary,
++      missing: aiMissing,
++      counts: { total: aiRenders.length, eligible: eligibleAi.length, blocked: blockedAi.length }
++    };
++
++    // 5. Documents & cartouche
++    const idCheck = PdfIdentity && typeof PdfIdentity.missingFields === 'function'
++      ? PdfIdentity.missingFields(safeProject, { cabinet })
++      : { missing: [], message: '' };
++    const docMissing = (idCheck.missing || []).map(f => `Champ cartouche manquant : ${f}`);
++    if (modelStatus === 'todo') docMissing.push('La maquette doit contenir des murs et des pièces avant export.');
++    const hasSomeMeta = Boolean(
++      (safeProject.meta && (safeProject.meta.name || safeProject.meta.architect || safeProject.meta.client)) ||
++      (cabinet && (cabinet.name || cabinet.architect))
++    );
++    const docStatus = modelStatus === 'todo' && !hasSomeMeta
++      ? 'todo'
++      : (docMissing.length === 0 && modelStatus !== 'todo' ? 'done' : 'partial');
++    const docStep = {
++      id: 'documents',
++      index: 5,
++      label: 'Documents & cartouche',
++      status: docStatus,
++      summary: docMissing.length === 0 && modelStatus !== 'todo'
++        ? `Cartouche complet${savedPlanches.length ? ` · ${savedPlanches.length} planche(s) PDF` : ''}`
++        : `${idCheck.missing.length} champ(s) cartouche à compléter${savedPlanches.length ? ` · ${savedPlanches.length} planche(s) PDF` : ''}`,
++      missing: docMissing,
++      missingFields: idCheck.missing || [],
++      planchesCount: savedPlanches.length
++    };
++
++    const steps = [planStep, modelStep, viewsStep, aiStep, docStep];
++    const doneCount = steps.filter(s => s.status === 'done').length;
++
++    const modelReady = walls.length > 0 && rooms.length > 0;
++    const documents = [
++      {
++        id: 'aps',
++        label: 'APS Auto (Avant-Projet Sommaire)',
++        ready: modelReady,
++        missing: modelReady ? idCheck.missing.slice() : ['Tracer les murs et pièces de la maquette.']
++      },
++      {
++        id: 'brochure',
++        label: 'Brochure client PDF',
++        ready: modelReady,
++        missing: [
++          ...(modelReady ? [] : ['Maquette incomplète.']),
++          ...(totalViews ? [] : ['Capturer des vues 3D pour illustrer la brochure.']),
++          ...idCheck.missing
++        ]
++      },
++      {
++        id: 'catalog',
++        label: 'Catalogue d’intérieurs PDF',
++        ready: (renders.length + eligibleAi.length) > 0,
++        missing: [
++          ...((renders.length + eligibleAi.length) > 0 ? [] : ['Aucune vue 3D ni rendu IA validé Porte E.']),
++          ...(blockedAi.length ? [`${blockedAi.length} rendu(s) IA écarté(s) (Porte E).`] : [])
++        ]
++      },
++      {
++        id: 'book',
++        label: 'Cahier de plans A3',
++        ready: modelReady,
++        missing: modelReady ? idCheck.missing.slice() : ['Maquette incomplète.']
++      },
++      {
++        id: 'synthesis',
++        label: 'Planche de synthèse A3',
++        ready: modelReady,
++        missing: modelReady ? idCheck.missing.slice() : ['Maquette incomplète.']
++      }
++    ];
++
++    return {
++      projectName: (safeProject.meta && safeProject.meta.name) || 'Projet sans titre',
++      doneCount,
++      totalSteps: steps.length,
++      ready: doneCount === steps.length,
++      steps,
++      documents
++    };
++  }
++
++  const STATUS_TEXT = { done: 'Prêt', partial: 'Partiel', todo: 'À faire' };
++
++  /**
++   * Rendu DOM sûr du tableau de bord (createElement / textContent uniquement, zéro innerHTML).
++   */
++  function render(container, state, handlers) {
++    if (!container || typeof container.ownerDocument === 'undefined' || !state) return;
++    const doc = container.ownerDocument;
++    while (container.firstChild) container.removeChild(container.firstChild);
++    const onExport = handlers && typeof handlers.onExport === 'function' ? handlers.onExport : null;
++
++    const head = doc.createElement('div');
++    head.className = 'dlv-summary';
++    const title = doc.createElement('strong');
++    title.textContent = `${state.projectName} — ${state.doneCount} / ${state.totalSteps} étapes prêtes`;
++    head.appendChild(title);
++    container.appendChild(head);
++
++    const stepsList = doc.createElement('ol');
++    stepsList.className = 'dlv-steps';
++    state.steps.forEach(step => {
++      const li = doc.createElement('li');
++      li.className = `dlv-step is-${step.status}`;
++      li.setAttribute('data-step-id', step.id);
++      li.setAttribute('data-step-status', step.status);
++
++      const row = doc.createElement('div');
++      row.className = 'dlv-step-head';
++      const lbl = doc.createElement('span');
++      lbl.className = 'dlv-step-title';
++      lbl.textContent = `${step.index}. ${step.label}`;
++      const badge = doc.createElement('span');
++      badge.className = `dlv-badge is-${step.status}`;
++      badge.textContent = STATUS_TEXT[step.status] || step.status;
++      row.appendChild(lbl);
++      row.appendChild(badge);
++      li.appendChild(row);
++
++      const sum = doc.createElement('p');
++      sum.className = 'dlv-step-summary';
++      sum.textContent = step.summary;
++      li.appendChild(sum);
++
++      if (step.missing && step.missing.length) {
++        const ul = doc.createElement('ul');
++        ul.className = 'dlv-missing';
++        step.missing.forEach(msg => {
++          const item = doc.createElement('li');
++          item.textContent = msg;
++          ul.appendChild(item);
++        });
++        li.appendChild(ul);
++      }
++      stepsList.appendChild(li);
++    });
++    container.appendChild(stepsList);
++
++    const docsTitle = doc.createElement('h4');
++    docsTitle.className = 'dlv-docs-title';
++    docsTitle.textContent = 'Livrables du dossier (5)';
++    container.appendChild(docsTitle);
++
++    const docsGrid = doc.createElement('div');
++    docsGrid.className = 'dlv-docs-grid';
++    state.documents.forEach(d => {
++      const card = doc.createElement('div');
++      card.className = `dlv-doc-card ${d.ready ? 'is-ready' : 'is-pending'}`;
++      card.setAttribute('data-doc-id', d.id);
++
++      const info = doc.createElement('div');
++      const name = doc.createElement('strong');
++      name.textContent = d.label;
++      info.appendChild(name);
++      const note = doc.createElement('small');
++      note.textContent = d.missing.length ? `À compléter : ${d.missing.join(' · ')}` : 'Prêt pour export';
++      info.appendChild(note);
++      card.appendChild(info);
++
++      const btn = doc.createElement('button');
++      btn.type = 'button';
++      btn.className = 'btn-toggle btn-small dlv-doc-btn';
++      btn.setAttribute('data-deliverable-export', d.id);
++      btn.textContent = d.ready ? 'Générer' : 'Ouvrir';
++      if (onExport) {
++        btn.addEventListener('click', () => onExport(d.id, d, btn));
++      }
++      card.appendChild(btn);
++      docsGrid.appendChild(card);
++    });
++    container.appendChild(docsGrid);
++  }
++
++  async function safeFetchJson(url) {
++    if (typeof fetch !== 'function') return null;
++    try {
++      const res = await fetch(url, { cache: 'no-store' });
++      if (!res.ok) return null;
++      return await res.json();
++    } catch {
++      return null;
++    }
++  }
++
++  /**
++   * Charge les sources réelles (cabinet, galerie, planches) et affiche le dialogue Livrables.
++   */
++  async function openDashboard({ dialogEl, bodyEl, statusEl, slug = '', project = null, cabinet = null, media = null, planches = null, onExport = null } = {}) {
++    if (!dialogEl || !bodyEl) return null;
++    if (statusEl) statusEl.textContent = 'Analyse de l’état des livrables…';
++    if (!dialogEl.open && typeof dialogEl.showModal === 'function') dialogEl.showModal();
++
++    const safeSlug = slug ? encodeURIComponent(slug) : '';
++    const [cabData, mediaData, planchesData] = await Promise.all([
++      cabinet ? Promise.resolve(cabinet) : safeFetchJson('api/cabinet/profile'),
++      media ? Promise.resolve(media) : (safeSlug ? safeFetchJson(`api/gallery/media?project=${safeSlug}`) : Promise.resolve({ renders: [], images: [] })),
++      planches ? Promise.resolve(planches) : (safeSlug ? safeFetchJson(`api/projects/${safeSlug}/planches`) : Promise.resolve({ items: [] }))
++    ]);
++
++    const state = evaluate({
++      project,
++      cabinet: cabData || null,
++      media: mediaData || { renders: [], images: [] },
++      planches: Array.isArray(planchesData) ? planchesData : (planchesData && Array.isArray(planchesData.items) ? planchesData.items : [])
++    });
++    render(bodyEl, state, { onExport });
++    if (statusEl) {
++      statusEl.textContent = state.ready
++        ? 'Toutes les étapes sont validées : vos 5 livrables sont prêts.'
++        : 'Certains points restent à vérifier ou compléter avant remise au client.';
++    }
++    return state;
++  }
++
++  return { evaluate, render, openDashboard };
++});
+diff --git a/js/editor.js b/js/editor.js
+index 5865180..eaf4e5a 100644
+--- a/js/editor.js
++++ b/js/editor.js
+@@ -2658,6 +2658,43 @@
+   if (btnProjectInfo) btnProjectInfo.onclick = openProjectInfoDialog;
+   const btnProjectInfoClose = $('dlg-project-info-close');
+   if (btnProjectInfoClose) btnProjectInfoClose.onclick = () => $('dlg-project-info')?.close();
++  const btnDeliverables = $('btn-deliverables');
++  const dlgDeliverables = $('dlg-deliverables');
++  const btnDeliverablesClose = $('dlg-deliverables-close');
++  if (btnDeliverablesClose && dlgDeliverables) btnDeliverablesClose.onclick = () => dlgDeliverables.close();
++  if (btnDeliverables && dlgDeliverables) {
++    btnDeliverables.onclick = () => {
++      if (typeof DeliverableChecklist === 'undefined') return;
++      const slug = S.p?.meta?.slug || slugify(S.p?.meta?.name || '');
++      DeliverableChecklist.openDashboard({
++        dialogEl: dlgDeliverables,
++        bodyEl: $('dlg-deliverables-body'),
++        statusEl: $('dlg-deliverables-status'),
++        slug,
++        project: toProjectJson(),
++        cabinet: cabinetProfile,
++        onExport: async docId => {
++          const stEl = $('dlg-deliverables-status');
++          if (docId === 'aps') { dlgDeliverables.close(); $('btn-aps')?.click(); return; }
++          if (docId === 'catalog') { dlgDeliverables.close(); $('btn-export-premium')?.click(); return; }
++          if (docId === 'book' && typeof PlanBook !== 'undefined' && typeof PlanBook.exportBook === 'function') {
++            if (stEl) stEl.textContent = 'Assemblage du cahier de plans A3…';
++            await PlanBook.exportBook({ data: toProjectJson(), studio: null, cabinet: cabinetProfile });
++            if (stEl) stEl.textContent = 'Cahier de plans A3 exporté.';
++            return;
++          }
++          if (docId === 'synthesis' && typeof PlanBook !== 'undefined' && typeof PlanBook.exportSynthesisBoard === 'function') {
++            if (stEl) stEl.textContent = 'Export de la planche de synthèse A3…';
++            await PlanBook.exportSynthesisBoard({ data: toProjectJson(), studio: null });
++            if (stEl) stEl.textContent = 'Planche de synthèse A3 exportée.';
++            return;
++          }
++          if (slug) location.assign(`index.html?project=${encodeURIComponent(slug)}`);
++          else if (stEl) stEl.textContent = 'Enregistrez d’abord le projet pour lancer cet export depuis la visite 3D.';
++        }
++      });
++    };
++  }
+   void fetchCabinetProfile();
+   buildLibrary();
+   window.addEventListener('resize', resize);
+diff --git a/js/home.js b/js/home.js
+index 7c456d1..68e9f53 100644
+--- a/js/home.js
++++ b/js/home.js
+@@ -58,6 +58,31 @@ window.ProjectCoverReady = (() => {
+   if (studioLink) studioLink.hidden = Boolean(context?.role);
+   // L’outil de saisie n’apparaît dans l’en-tête que pour l’architecte connecté ; en démo il reste en pied de page.
+   el('home-editor').hidden = context?.role !== 'architect';
++  const homeDeliverablesBtn = el('home-deliverables');
++  if (homeDeliverablesBtn) {
++    const isClientRole = Boolean(context?.role && context.role !== 'architect');
++    homeDeliverablesBtn.hidden = isClientRole;
++    homeDeliverablesBtn.addEventListener('click', () => {
++      const dlg = el('dlg-home-deliverables');
++      if (!dlg || typeof DeliverableChecklist === 'undefined') return;
++      const slug = select?.value || context?.project || url.searchParams.get('project') || '';
++      DeliverableChecklist.openDashboard({
++        dialogEl: dlg,
++        bodyEl: el('dlg-home-deliverables-body'),
++        statusEl: el('dlg-home-deliverables-status'),
++        slug,
++        project: loadedProjectRecord || loadedProjectData,
++        cabinet: currentCabinet,
++        media: loadedProjectMedia,
++        onExport: docId => {
++          dlg.close();
++          if (docId === 'aps') { location.assign(`editor.html${slug ? `?project=${encodeURIComponent(slug)}` : ''}`); return; }
++          if (docId === 'book' && el('workspace-book')) { el('workspace-book').click(); return; }
++          location.assign(viewerLink(slug));
++        }
++      });
++    });
++  }
+   el('footer-editor').hidden = Boolean(context?.role);
+   el('home-brand').dataset.view = 'cover';
+   el('home-brand').removeAttribute('aria-label');
+diff --git a/js/workspace.js b/js/workspace.js
+index a5e2d63..94453be 100644
+--- a/js/workspace.js
++++ b/js/workspace.js
+@@ -12,10 +12,10 @@
+     ['wp', 'variant', 'retours'].some(key => fragment.has(key));
+   const motion = matchMedia('(prefers-reduced-motion: reduce)');
+   const knownViews = ['cover', 'visit', 'dossier', 'estimate', 'gallery'];
+-  const common = ['motion', 'houseDataCore', 'viewOrder', 'deliverableGate', 'costEstimate'];
++  const common = ['motion', 'houseDataCore', 'viewOrder', 'deliverableGate', 'costEstimate', 'pdfIdentity', 'deliverableChecklist'];
+   const viewer = ['icons', 'data', 'projectLoader', 'scene', 'variantState', 'solarStudy', 'realism', 'assets', 'presentationPlan',
+     'renderStudio', 'aiSequence', 'scrollTour', 'walkController', 'minimap', 'clientFinishes', 'solarOptions', 'clientTools', 'clientVariants',
+-    'clientDecisions', 'clientFeedback', 'woodGrain', 'pdfIdentity', 'clientBrochure', 'sheetClassifier', 'planBook', 'aiPrompt', 'fidelityCheck', 'gateReviewUI', 'app', 'presentMode'];
++    'clientDecisions', 'clientFeedback', 'woodGrain', 'clientBrochure', 'sheetClassifier', 'planBook', 'aiPrompt', 'fidelityCheck', 'gateReviewUI', 'app', 'presentMode'];
+   const scripts = new Map();
+   const status = el('workspace-status');
+   let active = 'cover';
+@@ -75,6 +75,8 @@
+       document.body.append(el('book-dialog')); // L’export peut s’ouvrir depuis le dossier, indépendamment du canvas.
+       const gateDlg = el('gate-override-dialog');
+       if (gateDlg) document.body.append(gateDlg);
++      const dlvDlg = el('dlg-deliverables');
++      if (dlvDlg) document.body.append(dlvDlg);
+       markup = el('visit-workspace');
+       markup.hidden = active !== 'visit';
+     }
+diff --git a/privatePortal.js b/privatePortal.js
+index dfea173..9b51d7e 100644
+--- a/privatePortal.js
++++ b/privatePortal.js
+@@ -19,7 +19,7 @@ const viewerFiles = new Set(['js/portal-context.js', 'js/houseDataCore.js', 'js/
+   'js/scene.js', 'js/variantState.js', 'js/solarStudy.js', 'js/realism.js', 'js/assets.js', 'js/presentationPlan.js',
+   'js/renderStudio.js', 'js/aiSequence.js', 'js/scrollTour.js', 'js/walkController.js', 'js/minimap.js', 'js/solarOptions.js',
+   'js/clientFinishes.js', 'js/clientTools.js', 'js/clientVariants.js', 'js/clientFeedback.js', 'js/clientBrochure.js',
+-  'js/aiPrompt.js', 'js/fidelityCheck.js', 'js/deliverableGate.js', 'js/gateReviewUI.js', 'js/app.js', 'js/workspace.js', 'css/workspace.css', 'js/clientDecisions.js', 'css/style.css', 'css/clientTools.css',
++  'js/aiPrompt.js', 'js/fidelityCheck.js', 'js/deliverableGate.js', 'js/deliverableChecklist.js', 'js/pdfIdentity.js', 'js/gateReviewUI.js', 'js/app.js', 'js/workspace.js', 'css/workspace.css', 'js/clientDecisions.js', 'css/style.css', 'css/clientTools.css',
+   'css/tokens.css', 'css/motion.css', 'js/icons.js', 'js/motion.js', 'js/presentMode.js', 'js/viewOrder.js', 'js/costEstimate.js', 'js/sheetClassifier.js', 'js/woodGrain.js', 'js/planBook.js', 'assets/vendor/jspdf-4.2.1.umd.min.js', 'assets/vendor/pdf.min.js', 'assets/vendor/pdf.worker.min.js', 'js/home.js', 'js/coverImage.js', 'css/accueil.css', 'css/presentation.css', 'assets/fonts/manrope.woff2', 'assets/fonts/source-serif-4.woff2']);
+ const publicFiles = new Set(['portal.html', 'js/portal.js', 'css/portal.css', 'css/tokens.css', 'assets/fonts/manrope.woff2', 'assets/fonts/source-serif-4.woff2']);
+ 
+diff --git a/tests/deliverable-checklist.test.cjs b/tests/deliverable-checklist.test.cjs
+new file mode 100644
+index 0000000..ed9fe08
+--- /dev/null
++++ b/tests/deliverable-checklist.test.cjs
+@@ -0,0 +1,154 @@
++'use strict';
++
++const test = require('node:test');
++const assert = require('node:assert/strict');
++const fs = require('node:fs');
++const path = require('node:path');
++
++const DeliverableChecklist = require('../js/deliverableChecklist.js');
++
++test('Lot 8 — Projet vide : toutes les étapes sont « todo » avec liste explicite des manques', () => {
++  const state = DeliverableChecklist.evaluate({
++    project: { meta: {}, config: {}, walls: [], rooms: [] },
++    cabinet: {},
++    media: { renders: [], images: [] },
++    planches: []
++  });
++
++  assert.equal(state.totalSteps, 5);
++  assert.equal(state.doneCount, 0);
++  assert.equal(state.ready, false);
++  state.steps.forEach(step => {
++    assert.equal(step.status, 'todo', `Étape ${step.id} devrait être todo`);
++    assert.ok(step.missing.length > 0, `Étape ${step.id} doit expliquer ce qui manque`);
++  });
++  assert.equal(state.documents.length, 5);
++  assert.deepEqual(
++    state.documents.map(d => d.id),
++    ['aps', 'brochure', 'catalog', 'book', 'synthesis']
++  );
++  state.documents.forEach(d => assert.equal(d.ready, false));
++});
++
++test('Lot 8 — Projet partiel : plan non calibré, rendu IA bloqué Porte E, cartouche incomplet', () => {
++  const project = {
++    meta: { name: 'Villa Test', architect: 'Atelier Nord' },
++    config: {
++      planImage: { url: 'projects/villa-test/plan.png', calibrated: false, pxPerMeter: 50 }
++    },
++    walls: [
++      { from: [0, 0], to: [8, 0], thick: 0.25, type: 'ext', openings: [{ type: 'door', at: 2, w: 1, entry: true }] }
++    ],
++    rooms: [
++      { id: 'sejour', name: 'SÉJOUR', bounds: { xMin: 0, xMax: 8, zMin: 0, zMax: 5 } }
++    ]
++  };
++  const media = {
++    renders: [{ id: 'facade', file: 'projects/villa-test/generated/images/facade.jpg' }],
++    images: [
++      {
++        id: 'photor-sejour',
++        label: 'Séjour IA',
++        ai: true,
++        model: 'google/gemini-3.1-flash-image',
++        fidelity: { version: 2, score: 0.30, verdict: 'unfaithful' }
++      }
++    ]
++  };
++
++  const state = DeliverableChecklist.evaluate({
++    project,
++    cabinet: { name: 'Cabinet Test', architect: 'Atelier Nord' },
++    media,
++    planches: [{ id: 'p1', type: 'distribution', level: 0 }]
++  });
++
++  const byId = Object.fromEntries(state.steps.map(s => [s.id, s]));
++  assert.equal(byId.plan.status, 'partial');
++  assert.ok(byId.plan.missing.some(m => /calibr/i.test(m)));
++  assert.equal(byId.model.status, 'done');
++  assert.equal(byId.views.status, 'done');
++  assert.equal(byId['ai-gate'].status, 'partial');
++  assert.equal(byId['ai-gate'].counts.blocked, 1);
++  assert.ok(byId['ai-gate'].missing.some(m => m.includes('Séjour IA')));
++  assert.equal(byId.documents.status, 'partial');
++  assert.equal(byId.documents.planchesCount, 1);
++  assert.ok(byId.documents.missingFields.length > 0);
++  assert.equal(state.ready, false);
++});
++
++test('Lot 8 — Projet complet : 5/5 étapes prêtes et 5 livrables prêts', () => {
++  const project = {
++    meta: {
++      name: 'Villa Complète',
++      subtitle: 'Maison R+1',
++      client: 'M. & Mme Mbarga',
++      architect: 'Cabinet Horizon',
++      location: 'Douala, Cameroun',
++      phase: 'APS',
++      revision: 'Ind. B',
++      issueDate: '2026-11-25'
++    },
++    config: {
++      planImage: {
++        url: 'projects/villa-complete/plan.png',
++        calibrated: true,
++        pxPerMeter: 80,
++        controlCheck: { alert: false, errorPct: 0.4 }
++      }
++    },
++    walls: [
++      { from: [0, 0], to: [10, 0], thick: 0.25, type: 'ext', openings: [{ type: 'door', at: 5, w: 1.0, entry: true }] },
++      { from: [10, 0], to: [10, 8], thick: 0.25, type: 'ext', openings: [] },
++      { from: [10, 8], to: [0, 8], thick: 0.25, type: 'ext', openings: [] },
++      { from: [0, 8], to: [0, 0], thick: 0.25, type: 'ext', openings: [] }
++    ],
++    rooms: [
++      { id: 'sejour', name: 'SÉJOUR', bounds: { xMin: 0, xMax: 10, zMin: 0, zMax: 8 } }
++    ]
++  };
++  const media = {
++    renders: [
++      { id: 'facade', file: 'projects/villa-complete/generated/images/facade.jpg' },
++      { id: 'sejour', file: 'projects/villa-complete/generated/images/sejour.jpg' }
++    ],
++    images: [
++      {
++        id: 'photor-sejour',
++        label: 'Séjour IA',
++        ai: true,
++        model: 'google/gemini-3.1-flash-image',
++        fidelity: { version: 2, score: 0.88, verdict: 'faithful' }
++      }
++    ]
++  };
++
++  const state = DeliverableChecklist.evaluate({
++    project,
++    cabinet: { name: 'Cabinet Horizon', architect: 'Cabinet Horizon' },
++    media,
++    planches: [{ id: 'p1', type: 'distribution', level: 0 }]
++  });
++
++  assert.equal(state.doneCount, 5);
++  assert.equal(state.ready, true);
++  state.steps.forEach(s => assert.equal(s.status, 'done'));
++  state.documents.forEach(d => assert.equal(d.ready, true));
++});
++
++test('Lot 8 — Présence du bouton Livrables et du dialogue sur Visite 3D, Éditeur et Accueil', () => {
++  const root = path.join(__dirname, '..');
++  const indexHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
++  const editorHtml = fs.readFileSync(path.join(root, 'editor.html'), 'utf8');
++  const accueilHtml = fs.readFileSync(path.join(root, 'accueil.html'), 'utf8');
++  const workspaceJs = fs.readFileSync(path.join(root, 'js', 'workspace.js'), 'utf8');
++
++  assert.ok(indexHtml.includes('id="btn-deliverables"'), 'Bouton Livrables manquant dans index.html');
++  assert.ok(indexHtml.includes('id="dlg-deliverables"'), 'Dialogue Livrables manquant dans index.html');
++  assert.ok(editorHtml.includes('id="btn-deliverables"'), 'Bouton Livrables manquant dans editor.html');
++  assert.ok(editorHtml.includes('id="dlg-deliverables"'), 'Dialogue Livrables manquant dans editor.html');
++  assert.ok(editorHtml.includes('js/deliverableChecklist.js'), 'Script deliverableChecklist.js manquant dans editor.html');
++  assert.ok(accueilHtml.includes('id="home-deliverables"'), 'Bouton Livrables manquant dans accueil.html');
++  assert.ok(accueilHtml.includes('id="dlg-home-deliverables"'), 'Dialogue Livrables manquant dans accueil.html');
++  assert.ok(workspaceJs.includes("'deliverableChecklist'"), 'deliverableChecklist manquant dans js/workspace.js');
++});
+-- 
+2.34.1
+

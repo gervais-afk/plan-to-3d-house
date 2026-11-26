@@ -350,6 +350,7 @@ const ClientBrochure = (() => {
     const imgY = Math.max(y + 6, 86), imgH = 85;
     drawFitted(doc, capture(shots.facade, 1600, 800), 1600, 800, margin, imgY, width, imgH);
     doc.setDrawColor(C.gold).setLineWidth(0.35).rect(margin, imgY, width, imgH);
+    doc.setDrawColor(C.sand).setLineWidth(0.14).rect(margin + 1.4, imgY + 1.4, width - 2.8, imgH - 2.8);
     text(doc, caption3d(data, false), margin, imgY + imgH + 5, 6.8, { color: C.sand, maxWidth: width });
 
     const habitable = Number.isFinite(data.totals?.habitable)
@@ -378,20 +379,30 @@ const ClientBrochure = (() => {
     text(doc, 'RDC et abords modélisés · cotes indicatives de la maquette', margin, 53.5, 8.8, { color: C.muted });
     sitePlan(doc, data, margin, 58, width, 118, variant?.solar?.north);
     text(doc, 'Vues intérieures', margin, 191, 17, { serif: true, bold: true });
-    const photoW = (width - 8) / 2, photoH = 58;
+    const photoW = (width - 8) / 2, photoH = 54;
+    const AP = typeof AiPrompt !== 'undefined' ? AiPrompt : (typeof globalThis !== 'undefined' ? globalThis.AiPrompt : null);
     for (let i = 0; i < 2; i++) {
       const shot = shots.interior[i], x = margin + i * (photoW + 8);
       if (shot) {
-        drawFitted(doc, capture(shot, 1000, 659), 1000, 659, x, 198, photoW, photoH);
-        doc.setDrawColor(C.gold).setLineWidth(0.3).rect(x, 198, photoW, photoH);
-        text(doc, shot.label, x, 262.5, 8.8, { bold: true, maxWidth: photoW });
+        drawFitted(doc, capture(shot, 1000, 659), 1000, 659, x, 197, photoW, photoH);
+        doc.setDrawColor(C.gold).setLineWidth(0.3).rect(x, 197, photoW, photoH);
+        text(doc, shot.label, x, 256.5, 8.8, { bold: true, maxWidth: photoW });
+        const matchedRoom = (data.rooms || []).find(r => r.id === shot.room || r.name === shot.label);
+        const warm = AP && typeof AP.warmRoomCaption === 'function'
+          ? AP.warmRoomCaption(matchedRoom || { name: shot.label }, { label: shot.label })
+          : '';
+        if (warm) {
+          doc.setFont('helvetica', 'normal').setFontSize(6.6).setTextColor(C.muted);
+          const wLines = doc.splitTextToSize(pdfSafe(warm), photoW).slice(0, 2);
+          wLines.forEach((ln, li) => doc.text(ln, x, 261 + li * 3.2));
+        }
       } else {
-        doc.setFillColor(C.room).rect(x, 198, photoW, photoH, 'F');
-        doc.setDrawColor(C.rule).setLineWidth(0.3).rect(x, 198, photoW, photoH);
-        text(doc, 'Pas de vue intérieure modélisée', x + photoW / 2, 228, 8, { align: 'center', color: C.muted });
+        doc.setFillColor(C.room).rect(x, 197, photoW, photoH, 'F');
+        doc.setDrawColor(C.rule).setLineWidth(0.3).rect(x, 197, photoW, photoH);
+        text(doc, 'Pas de vue intérieure modélisée', x + photoW / 2, 224, 8, { align: 'center', color: C.muted });
       }
     }
-    text(doc, caption3d(data, shots.interior.length > 1), margin, 270, 7, { color: C.muted, maxWidth: width });
+    text(doc, caption3d(data, shots.interior.length > 1), margin, 272.5, 6.8, { color: C.muted, maxWidth: width });
 
     // Page 3 — Programme & tableau des surfaces
     doc.addPage();

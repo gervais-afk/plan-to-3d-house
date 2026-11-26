@@ -122,7 +122,40 @@ window.startProjectViewer = () => {
     return fidelityCache.get(key);
   }
 
-  function fidelityBadge(aiImage, referenceUrl) {
+  const rgFiltersBar = document.getElementById('rg-filters');
+  const rgFilterCount = document.getElementById('rg-filter-count');
+  let activeGalleryFilter = 'all';
+
+  function applyGalleryFilter(filter = activeGalleryFilter) {
+    activeGalleryFilter = filter;
+    if (rgFiltersBar) {
+      rgFiltersBar.querySelectorAll('button[data-filter]').forEach(btn => {
+        btn.setAttribute('aria-selected', String(btn.dataset.filter === filter));
+      });
+    }
+    const cards = [...grid.querySelectorAll('.rg-card')];
+    let shown = 0;
+    for (const card of cards) {
+      const cat = card.dataset.category || '3d';
+      const statusTag = card.dataset.fidelityStatus || 'none';
+      const isCatalog = card.dataset.catalog === 'true';
+      let visible = true;
+      if (filter === 'verified') visible = statusTag === 'faithful' || isCatalog || statusTag === 'non-ai';
+      else if (filter === 'review') visible = statusTag === 'review' || statusTag === 'unfaithful';
+      else if (filter === 'plan') visible = cat === 'plan';
+      card.hidden = !visible;
+      if (visible) shown++;
+    }
+    if (rgFilterCount) {
+      rgFilterCount.textContent = cards.length ? `${shown} / ${cards.length} vue${cards.length > 1 ? 's' : ''}` : '';
+    }
+  }
+  rgFiltersBar?.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-filter]');
+    if (btn) applyGalleryFilter(btn.dataset.filter);
+  });
+
+  function fidelityBadge(aiImage, referenceUrl, cardEl = null) {
     const badge = document.createElement('span');
     badge.className = 'rg-fidelity is-pending';
     badge.textContent = 'Contrôle géométrique…';
@@ -131,6 +164,10 @@ window.startProjectViewer = () => {
       badge.className = `rg-fidelity is-${result.verdict}`;
       badge.textContent = FidelityCheck.describe(result);
       badge.title = 'Part des lignes de la vue 3D retrouvées dans le rendu IA, corrigée du hasard. Garde-fou automatique : le contrôle visuel reste nécessaire.';
+      if (cardEl) {
+        cardEl.dataset.fidelityStatus = result.verdict || 'review';
+        if (activeGalleryFilter !== 'all') applyGalleryFilter(activeGalleryFilter);
+      }
     });
     return badge;
   }
@@ -141,11 +178,13 @@ window.startProjectViewer = () => {
     card.className = `rg-card rg-view-card${isPlan ? ' is-plan' : ''}`;
     card.dataset.id = shot.id;
     card.dataset.category = isPlan ? 'plan' : '3d';
+    const isAi = Boolean(aiImage || shot.generator?.includes('OpenRouter'));
+    card.dataset.fidelityStatus = isAi ? (aiImage?.fidelity?.verdict || shot.fidelity?.verdict || 'review') : 'non-ai';
+    card.dataset.catalog = String(Boolean(aiImage?.catalog || shot.catalog || baseImage?.catalog));
 
     const thumbWrap = document.createElement('div');
     thumbWrap.className = 'rg-thumb-wrap';
     const badge = document.createElement('span');
-    const isAi = Boolean(aiImage || shot.generator?.includes('OpenRouter'));
     badge.className = `rg-badge ${isAi ? 'rg-badge-ultra' : 'rg-badge-3d'}`;
     badge.textContent = aiImage ? 'Rendu IA disponible' : shot.generator?.includes('OpenRouter') ? (isPlan ? 'Rendu 2D sublimé' : 'Rendu IA') : 'Vue 3D de base';
     thumbWrap.appendChild(badge);
@@ -159,7 +198,7 @@ window.startProjectViewer = () => {
     // dessiné d'origine, pas de cette capture ; sans référence enregistrée, on ne l'évalue pas.
     const checked = aiImage || (shot.generator?.includes('OpenRouter') && shot.reference ? { ...shot, file: shot.url } : null);
     const knownSource = checked && (checked.reference || shot.id !== 'plan-2d-presentation');
-    if (knownSource) thumbWrap.appendChild(fidelityBadge(checked, checked.reference || shot.url));
+    if (knownSource) thumbWrap.appendChild(fidelityBadge(checked, checked.reference || shot.url, card));
     card.appendChild(thumbWrap);
 
     const meta = document.createElement('div');
@@ -245,18 +284,18 @@ window.startProjectViewer = () => {
                 }
                 const decision = DeliverableGate.evaluate({ ...target, fidelity });
                 if (!decision.eligible) {
-                  const reason = window.prompt(
-                    `Porte E — ${decision.reason}.\nCe rendu IA n’est pas classé « Fidèle au plan ». Indiquez un motif tracé pour forcer son affectation au ${label.toLowerCase()} (Annuler pour conserver hors livrables) :`
-                  );
-                  if (!reason || !reason.trim()) {
+                  const overrideRes = await requestGateOverride({
+                    targetId: target.id,
+                    targetLabel: shot.label,
+                    destination: label,
+                    decisionReason: decision.reason,
+                    fidelity
+                  });
+                  if (!overrideRes) {
                     status.textContent = `Affectation refusée (Porte E) : ${decision.reason}.`;
                     return;
                   }
-                  payload.fidelityOverride = DeliverableGate.sanitizeOverride({
-                    reason: reason.trim(),
-                    fidelityVersion: fidelity?.version ?? 0,
-                    verdict: fidelity?.verdict || 'missing'
-                  });
+                  payload.fidelityOverride = overrideRes.override;
                 }
               }
               const res = await setImageFlags(target.id, payload);
@@ -423,6 +462,23 @@ window.startProjectViewer = () => {
     'bytedance-seed/seedream-5-0-flash': { label: 'Seedream 5.0 Flash — brouillon rapide, ≈ 0,018 $', estimate: 'Brouillon rapide : ≈ 0,018 $ pour une image 1K (4,31 $ par million de jetons image). Pour comparer des ambiances avant le rendu final.' }
   };
 
+  const gateOverrideHistory = typeof GateReviewUI !== 'undefined' ? GateReviewUI.createOverrideHistory() : null;
+  async function requestGateOverride({ targetId, targetLabel, destination, decisionReason, fidelity }) {
+    const dialogEl = document.getElementById('gate-override-dialog');
+    if (typeof GateReviewUI !== 'undefined' && dialogEl) {
+      return GateReviewUI.openGateOverrideDialog(dialogEl, {
+        targetId,
+        targetLabel,
+        destination,
+        decisionReason,
+        fidelity,
+        history: gateOverrideHistory,
+        gateApi: typeof DeliverableGate !== 'undefined' ? DeliverableGate : null
+      });
+    }
+    return null;
+  }
+
   function choosePublicationTargets(label, fidelity = null) {
     if (!publishDialog?.showModal) return Promise.resolve(null);
     const form = document.getElementById('rg-publish-form');
@@ -440,25 +496,23 @@ window.startProjectViewer = () => {
     book.checked = false;
     publishDialog.returnValue = '';
     return new Promise(resolve => {
-      publishDialog.addEventListener('close', () => {
+      publishDialog.addEventListener('close', async () => {
         const chosen = publishDialog.returnValue === 'save' ? { catalog: catalog.checked, book: book.checked } : null;
         // Porte E : tout rendu IA non « faithful » exige un forçage explicite tracé pour entrer dans les livrables.
         if (chosen && !decision.eligible && (chosen.catalog || chosen.book)) {
-          const reason = window.prompt(
-            `Porte E — ${decision.reason}.\nIndiquez le motif de forçage architecte pour publier ce rendu dans les livrables (Annuler pour le garder hors livrables) :`
-          );
-          if (!reason || !reason.trim()) {
+          const dest = [chosen.catalog ? 'Catalogue' : '', chosen.book ? 'Cahier de plans' : ''].filter(Boolean).join(' & ');
+          const overrideRes = await requestGateOverride({
+            targetId: 'photor-draft',
+            targetLabel: label,
+            destination: dest || 'Livrables',
+            decisionReason: decision.reason,
+            fidelity
+          });
+          if (!overrideRes) {
             resolve({ catalog: false, book: false });
             return;
           }
-          const fidelityOverride = typeof DeliverableGate !== 'undefined'
-            ? DeliverableGate.sanitizeOverride({
-                reason: reason.trim(),
-                fidelityVersion: fidelity?.version ?? 0,
-                verdict: fidelity?.verdict || 'missing'
-              })
-            : { acceptedAt: new Date().toISOString(), acceptedBy: 'architect', reason: reason.trim(), fidelityVersion: fidelity?.version ?? 0, verdict: fidelity?.verdict || 'missing' };
-          resolve({ ...chosen, fidelityOverride });
+          resolve({ ...chosen, fidelityOverride: overrideRes.override });
           return;
         }
         resolve(chosen);
@@ -501,6 +555,10 @@ window.startProjectViewer = () => {
       status.textContent = 'Contrôle géométrique du rendu face à la vue source…';
       const fidelity = await FidelityCheck.compareUrls(rawSource, image).catch(() => null);
       const id = `photor-${item.id}`;
+      const matchedRoom = item.shot?.room ? HOUSE_DATA.rooms.find(r => r.id === item.shot.room) : null;
+      const warmNotes = (!is2DPlan && (matchedRoom || item.shot?.interior) && typeof AiPrompt !== 'undefined' && typeof AiPrompt.warmRoomCaption === 'function')
+        ? AiPrompt.warmRoomCaption(matchedRoom || { name: item.label }, { label: item.label, floor: promptTags?.floor })
+        : '';
       const saveResponse = await fetch(projectApi('api/save-generated'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -512,6 +570,7 @@ window.startProjectViewer = () => {
               : (item.ext === 'png' ? projectMedia('renders/plan-2d-presentation.png') : projectMedia(`renders/${item.id}.jpg`)),
             room: item.shot?.room || null,
             label: `${item.label} — ${is2DPlan ? 'plan colorisé IA' : 'photoréaliste'}`,
+            notes: warmNotes || undefined,
             width: dimensions.width, height: dimensions.height, model,
             prompt: promptToUse, tags: promptTags, fidelity
           }
@@ -646,6 +705,7 @@ window.startProjectViewer = () => {
     }
     status.textContent = `${shots3D.length} vues 3D ${invited ? 'enregistrées' : 'capturées gratuitement'} · ${withAI} rendu(s) IA disponible(s)${media.videos.length ? ` · ${media.videos.length} vidéo(s)` : ''}`;
     galleryInitialized = true;
+    applyGalleryFilter(activeGalleryFilter);
   }
 
   // Visionneuse commune : une vue 3D de base, avec comparaison IA uniquement si un fichier réel existe.
@@ -705,9 +765,17 @@ window.startProjectViewer = () => {
       } else {
         metaEl.textContent = item.generator || (isPlanLike ? 'Planche architecturale' : 'Capture locale de la maquette Three.js');
       }
+      let currentFidelity = aiImage?.fidelity || null;
+      let inspectorHandle = null;
       if (aiImage && (aiImage.reference || item.id !== 'plan-2d-presentation')) {
         fidelityFor(aiImage, aiImage.reference || baseUrl).then(result => {
-          if (result && currentItem === item) metaEl.textContent += ` · ${FidelityCheck.describe(result)}`;
+          if (result && currentItem === item) {
+            currentFidelity = result;
+            metaEl.textContent += ` · ${FidelityCheck.describe(result)}`;
+            if (inspectorHandle && typeof inspectorHandle.updateFidelity === 'function') {
+              inspectorHandle.updateFidelity(result);
+            }
+          }
         });
       }
       dlLink.href = aiImage ? aiImage.file : baseUrl;
@@ -724,8 +792,17 @@ window.startProjectViewer = () => {
           if (enable) {
             fullImg.classList.add('hidden');
             compareView.classList.remove('hidden');
-            compare3D.src = baseUrl;
-            compareGen.src = aiImage.file;
+            if (typeof GateReviewUI !== 'undefined' && typeof GateReviewUI.renderFidelityInspector === 'function') {
+              inspectorHandle = GateReviewUI.renderFidelityInspector(compareView, {
+                beforeUrl: baseUrl,
+                afterUrl: aiImage.file,
+                label: item.label,
+                fidelity: currentFidelity
+              });
+            } else {
+              if (compare3D) compare3D.src = baseUrl;
+              if (compareGen) compareGen.src = aiImage.file;
+            }
             Icons.label(btnCompare, 'gallery', 'Afficher une seule vue');
           } else {
             compareView.classList.add('hidden');
@@ -855,9 +932,9 @@ window.startProjectViewer = () => {
     if (clientTools.measuring) clientTools.toggleMeasure(false);
     hidePhotoOverlay();
     const intro=gallery.querySelector('.rg-intro');
-    if(intro && PROJECT_SLUG==='residence-verandas'){
-      const budget=CostEstimate.estimate(HOUSE_DATA,HOUSE_DATA.estimate);
-      intro.textContent=`Budget travaux indicatif : ${CostEstimate.formatXAF(budget.total.low)} – ${CostEstimate.formatXAF(budget.total.high)}. Cette estimation FCFA est distincte du coût IA affiché sur chaque vue ; aucun appel facturable n’est lancé sans confirmation.`;
+    if (intro && typeof CostEstimate !== 'undefined') {
+      const budget = CostEstimate.estimate(HOUSE_DATA, HOUSE_DATA.estimate);
+      intro.textContent = `Budget travaux indicatif : ${CostEstimate.formatXAF(budget.total.low)} – ${CostEstimate.formatXAF(budget.total.high)}. Cette estimation FCFA est distincte du coût IA affiché sur chaque vue ; aucun appel facturable n’est lancé sans confirmation.`;
     }
     gallery.classList.remove('hidden');
     gallery.showModal();
@@ -1093,9 +1170,24 @@ window.startProjectViewer = () => {
 
   // Accès client persistants en mode présentation.
   const synthesisLink = document.getElementById('presentation-synthesis');
-  if (PROJECT_SLUG === 'residence-verandas') {
-    synthesisLink.href = `projects/${encodeURIComponent(PROJECT_SLUG)}/planches/cahier.pdf`;
+  const safeBookFile = (() => {
+    const raw = HOUSE_DATA.edition?.bookFile;
+    const prefix = `projects/${PROJECT_SLUG}/`;
+    if (typeof raw !== 'string' || !raw.startsWith(prefix) || raw.includes('..')) return '';
+    return /^(?:[a-z\d_-]+\/)*[a-z\d_-]+\.pdf$/i.test(raw.slice(prefix.length)) ? raw : '';
+  })();
+  if (synthesisLink && safeBookFile) {
+    synthesisLink.href = safeBookFile;
+    synthesisLink.download = `${PROJECT_SLUG}-cahier-de-plans.pdf`;
     synthesisLink.hidden = false;
+  } else if (synthesisLink && typeof PlanBook !== 'undefined' && typeof PlanBook.exportBook === 'function') {
+    synthesisLink.href = '#cahier-de-plans';
+    synthesisLink.hidden = false;
+    synthesisLink.addEventListener('click', async event => {
+      event.preventDefault();
+      const cabinet = await loadCabinetForPdf();
+      await PlanBook.exportBook({ data: HOUSE_DATA, studio, cabinet });
+    });
   }
   const estimateDialog = document.getElementById('presentation-estimate');
   const estimateOpen = document.getElementById('presentation-estimate-open');
@@ -1155,7 +1247,9 @@ window.startProjectViewer = () => {
       estimateOutput.replaceChildren();
       const rows=[['Surface habitable',`${fmt(q.habitable)} m²`],['Annexes',`${fmt(q.annexes)} m²`],['Parpaings 15 / 20',`${fmt(result.materials.find(x=>x.id==='parpaing-15')?.quantity||0)} / ${fmt(result.materials.find(x=>x.id==='parpaing-20')?.quantity||0)} unités`],['Toiture estimée',`${fmt(q.roofArea)} m²`],['Carrelages',`${fmt(q.tiledArea)} m²`],['Budget indicatif',`${CostEstimate.formatXAF(result.total.low)} – ${CostEstimate.formatXAF(result.total.high)}`]];
       for(const [label,value] of rows){const line=document.createElement('p');line.append(Object.assign(document.createElement('span'),{textContent:label}),Object.assign(document.createElement('strong'),{textContent:value}));estimateOutput.append(line);}
-      document.getElementById('atlas-bqe').onclick=()=>{const csv=CostEstimate.bordereauCSV(result,HOUSE_DATA.meta.name),url=URL.createObjectURL(new Blob(['\\ufeff',csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='residence-des-verandas-bqe.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+      document.getElementById('atlas-bqe').onclick=()=>{const csv=CostEstimate.bordereauCSV(result,HOUSE_DATA.meta.name),url=URL.createObjectURL(new Blob(['\ufeff',csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=`${PROJECT_SLUG}-bqe.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+      const bqeXlsxBtn=document.getElementById('atlas-bqe-xlsx');
+      if(bqeXlsxBtn) bqeXlsxBtn.onclick=()=>{if(typeof XlsxExport!=='undefined') void XlsxExport.downloadXlsx(HOUSE_DATA,result,{slug:PROJECT_SLUG});};
     }
     standing.addEventListener('change',updateAtlasEstimate);
     zone.querySelector('[data-zone="plan"]').onclick = () => browseEdition(zoneRoom.id === 'outside' ? 0 : zoneRoom.level ? 2 : 1);
@@ -1269,15 +1363,17 @@ window.startProjectViewer = () => {
         : `${s.model}${s.cost ? ` · ${s.cost}` : ''} · illustratif, non contractuel`;
       const include = box.querySelector('[data-sublime-include]');
       include.checked = page.sublimedInclude;
-      include.addEventListener('change', () => {
+      include.addEventListener('change', async () => {
         if (include.checked && blocked) {
-          const reason = window.prompt(
-            `Porte E — ${decision.reason}.\nIndiquez le motif de forçage architecte pour inclure cette version d’ambiance dans le cahier :`
-          );
-          if (!reason || !reason.trim()) { include.checked = false; return; }
-          s.fidelityOverride = typeof DeliverableGate !== 'undefined'
-            ? DeliverableGate.sanitizeOverride({ reason: reason.trim(), fidelityVersion: s.fidelity?.version ?? 0, verdict: s.fidelity?.verdict || 'missing' })
-            : { acceptedAt: new Date().toISOString(), acceptedBy: 'architect', reason: reason.trim(), fidelityVersion: s.fidelity?.version ?? 0, verdict: s.fidelity?.verdict || 'missing' };
+          const overrideRes = await requestGateOverride({
+            targetId: s.id || 'photor-planche',
+            targetLabel: page.label || page.name || 'Planche IA',
+            destination: 'Cahier de plans',
+            decisionReason: decision.reason,
+            fidelity: s.fidelity
+          });
+          if (!overrideRes) { include.checked = false; return; }
+          s.fidelityOverride = overrideRes.override;
         }
         page.sublimedInclude = include.checked; bookChanged();
       });
@@ -1331,6 +1427,81 @@ window.startProjectViewer = () => {
     bookSheetsChanged();
   }
 
+  function planchesApiUrl(id = '') {
+    const slug = encodeURIComponent(PROJECT_SLUG || HOUSE_DATA?.meta?.slug || '');
+    return `api/projects/${slug}/planches${id ? '/' + encodeURIComponent(id) : ''}`;
+  }
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error(`Lecture impossible : ${file.name}`));
+      reader.readAsDataURL(file);
+    });
+  }
+  function savedItemToSheet(item) {
+    const fallbackGuess = { type: item.type || 'autre', level: item.level ?? null, label: item.label || item.originalName || 'Planche',
+      discipline: SheetClassifier?.TYPES?.[item.type]?.discipline || 'annexe', confidence: 'none', reasons: [], scale: item.scale || '' };
+    const guess = item.guess || fallbackGuess;
+    return {
+      id: item.id,
+      name: item.originalName || 'planche.pdf',
+      page: item.page || 1,
+      total: item.total || 1,
+      width: item.width || 0,
+      height: item.height || 0,
+      paperMm: item.paperMm || null,
+      data: item.imageUrl,
+      thumb: item.imageUrl,
+      imageUrl: item.imageUrl,
+      pdfUrl: item.pdfUrl,
+      guess,
+      type: item.type || guess.type,
+      level: item.level ?? null,
+      scale: item.scale || guess.scale || '',
+      label: item.label || guess.label,
+      include: item.include !== false,
+      replaceGenerated: item.replaceGenerated !== false
+    };
+  }
+  async function loadSavedPlanches() {
+    if (invited) return [];
+    const response = await fetch(planchesApiUrl(), { cache: 'no-store' });
+    if (!response.ok) return [];
+    const payload = await response.json().catch(() => ({}));
+    return Array.isArray(payload.items) ? payload.items.map(savedItemToSheet) : [];
+  }
+  async function patchSavedPlanche(page, patch) {
+    if (!page?.id || invited) return;
+    try {
+      const response = await fetch(planchesApiUrl(page.id), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch)
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        bookDialogStatus.textContent = err.error || 'Impossible d’enregistrer cette modification.';
+      }
+    } catch {
+      bookDialogStatus.textContent = 'Enregistrement de la planche indisponible.';
+    }
+  }
+  async function deleteSavedPlanche(page) {
+    if (!page) return;
+    if (page.id && !invited) {
+      const response = await fetch(planchesApiUrl(page.id), { method: 'DELETE' });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        bookDialogStatus.textContent = err.error || 'Suppression impossible.';
+        return;
+      }
+    }
+    bookSheets = bookSheets.filter(item => item !== page);
+    bookDialogStatus.textContent = 'Planche retirée du projet.';
+    bookSheetsChanged();
+  }
+
   function renderBookSheets() {
     const list = document.getElementById('book-files-list');
     const levelOptions = [['', '—'], ['-1', 'Sous-sol'], ['0', 'Rez-de-chaussée'], ['1', 'Étage 1'], ['2', 'Étage 2']];
@@ -1347,23 +1518,43 @@ window.startProjectViewer = () => {
             <label>Niveau <select data-field="level">${levelOptions.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>
             <label class="book-sheet-check"><input type="checkbox" data-field="include"> Inclure</label>
             <label class="book-sheet-check" data-replace hidden><input type="checkbox" data-field="replaceGenerated"> Remplace le plan tiré de la maquette</label>
+            <button type="button" class="btn-toggle btn-small" data-remove-sheet>Supprimer</button>
           </div></div>`;
       li.querySelector('strong').textContent = SheetClassifier.label(page.type, page.level, {
         orientation: page.type === 'facade' ? (page.guess.label.match(/^Façade (.+)$/) || [])[1] : '',
         cut: page.type === 'coupe' ? (page.guess.label.match(/^Coupe (.+)$/) || [])[1] : '' });
-      li.querySelector('.book-sheet-source').textContent = `${page.name}${page.total > 1 ? ` — page ${page.page}/${page.total}` : ''}${page.guess.scale ? ` · ${page.guess.scale}` : ''}`;
+      const shownScale = page.scale || page.guess.scale;
+      li.querySelector('.book-sheet-source').textContent = `${page.name}${page.total > 1 ? ` — page ${page.page}/${page.total}` : ''}${shownScale ? ` · ${shownScale}` : ''}`;
       li.querySelector('.book-sheet-chip').textContent = userChoice ? 'Choisi par vous' : chip;
-      li.querySelector('.book-sheet-why').textContent = userChoice ? '' : page.guess.reasons.join(' · ');
+      li.querySelector('.book-sheet-why').textContent = userChoice ? '' : (page.guess.reasons || []).join(' · ');
       const type = li.querySelector('[data-field="type"]'), level = li.querySelector('[data-field="level"]');
       const include = li.querySelector('[data-field="include"]'), replace = li.querySelector('[data-field="replaceGenerated"]');
       type.value = page.type; level.value = page.level ?? ''; include.checked = page.include; replace.checked = page.replaceGenerated;
       level.disabled = !SheetClassifier.TYPES[page.type]?.levels;
       const canReplace = page.type === 'distribution' && modelLevels().includes(page.level);
       li.querySelector('[data-replace]').hidden = !canReplace;
-      type.addEventListener('change', () => { page.type = type.value; if (!SheetClassifier.TYPES[page.type]?.levels) page.level = null; bookSheetsChanged(); });
-      level.addEventListener('change', () => { page.level = level.value === '' ? null : Number(level.value); bookSheetsChanged(); });
-      include.addEventListener('change', () => { page.include = include.checked; bookSheetsChanged(); });
-      replace.addEventListener('change', () => { page.replaceGenerated = replace.checked; bookSheetsChanged(); });
+      type.addEventListener('change', () => {
+        page.type = type.value;
+        if (!SheetClassifier.TYPES[page.type]?.levels) page.level = null;
+        patchSavedPlanche(page, { type: page.type, level: page.level });
+        bookSheetsChanged();
+      });
+      level.addEventListener('change', () => {
+        page.level = level.value === '' ? null : Number(level.value);
+        patchSavedPlanche(page, { level: page.level });
+        bookSheetsChanged();
+      });
+      include.addEventListener('change', () => {
+        page.include = include.checked;
+        patchSavedPlanche(page, { include: page.include });
+        bookSheetsChanged();
+      });
+      replace.addEventListener('change', () => {
+        page.replaceGenerated = replace.checked;
+        patchSavedPlanche(page, { replaceGenerated: page.replaceGenerated });
+        bookSheetsChanged();
+      });
+      li.querySelector('[data-remove-sheet]').addEventListener('click', () => deleteSavedPlanche(page));
       if (SUBLIMABLE.includes(page.type) && !invited) li.querySelector('.book-sheet-body').append(sublimeBlock(page));
       return li;
     }));
@@ -1444,26 +1635,63 @@ window.startProjectViewer = () => {
       label.querySelector('input').addEventListener('change', bookChanged);
       return label;
     }));
-    bookDialogStatus.textContent = 'Chargement des images…';
+    bookDialogStatus.textContent = 'Chargement des images et planches enregistrées…';
     bookDialog.showModal();
-    [bookViews, bookCabinet] = await Promise.all([PlanBook.publishedViews(HOUSE_DATA), loadCabinetForPdf()]);
+    const [views, cabinet, savedSheets] = await Promise.all([
+      PlanBook.publishedViews(HOUSE_DATA),
+      loadCabinetForPdf(),
+      loadSavedPlanches().catch(() => [])
+    ]);
+    bookViews = views;
+    bookCabinet = cabinet;
+    bookSheets = savedSheets;
     const missing = missingCartoucheNote(bookCabinet).trim();
-    bookDialogStatus.textContent = missing ? `Cartouche : ${missing}` : '';
+    const savedNote = savedSheets.length ? `${savedSheets.length} planche${savedSheets.length > 1 ? 's' : ''} enregistrée${savedSheets.length > 1 ? 's' : ''} rechargée${savedSheets.length > 1 ? 's' : ''}.` : '';
+    bookDialogStatus.textContent = [savedNote, missing ? `Cartouche : ${missing}` : ''].filter(Boolean).join(' ');
     renderBookImages();
+    renderBookSheets();
     bookChanged();
   });
   bookFiles.addEventListener('change', async () => {
-    // Les PDF s'ajoutent à ceux déjà lus : l'architecte peut déposer ses planches en plusieurs fois.
+    // Les PDF s'ajoutent à ceux déjà enregistrés dans le projet (projects/<slug>/planches/).
     const files = Array.from(bookFiles.files);
     if (!files.length) return;
     bookFiles.disabled = true;
     try {
-      const pages = await PlanBook.readSheets(files, message => { bookDialogStatus.textContent = message; });
-      bookSheets = bookSheets.concat(pages);
-      const sure = pages.filter(page => page.guess.confidence === 'title').length;
-      bookDialogStatus.textContent = `${pages.length} page${pages.length > 1 ? 's' : ''} lue${pages.length > 1 ? 's' : ''} : ${sure} identifiée${sure > 1 ? 's' : ''} par le cartouche${pages.length - sure ? `, ${pages.length - sure} à vérifier` : ''}.`;
+      let addedCount = 0;
+      let sureCount = 0;
+      for (const file of files) {
+        const pages = await PlanBook.readSheets([file], message => { bookDialogStatus.textContent = message; });
+        if (!pages.length) continue;
+        bookDialogStatus.textContent = `Enregistrement de « ${file.name} » dans le projet…`;
+        const pdfDataUrl = await fileToDataUrl(file);
+        const response = await fetch(planchesApiUrl(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: file.name,
+            pdf: pdfDataUrl,
+            pages: pages.map(p => ({
+              page: p.page, total: p.total, image: p.data, width: p.width, height: p.height,
+              paperMm: p.paperMm, text: p.text, guess: p.guess, type: p.type, level: p.level,
+              scale: p.guess?.scale || '', label: p.label, include: p.include, replaceGenerated: p.replaceGenerated
+            }))
+          })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+        const saved = Array.isArray(payload.items) ? payload.items.map((item, idx) => ({
+          ...savedItemToSheet(item),
+          data: pages[idx]?.data || item.imageUrl,
+          thumb: pages[idx]?.thumb || item.imageUrl
+        })) : pages;
+        bookSheets = bookSheets.concat(saved);
+        addedCount += saved.length;
+        sureCount += saved.filter(page => page.guess?.confidence === 'title').length;
+      }
+      bookDialogStatus.textContent = `${addedCount} page${addedCount > 1 ? 's' : ''} enregistrée${addedCount > 1 ? 's' : ''} : ${sureCount} identifiée${sureCount > 1 ? 's' : ''} par le cartouche${addedCount - sureCount ? `, ${addedCount - sureCount} à vérifier` : ''}.`;
     } catch (error) {
-      bookDialogStatus.textContent = `Lecture des PDF impossible : ${error.message}`;
+      bookDialogStatus.textContent = `Lecture ou enregistrement des PDF impossible : ${error.message}`;
     } finally {
       bookFiles.value = '';
       bookFiles.disabled = false;
@@ -1515,6 +1743,40 @@ window.startProjectViewer = () => {
   const excludedNote = excluded => excluded?.length
     ? ` ${excluded.length} rendu${excluded.length > 1 ? 's' : ''} écarté${excluded.length > 1 ? 's' : ''} (Porte E) : ${excluded.map(e => `${e.label} (${e.reason})`).join(', ')}.`
     : '';
+
+  // ---------- Tableau de bord « Livrables » (5 étapes + 5 exports) ----------
+  const deliverablesBtn = document.getElementById('btn-deliverables');
+  const deliverablesDlg = document.getElementById('dlg-deliverables');
+  if (deliverablesBtn) {
+    deliverablesBtn.hidden = invited;
+    deliverablesBtn.addEventListener('click', () => {
+      if (invited || typeof DeliverableChecklist === 'undefined' || !deliverablesDlg) return;
+      const slug = PROJECT_SLUG || HOUSE_DATA?.meta?.slug || '';
+      DeliverableChecklist.openDashboard({
+        dialogEl: deliverablesDlg,
+        bodyEl: document.getElementById('dlg-deliverables-body'),
+        statusEl: document.getElementById('dlg-deliverables-status'),
+        slug,
+        project: HOUSE_DATA,
+        onExport: async docId => {
+          const stEl = document.getElementById('dlg-deliverables-status');
+          if (docId === 'brochure') { deliverablesDlg.close(); pdfButton?.click(); return; }
+          if (docId === 'catalog') { deliverablesDlg.close(); catalogButton?.click(); return; }
+          if (docId === 'book') { deliverablesDlg.close(); document.getElementById('book-pdf')?.click(); return; }
+          if (docId === 'synthesis' && typeof PlanBook !== 'undefined' && typeof PlanBook.exportSynthesisBoard === 'function') {
+            if (stEl) stEl.textContent = 'Export de la planche de synthèse A3…';
+            await assetsReady;
+            await PlanBook.exportSynthesisBoard({ data: HOUSE_DATA, studio, screen: screenForDelivery, onStatus: msg => { if (stEl) stEl.textContent = msg; } });
+            if (stEl) stEl.textContent = 'Planche de synthèse A3 téléchargée.';
+            return;
+          }
+          if (docId === 'aps') {
+            location.assign(`editor.html${slug ? `?project=${encodeURIComponent(slug)}` : ''}`);
+          }
+        }
+      });
+    });
+  }
 
   // ---------- Catalogue des intérieurs : ouvert aux clients ----------
   catalogButton.addEventListener('click', async () => {
@@ -1692,7 +1954,23 @@ window.startProjectViewer = () => {
       return;
     }
     if (!window.MediaRecorder || !houseScene.renderer.domElement.captureStream) {
-      setVideoExportStatus('Capture vidéo indisponible dans ce navigateur.');
+      exportVideoButton.disabled = true;
+      exportVideoButton.textContent = '⏳ Rendu FFmpeg…';
+      setVideoExportStatus('MediaRecorder absent — assemblage vidéo MP4 via le moteur FFmpeg du serveur…');
+      try {
+        const res = await fetch(projectApi('api/render-video'), { method: 'POST' });
+        const result = await res.json();
+        if (!res.ok || !result.ok) throw new Error(result.error || `HTTP ${res.status}`);
+        galleryMediaCache = null;
+        galleryInitialized = false;
+        if (!gallery.classList.contains('hidden')) await buildGallery();
+        setVideoExportStatus(`${result.item.label} prêt (${(result.item.size / (1024 * 1024)).toFixed(1)} Mo, MP4 H.264). Disponible dans la galerie.`);
+      } catch (error) {
+        setVideoExportStatus(`Export vidéo impossible : ${error.message}`);
+      } finally {
+        exportVideoButton.disabled = false;
+        Icons.label(exportVideoButton, 'video', 'Exporter l’animation vidéo');
+      }
       return;
     }
 
@@ -1761,7 +2039,9 @@ window.startProjectViewer = () => {
             galleryMediaCache = null;
             galleryInitialized = false;
             if (!gallery.classList.contains('hidden')) await buildGallery();
-            uploadStatus = `${result.item.label} enregistrée (${(blob.size / (1024 * 1024)).toFixed(1)} Mo, ${actualMime.includes('mp4') ? 'MP4' : 'WebM'}). Disponible dans la galerie.`;
+            const fmtLabel = result.transcoded ? 'MP4 H.264 (FFmpeg)' : (result.item?.format === 'mp4' || actualMime.includes('mp4') ? 'MP4' : 'WebM');
+            const finalMb = ((result.item?.size || blob.size) / (1024 * 1024)).toFixed(1);
+            uploadStatus = `${result.item.label} enregistrée (${finalMb} Mo, ${fmtLabel}). Disponible dans la galerie.`;
           } catch (error) {
             uploadStatus = `Export vidéo impossible : ${error.message}`;
           } finally {
@@ -1785,6 +2065,7 @@ window.startProjectViewer = () => {
           const progress = Math.min(1, (now - startedAt) / (TOUR_RECORD_SECONDS * 1000));
           scrollProgress = progress;
           scrollTour.update(progress);
+          houseScene.render();
           const elevation = Math.min(100, Math.round(Math.min(1, progress / HOUSE_DATA.config.elevationEnd) * 100));
           elevationPercentEl.textContent = `${elevation}%`;
           progressFillEl.style.width = `${progress * 100}%`;
@@ -1977,6 +2258,14 @@ window.startProjectViewer = () => {
     if (e.code === 'KeyF') setPhotoMode(!photoModeEnabled);
     if (e.code === 'KeyR') void openGallery();
     if (e.code === 'KeyH') setQuality(houseScene.quality === 'high' ? 'normal' : 'high');
+    if (e.key === '?') {
+      const dlg = document.getElementById('dlg-shortcuts');
+      if (dlg && !dlg.open) dlg.showModal();
+    }
+  });
+  document.getElementById('btn-shortcuts-help')?.addEventListener('click', () => {
+    const dlg = document.getElementById('dlg-shortcuts');
+    if (dlg && !dlg.open) dlg.showModal();
   });
 
   // --- GESTION DU SCROLL ---

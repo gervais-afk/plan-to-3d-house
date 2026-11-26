@@ -1069,6 +1069,7 @@
   ],
   "edition": {
     "artDirectory": "edition-art",
+    "bookFile": "projects/residence-verandas/planches/cahier.pdf",
     "zonePhotos": {
       "outside": 0,
       "r0": 1,

@@ -17,12 +17,24 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Projets de travail du cabinet (données clients locales, jamais publiées dans Git)
+# Seuls les 4 projets de démonstration exigés par la suite de tests restent suivis :
+# - residence-verandas : tests/deliverable-gate, stairs-roof-circulation, habitability, walk-stairs, project-info, generic-project, apsGenerator, clientBrochurePremium, aiEnhance
+# - villa-serena : tests/cost-estimate, apsGenerator, clientBrochurePremium
+# - maison-croquis : tests/aiEnhance
+# - test-l : tests/client-tools
+projects/*
+!projects/residence-verandas/
+!projects/villa-serena/
+!projects/maison-croquis/
+!projects/test-l/
+
 # Médias lourds ou temporaires de validation (GitHub bloque les fichiers > 100 Mo)
 projects/**/temp*
 
 # Retours privés par lien, hors du serveur statique
 .client-feedback/
 
-# Sessions, invitations et configuration locale du cabinet
+# Sessions, invitations, profil et logo local du cabinet (.cabinet/logo.png)
 .private-portal/
 .cabinet/

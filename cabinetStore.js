@@ -5,10 +5,39 @@ const { randomUUID } = require('node:crypto');
 const slugPattern = /^[a-z0-9-]{1,60}$/;
 
 function paths(root) {
-  return { profile: path.join(root, '.cabinet', 'profile.json'), logo: path.join(root, 'assets', 'cabinet', 'logo.png') };
+  return {
+    profile: path.join(root, '.cabinet', 'profile.json'),
+    logo: path.join(root, '.cabinet', 'logo.png'),
+    legacyLogo: path.join(root, 'assets', 'cabinet', 'logo.png')
+  };
+}
+
+function migrateLegacyLogo(root) {
+  const files = paths(root);
+  if (fs.existsSync(files.logo) || !fs.existsSync(files.legacyLogo)) return;
+  try {
+    const buf = fs.readFileSync(files.legacyLogo);
+    if (!buf.length) return;
+    fs.mkdirSync(path.dirname(files.logo), { recursive: true, mode: 0o700 });
+    const tmp = `${files.logo}.${randomUUID()}.tmp`;
+    try {
+      fs.writeFileSync(tmp, buf, { flag: 'wx', mode: 0o600 });
+      fs.renameSync(tmp, files.logo);
+    } finally { fs.rmSync(tmp, { force: true }); }
+    fs.rmSync(files.legacyLogo, { force: true });
+  } catch { /* la migration réessaiera à la prochaine lecture */ }
+}
+
+function readLogo(root) {
+  migrateLegacyLogo(root);
+  const files = paths(root);
+  if (!fs.existsSync(files.logo)) return null;
+  try { return fs.readFileSync(files.logo); }
+  catch { return null; }
 }
 
 function read(root) {
+  migrateLegacyLogo(root);
   const files = paths(root);
   let profile = {};
   try {
@@ -18,7 +47,7 @@ function read(root) {
   return {
     name: typeof profile.name === 'string' ? profile.name.slice(0, 120) : '',
     architect: typeof profile.architect === 'string' ? profile.architect.slice(0, 120) : '',
-    logoUrl: fs.existsSync(files.logo) ? '/assets/cabinet/logo.png' : ''
+    logoUrl: fs.existsSync(files.logo) ? '/api/cabinet/logo' : ''
   };
 }
 
@@ -80,12 +109,15 @@ function save(root, input) {
   } finally { fs.rmSync(tmp, { force: true }); }
 
   if (input.logo !== undefined) {
-    if (!logoImage) fs.rmSync(files.logo, { force: true });
-    else {
-      fs.mkdirSync(path.dirname(files.logo), { recursive: true });
+    if (!logoImage) {
+      fs.rmSync(files.logo, { force: true });
+      fs.rmSync(files.legacyLogo, { force: true });
+    } else {
+      fs.mkdirSync(path.dirname(files.logo), { recursive: true, mode: 0o700 });
       const logoTmp = `${files.logo}.${randomUUID()}.tmp`;
-      try { fs.writeFileSync(logoTmp, logoImage, { flag: 'wx' }); fs.renameSync(logoTmp, files.logo); }
+      try { fs.writeFileSync(logoTmp, logoImage, { flag: 'wx', mode: 0o600 }); fs.renameSync(logoTmp, files.logo); }
       finally { fs.rmSync(logoTmp, { force: true }); }
+      fs.rmSync(files.legacyLogo, { force: true });
     }
   }
   return read(root);
@@ -99,4 +131,4 @@ function projectSheetsValid(sheets) {
       (typeof sheet[key] === 'string' && sheet[key].length <= (key === 'title' ? 160 : 80)))));
 }
 
-module.exports = { read, save, slugPattern, projectSheetsValid };
+module.exports = { read, save, readLogo, migrateLegacyLogo, slugPattern, projectSheetsValid };

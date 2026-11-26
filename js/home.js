@@ -58,6 +58,31 @@ window.ProjectCoverReady = (() => {
   if (studioLink) studioLink.hidden = Boolean(context?.role);
   // L’outil de saisie n’apparaît dans l’en-tête que pour l’architecte connecté ; en démo il reste en pied de page.
   el('home-editor').hidden = context?.role !== 'architect';
+  const homeDeliverablesBtn = el('home-deliverables');
+  if (homeDeliverablesBtn) {
+    const isClientRole = Boolean(context?.role && context.role !== 'architect');
+    homeDeliverablesBtn.hidden = isClientRole;
+    homeDeliverablesBtn.addEventListener('click', () => {
+      const dlg = el('dlg-home-deliverables');
+      if (!dlg || typeof DeliverableChecklist === 'undefined') return;
+      const slug = select?.value || context?.project || url.searchParams.get('project') || '';
+      DeliverableChecklist.openDashboard({
+        dialogEl: dlg,
+        bodyEl: el('dlg-home-deliverables-body'),
+        statusEl: el('dlg-home-deliverables-status'),
+        slug,
+        project: loadedProjectRecord || loadedProjectData,
+        cabinet: currentCabinet,
+        media: loadedProjectMedia,
+        onExport: docId => {
+          dlg.close();
+          if (docId === 'aps') { location.assign(`editor.html${slug ? `?project=${encodeURIComponent(slug)}` : ''}`); return; }
+          if (docId === 'book' && el('workspace-book')) { el('workspace-book').click(); return; }
+          location.assign(viewerLink(slug));
+        }
+      });
+    });
+  }
   el('footer-editor').hidden = Boolean(context?.role);
   el('home-brand').dataset.view = 'cover';
   el('home-brand').removeAttribute('aria-label');
@@ -114,12 +139,130 @@ window.ProjectCoverReady = (() => {
       .slice(0, 3)
       .map(view => ({ ...view, fallbackCover: true }));
   };
+  const coverCalm = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
+  const COVER_SLIDE_MS = 6500;
+  let coverAutoplay = null;
+  let coverUserPaused = false;
+  let coverHoverPaused = false;
+
+  function stopCoverAutoplay() {
+    clearInterval(coverAutoplay);
+    coverAutoplay = null;
+  }
+
+  function startCoverAutoplay() {
+    stopCoverAutoplay();
+    if (coverCalm.matches || coverUserPaused || coverHoverPaused || activeViews.length < 2) return;
+    coverAutoplay = setInterval(() => void showView(current + 1), COVER_SLIDE_MS);
+  }
+
+  function setCoverPaused(paused) {
+    coverUserPaused = Boolean(paused);
+    const toggle = el('cover-toggle');
+    if (toggle) {
+      toggle.setAttribute('aria-pressed', String(coverUserPaused));
+      toggle.textContent = coverUserPaused ? '▶' : '❚❚';
+      toggle.setAttribute('aria-label', coverUserPaused ? 'Reprendre le défilement automatique' : 'Mettre en pause le défilement');
+    }
+    if (coverUserPaused) stopCoverAutoplay();
+    else startCoverAutoplay();
+  }
+
+  /** Détecte génériquement les plans ultra-réalistes, les coupes/toitures existantes du projet et la planche complète (sans cas particulier par slug). */
+  async function loadShowcasePlates(slug, projectRecord, signal) {
+    if (!slug || !slugPattern.test(slug)) return [];
+    const existingTechSheets = (projectRecord?.edition?.sheets || [])
+      .filter(sheet => /\b(coupe|toiture)\b/i.test(String(sheet?.title || '')))
+      .map(sheet => {
+        const isRoof = /\btoiture\b/i.test(String(sheet.title || ''));
+        const previewPath = typeof sheet.preview === 'string' ? sheet.preview : '';
+        const prefix = `projects/${slug}/planches/`;
+        // Priorise la planche originale haute définition (planches/edition-art/<fichier>) quand elle existe
+        const originalHiRes = previewPath.startsWith(prefix) && !previewPath.slice(prefix.length).includes('/')
+          ? `${prefix}edition-art/${previewPath.slice(prefix.length)}`
+          : '';
+        return {
+          file: originalHiRes || sheet.art || previewPath,
+          fallback: previewPath || sheet.art || '',
+          label: `${sheet.title} — planche d’origine`,
+          kind: isRoof ? 'Plan de toiture' : 'Coupe 2D',
+          fit: 'contain'
+        };
+      })
+      .filter(item => item.file);
+
+    const candidates = [
+      { file: `projects/${slug}/planches/edition-art/plan-rdc-ultrareal.jpg`, label: 'Plan RDC ultra-réaliste (fidèle au plan source)', kind: 'Plan 2D ultra-réaliste', fit: 'contain' },
+      { file: `projects/${slug}/planches/edition-art/plan-etage-ultrareal.jpg`, label: 'Plan R+1 ultra-réaliste (fidèle au plan source)', kind: 'Plan 2D ultra-réaliste', fit: 'contain' },
+      ...existingTechSheets,
+      { file: `projects/${slug}/planches/edition-art/planche-complete.jpg`, label: 'Planche complète — vues, plan et matériaux', kind: 'Planche complète', fit: 'contain' }
+    ];
+    const checks = await Promise.all(candidates.map(async item => {
+      const pathsToTry = item.fallback && item.fallback !== item.file ? [item.file, item.fallback] : [item.file];
+      for (const candidatePath of pathsToTry) {
+        try {
+          const res = await fetch(new URL(candidatePath, url), { method: 'HEAD', cache: 'no-store', signal });
+          if (res.ok) {
+            return {
+              source: candidatePath,
+              preview: candidatePath,
+              label: item.label,
+              alt: item.label,
+              kind: item.kind,
+              published: true,
+              fit: item.fit
+            };
+          }
+        } catch {
+          // Essaie le repli si présent
+        }
+      }
+      return null;
+    }));
+    return checks.filter(Boolean);
+  }
+
+  const coverStrip = el('cover-strip');
+  const coverLightbox = el('cover-lightbox');
+  const coverLightboxImg = el('cover-lightbox-img');
+  const coverLightboxTitle = el('cover-lightbox-title');
+  const coverLightboxCount = el('cover-lightbox-count');
+
+  function syncCoverLightbox() {
+    if (!coverLightbox?.open || !coverLightboxImg || !activeViews.length) return;
+    const shot = activeViews[current];
+    if (!shot) return;
+    coverLightboxImg.src = new URL(shot.source, url).href;
+    coverLightboxImg.alt = shot.alt || shot.label || '';
+    if (coverLightboxTitle) coverLightboxTitle.textContent = shot.label || 'Visuel du projet';
+    if (coverLightboxCount) coverLightboxCount.textContent = `${counter(current + 1)} / ${counter(activeViews.length)}`;
+  }
+
+  function openCoverLightbox(index = current) {
+    if (!coverLightbox || !coverLightboxImg || !activeViews.length) return;
+    stopCoverAutoplay();
+    void showView(index);
+    const shot = activeViews[(index + activeViews.length) % activeViews.length];
+    if (!shot) return;
+    coverLightboxImg.src = new URL(shot.source, url).href;
+    coverLightboxImg.alt = shot.alt || shot.label || '';
+    if (coverLightboxTitle) coverLightboxTitle.textContent = shot.label || 'Visuel du projet';
+    if (coverLightboxCount) coverLightboxCount.textContent = `${counter(((index + activeViews.length) % activeViews.length) + 1)} / ${counter(activeViews.length)}`;
+    if (!coverLightbox.open) coverLightbox.showModal();
+  }
+
   async function showView(index) {
     if (!activeViews.length) return;
     current = (index + activeViews.length) % activeViews.length;
     const version = ++pictureVersion;
     const shot = activeViews[current];
     const focal = current === 0 ? presentation?.focal : null;
+    if (shot.fit === 'contain') cover.dataset.slideFit = 'contain';
+    else delete cover.dataset.slideFit;
+    if (coverStrip) {
+      Array.from(coverStrip.children).forEach((btn, i) => btn.setAttribute('aria-pressed', String(i === current)));
+    }
+    syncCoverLightbox();
     if (!shot.published && !shot.fallbackCover) {
       image.hidden = true;
       cover.dataset.art = 'ambient';
@@ -152,13 +295,37 @@ window.ProjectCoverReady = (() => {
     }
   }
   function renderViews(shots) {
+    stopCoverAutoplay();
     activeViews = shots;
     pictureVersion++;
     image.hidden = true;
     image.removeAttribute('src');
+    delete cover.dataset.slideFit;
     el('cover-caption').textContent = shots.length || cover.dataset.art === 'loading' ? '' : 'Visuel du projet';
     el('cover-index').hidden = shots.length < 2;
     el('cover-empty').hidden = shots.length > 0;
+    if (coverStrip) {
+      coverStrip.hidden = shots.length < 2;
+      coverStrip.replaceChildren(...shots.map((shot, i) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cover-strip-item';
+        btn.setAttribute('aria-pressed', String(i === 0));
+        btn.setAttribute('aria-label', `${counter(i + 1)} · ${shot.label}`);
+        btn.title = shot.label;
+        const img = document.createElement('img');
+        img.src = shot.preview || shot.source;
+        img.alt = '';
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        btn.append(img);
+        btn.addEventListener('click', () => {
+          void showView(i);
+          if (!coverUserPaused) startCoverAutoplay();
+        });
+        return btn;
+      }));
+    }
     views.replaceChildren(...shots.map((shot, i) => {
       const button = document.createElement('button');
       button.type = 'button'; button.className = 'view-card';
@@ -170,15 +337,15 @@ window.ProjectCoverReady = (() => {
       const kind = document.createElement('span'); kind.className = 'view-kind'; kind.textContent = shot.kind;
       figure.append(thumb); button.append(figure, caption, kind);
       button.addEventListener('click', () => {
-        void showView(i);
-        cover.focus({ preventScroll: true });
-        cover.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+        openCoverLightbox(i);
       });
       return button;
     }));
     // Sans photographie disponible, la couverture garde son fond architectural abstrait — jamais un plan.
-    if (shots.length) void showView(0);
-    else if (cover.dataset.art !== 'loading') cover.dataset.art = 'ambient';
+    if (shots.length) {
+      void showView(0);
+      startCoverAutoplay();
+    } else if (cover.dataset.art !== 'loading') cover.dataset.art = 'ambient';
   }
   function projectDrawing(walls) {
     const all = (Array.isArray(walls) ? walls : []).filter(wall => [wall?.from, wall?.to].every(point => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)));
@@ -616,7 +783,41 @@ window.ProjectCoverReady = (() => {
       link.click();
       setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     };
-    toolbar.append(unit, csv);
+    const xlsxBtn = element('button', 'Exporter Excel (.xlsx)', 'cover-print');
+    xlsxBtn.type = 'button';
+    xlsxBtn.onclick = () => {
+      if (typeof XlsxExport === 'undefined') return;
+      void XlsxExport.downloadXlsx({ ...data, meta: project.meta || {}, estimate: project.estimate }, result, { slug });
+    };
+    toolbar.append(unit, csv, xlsxBtn);
+    const variantsBox = element('div', '', 'workspace-variants-compare');
+    variantsBox.hidden = true;
+    if (typeof VariantComparator !== 'undefined' && slug && slugPattern.test(slug)) {
+      fetch(`api/projects/${encodeURIComponent(slug)}/variants`, { cache: 'no-store' })
+        .then(res => (res.ok ? res.json() : null))
+        .then(payload => {
+          const A = payload?.variants?.A || null;
+          const B = payload?.variants?.B || null;
+          if (!A || !B) return;
+          const cmp = VariantComparator.compare(A, B);
+          const sign = v => (v > 0 ? `+${number.format(v)}` : number.format(v));
+          const titleEl = element('h3', `Comparatif Variantes — ${cmp.a.label} vs ${cmp.b.label}`);
+          const pair = element('div', '', 'workspace-variants-pair');
+          for (const [slot, item, sum] of [['A', A, cmp.a], ['B', B, cmp.b]]) {
+            const card = element('div', '', 'workspace-variant-card');
+            const heading = element('strong', `Variante ${slot} · ${sum.label}`);
+            const svgWrap = element('div', '', 'workspace-variant-svg');
+            svgWrap.innerHTML = VariantComparator.miniPlanSVG(item, { width: 300, height: 190 });
+            const info = element('p', `${number.format(sum.habitable)} m² habitables · ${CostEstimate.formatXAF(sum.budgetLow)} – ${CostEstimate.formatXAF(sum.budgetHigh)}`, 'workspace-intro');
+            card.append(heading, svgWrap, info);
+            pair.append(card);
+          }
+          const deltaText = element('p', `Écart B vs A : ${sign(cmp.deltas.habitable)} m² habitables (${sign(cmp.deltas.habitablePct)} %) · ${sign(cmp.deltas.budgetLow)} FCFA (bas) / ${sign(cmp.deltas.budgetHigh)} FCFA (haut).`, 'workspace-intro');
+          variantsBox.replaceChildren(titleEl, pair, deltaText);
+          variantsBox.hidden = false;
+        })
+        .catch(() => { /* variantes facultatives */ });
+    }
     function render() {
       const money = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
       const format = value => unit.value === 'EUR' ? `${money.format(value / 655.957)} €` : CostEstimate.formatXAF(value);
@@ -644,7 +845,7 @@ window.ProjectCoverReady = (() => {
       const materials = table('Bordereau d’achats', ['Matériau', 'Quantité', 'Montant'], result.materials.map(row =>
         [row.label, `${number.format(row.quantity)} ${row.unit}`, format(row.cost)]));
       const foot = element('p', `${result.excluded} Le bordereau est un repère d’achat déjà inclus dans le gros œuvre.`, 'workspace-intro');
-      estimate.replaceChildren(summary, works);
+      estimate.replaceChildren(summary, variantsBox, works);
       if (result.overall) estimate.append(table('Budget global avec annexes', ['Poste', 'Bas', 'Haut'],
         ranges([...result.annexes, { label: 'Total global', ...result.overall }])));
       estimate.append(materials, foot);
@@ -685,7 +886,9 @@ window.ProjectCoverReady = (() => {
       host.append(anchor);
     };
     const crop = project?.config?.planImage?.url;
-    if (typeof crop === 'string' && crop.startsWith(`projects/${slug}/`) && /^[a-z\d_-]+\.(?:jpe?g|png|webp)$/i.test(crop.slice(`projects/${slug}/`.length))) {
+    const cropPrefix = `projects/${slug}/`;
+    const cropRel = typeof crop === 'string' && crop.startsWith(cropPrefix) ? crop.slice(cropPrefix.length) : '';
+    if (cropRel && !cropRel.includes('..') && /^(?:planches\/)?[a-z\d_-]+\.(?:jpe?g|png|webp)$/i.test(cropRel)) {
       append(crop, 'Plan ou croquis d’origine', 'Document source');
     }
     for (const view of ViewOrder.views({ images: media.images }, slug, Infinity, { keepDuplicates: true }).filter(view => view.catalog && isGateEligible(view))) {
@@ -701,9 +904,17 @@ window.ProjectCoverReady = (() => {
     if (!host.children.length) host.append(element('p', 'Aucun média partagé pour le moment.', 'workspace-empty'));
   }
 
+  function validBookFile(bookFile, slug) {
+    if (typeof bookFile !== 'string') return '';
+    const prefix = `projects/${slug}/`;
+    if (!bookFile.startsWith(prefix) || bookFile.includes('..')) return '';
+    const rel = bookFile.slice(prefix.length);
+    return /^(?:[a-z\d_-]+\/)*[a-z\d_-]+\.pdf$/i.test(rel) ? bookFile : '';
+  }
+
   function renderEdition(project, slug, host = el('edition-reader'), initial = 0, media = loadedProjectMedia) {
     host.hidden = true; host.replaceChildren();
-    if (slug !== 'residence-verandas' || !project?.edition) return;
+    if (!project?.edition) return;
     const manifestImages = media?.images || [];
     const sheets = (project.edition.sheets || []).map(sheet => {
       const resolved = typeof DeliverableGate !== 'undefined'
@@ -711,17 +922,41 @@ window.ProjectCoverReady = (() => {
         : { source: sheet.art || sheet.preview };
       return { ...sheet, resolvedSource: resolved.source || sheet.preview };
     });
-    const series = [...sheets, ...project.edition.photos];
+    const series = [...sheets, ...(project.edition.photos || [])];
     if (!series.length) return;
-    const title = element('h3', 'Les planches de la résidence');
+    const title = element('h3', project.edition.title || 'Les planches du projet');
     const select = element('select'); select.setAttribute('aria-label', 'Choisir une planche');
     series.forEach((sheet, i) => select.add(new Option(`${counter(i + 1)} · ${sheet.title}`, String(i))));
     const image = element('img'); image.loading = 'lazy';
     const caption = element('figcaption'); caption.setAttribute('aria-live', 'polite');
     const figure = element('figure'); figure.append(image, caption);
     const prev = element('button', 'Précédente'), next = element('button', 'Suivante');
-    const download = element('a', 'Télécharger le cahier complet (PDF)');
-    download.href = `projects/${slug}/planches/cahier.pdf`; download.download = 'Residence-des-Verandas.pdf';
+    const safeSlug = String(slug || project.meta?.slug || 'projet').replace(/[^a-z0-9-]/gi, '-');
+    const bookFile = validBookFile(project.edition.bookFile, slug);
+    let download;
+    if (bookFile) {
+      download = element('a', 'Télécharger le cahier complet (PDF)');
+      download.href = bookFile;
+      download.download = `${safeSlug}-cahier-de-plans.pdf`;
+    } else {
+      download = element('button', 'Exporter le cahier de plans (PDF)');
+      download.type = 'button';
+      download.onclick = async () => {
+        if (typeof PlanBook === 'undefined' || typeof PlanBook.exportBook !== 'function') {
+          location.assign(`index.html?project=${encodeURIComponent(slug)}`);
+          return;
+        }
+        download.disabled = true;
+        try {
+          const cabinet = typeof PdfIdentity !== 'undefined' && typeof PdfIdentity.loadCabinetProfile === 'function'
+            ? await PdfIdentity.loadCabinetProfile() : null;
+          const bookData = { ...project, meta: { ...(project.meta || {}), slug: safeSlug } };
+          await PlanBook.exportBook({ data: bookData, studio: null, cabinet });
+        } finally {
+          download.disabled = false;
+        }
+      };
+    }
     function show(i) {
       const sheet = series[i]; select.selectedIndex = i;
       image.src = sheet.image || sheet.resolvedSource || sheet.preview;
@@ -781,7 +1016,10 @@ window.ProjectCoverReady = (() => {
     renderGallery(projectRecord, media, item.slug);
     loadedProjectRecord = projectRecord; loadedProjectData = projectData; loadedProjectMedia = media;
     renderPresentationEditor(media, item.slug);
-    renderViews(makeViews(media, item.slug));
+    const baseViews = makeViews(media, item.slug);
+    const showcasePlates = await loadShowcasePlates(item.slug, projectRecord, controller.signal);
+    if (controller.signal.aborted) return;
+    renderViews([...baseViews, ...showcasePlates]);
     renderPlanBook(projectRecord, projectData, media);
     if (gallery.status === 'rejected') el('cover-empty').textContent = 'Les rendus sont momentanément indisponibles. Vous pouvez toujours ouvrir la maquette.';
     else el('cover-empty').textContent = 'Aucun visuel publié. Entrez dans le cockpit pour découvrir la maquette.';
@@ -793,8 +1031,22 @@ window.ProjectCoverReady = (() => {
   }));
   window.addEventListener('afterprint', () => { delete document.body.dataset.print; });
 
-  el('cover-prev').addEventListener('click', () => void showView(current - 1));
-  el('cover-next').addEventListener('click', () => void showView(current + 1));
+  el('cover-prev').addEventListener('click', () => { void showView(current - 1); if (!coverUserPaused) startCoverAutoplay(); });
+  el('cover-next').addEventListener('click', () => { void showView(current + 1); if (!coverUserPaused) startCoverAutoplay(); });
+  el('cover-toggle')?.addEventListener('click', () => setCoverPaused(!coverUserPaused));
+  el('cover-expand')?.addEventListener('click', () => openCoverLightbox(current));
+  el('cover-lightbox-prev')?.addEventListener('click', () => void showView(current - 1));
+  el('cover-lightbox-next')?.addEventListener('click', () => void showView(current + 1));
+  el('cover-lightbox-close')?.addEventListener('click', () => coverLightbox?.close());
+  coverLightbox?.addEventListener('close', () => { if (!coverUserPaused) startCoverAutoplay(); });
+  coverLightbox?.addEventListener('click', event => { if (event.target === coverLightbox) coverLightbox.close(); });
+  coverLightbox?.addEventListener('keydown', event => {
+    if (event.key === 'ArrowLeft') { event.preventDefault(); void showView(current - 1); }
+    else if (event.key === 'ArrowRight') { event.preventDefault(); void showView(current + 1); }
+  });
+  el('sheet-open-deliverables')?.addEventListener('click', () => el('home-deliverables')?.click());
+  cover.addEventListener('pointerenter', () => { coverHoverPaused = true; stopCoverAutoplay(); });
+  cover.addEventListener('pointerleave', () => { coverHoverPaused = false; if (!coverUserPaused) startCoverAutoplay(); });
   return json('api/projects').then(items => {
     const projects = items.filter(item => slugPattern.test(item.slug) && typeof item.name === 'string');
     if (!projects.length) { el('cover-empty').hidden = false; status.textContent = 'Aucun dossier disponible.'; return; }

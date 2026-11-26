@@ -1,0 +1,1782 @@
+From d77f70596dbcd9699de2c3e44224daa8d34e8b92 Mon Sep 17 00:00:00 2001
+From: ArchiCam Dev <dev@archicam.local>
+Date: Wed, 25 Nov 2026 18:30:22 +0000
+Subject: [PATCH] =?UTF-8?q?Lot=207=20=E2=80=94=20Revue=20visuelle=20et=20g?=
+ =?UTF-8?q?arde-fou=20expliqu=C3=A9?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ css/editor.css                    |  10 +
+ css/style.css                     | 145 +++++++++++
+ index.html                        |  20 ++
+ js/app.js                         | 100 +++++---
+ js/editor.js                      |  91 ++++++-
+ js/editorAI.js                    |  90 +++++--
+ js/gateReviewUI.js                | 401 ++++++++++++++++++++++++++++++
+ js/planProposalReview.js          | 375 +++++++++++++++++++++++++++-
+ js/workspace.js                   |   4 +-
+ privatePortal.js                  |   2 +-
+ tests/visual-review-gate.test.cjs | 252 +++++++++++++++++++
+ 11 files changed, 1430 insertions(+), 60 deletions(-)
+ create mode 100644 js/gateReviewUI.js
+ create mode 100644 tests/visual-review-gate.test.cjs
+
+diff --git a/css/editor.css b/css/editor.css
+index 285fef5..8f89301 100644
+--- a/css/editor.css
++++ b/css/editor.css
+@@ -237,7 +237,17 @@ kbd {
+ .ed-ai-review ul { margin: 0 0 6px; padding-left: 16px; }
+ .ed-ai-review li { margin: 2px 0; }
+ .ed-ai-review .ed-ai-err { color: var(--danger); font-weight: 600; }
++.ed-ai-review .ed-ai-ok { color: var(--success); font-weight: 600; }
+ .ed-ai-review .ed-ai-pos { color: var(--muted); font-variant-numeric: tabular-nums; }
++.ed-ai-item-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 4px 0 6px; }
++.ed-ai-badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
++.ed-ai-badge.is-green { background: rgba(21,128,61,0.14); color: #15803d; }
++.ed-ai-badge.is-orange { background: rgba(217,119,6,0.16); color: #b45309; }
++.ed-ai-badge.is-red { background: rgba(220,38,38,0.16); color: #b91c1c; }
++.ed-ai-badge.is-muted { background: rgba(107,114,128,0.15); color: #4b5563; }
++.ed-ai-btn { padding: 2px 7px; font-size: 11px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--ink); cursor: pointer; }
++.ed-ai-btn.is-active { background: var(--ink); color: #fff; border-color: var(--ink); }
++.ed-dialog.is-review-docked { position: fixed; top: 60px; right: 16px; left: auto; margin: 0; width: min(420px, calc(100vw - 32px)); max-height: calc(100dvh - 80px); overflow-y: auto; z-index: 25; box-shadow: 0 18px 44px rgba(17,24,39,0.28); }
+ .ed-ai-actions { justify-content: flex-end; flex-wrap: wrap; }
+ .ed-ai-actions #ai-apply { order: 2; }
+ .ed-ai-actions #ai-run { order: 1; }
+diff --git a/css/style.css b/css/style.css
+index 2c72821..f9f2642 100644
+--- a/css/style.css
++++ b/css/style.css
+@@ -783,6 +783,151 @@ body.fps-active .crosshair {
+   }
+ }
+ 
++/* Inspecteur de fidélité Avant/Après (rideau + grille 3×3 worstTile / addedTile) */
++.rg-compare-view {
++  flex-direction: column;
++  align-items: center;
++}
++.rg-inspector-toolbar {
++  display: flex;
++  flex-wrap: wrap;
++  align-items: center;
++  gap: 10px;
++  width: 100%;
++  justify-content: space-between;
++  font-size: 12px;
++  color: var(--on-night, #f3f4f6);
++}
++.rg-inspector-check {
++  display: inline-flex;
++  align-items: center;
++  gap: 6px;
++  cursor: pointer;
++}
++.rg-inspector-legend {
++  font-size: 12px;
++  opacity: 0.9;
++}
++.rg-slider-stage {
++  position: relative;
++  width: min(100%, 1080px);
++  max-height: calc(100vh - 220px);
++  background: var(--night);
++  border-radius: 8px;
++  overflow: hidden;
++  border: 1px solid rgba(255,255,255,0.16);
++  user-select: none;
++}
++.rg-slider-before,
++.rg-slider-after {
++  width: 100%;
++  max-height: calc(100vh - 220px);
++  object-fit: contain;
++  display: block;
++}
++.rg-slider-after-clip {
++  position: absolute;
++  inset: 0;
++  pointer-events: none;
++}
++.rg-slider-line {
++  position: absolute;
++  top: 0;
++  bottom: 0;
++  width: 2px;
++  background: #f59e0b;
++  box-shadow: 0 0 8px rgba(0,0,0,0.65);
++  pointer-events: none;
++  z-index: 3;
++}
++.rg-slider-tag-left { left: 12px; right: auto; }
++.rg-slider-tag-right { left: auto; right: 12px; }
++.rg-slider-range {
++  position: absolute;
++  inset: 0;
++  width: 100%;
++  height: 100%;
++  margin: 0;
++  opacity: 0;
++  cursor: ew-resize;
++  z-index: 5;
++}
++.rg-fidelity-grid {
++  position: absolute;
++  inset: 0;
++  display: grid;
++  grid-template-columns: repeat(3, 1fr);
++  grid-template-rows: repeat(3, 1fr);
++  pointer-events: none;
++  z-index: 4;
++}
++.rg-fidelity-cell {
++  border: 1px dashed rgba(255,255,255,0.22);
++  display: flex;
++  align-items: flex-end;
++  justify-content: center;
++  padding: 6px;
++}
++.rg-fidelity-cell.is-worst,
++.rg-fidelity-cell.is-both {
++  border: 2.5px solid #dc2626;
++  background: rgba(220, 38, 38, 0.16);
++}
++.rg-fidelity-cell.is-added {
++  border: 2.5px dashed #d97706;
++  background: rgba(217, 119, 6, 0.16);
++}
++.rg-fidelity-cell-label {
++  background: rgba(17, 24, 39, 0.88);
++  color: #fff;
++  font-size: 10px;
++  font-weight: 700;
++  padding: 2px 6px;
++  border-radius: 4px;
++  text-align: center;
++}
++.rg-compare-side {
++  display: flex;
++  width: 100%;
++  gap: 16px;
++}
++.gate-override-dialog textarea {
++  width: 100%;
++  padding: 8px 10px;
++  border: 1px solid var(--rule);
++  border-radius: 8px;
++  font: inherit;
++  font-size: 0.88rem;
++  resize: vertical;
++  background: #fff;
++  color: var(--ink);
++  box-sizing: border-box;
++}
++.gate-override-label {
++  font-weight: 700;
++  font-size: 0.84rem;
++}
++.gate-override-error {
++  margin: 0;
++  min-height: 1.2em;
++  color: #b91c1c;
++  font-size: 0.82rem;
++  font-weight: 600;
++}
++.gate-override-history-box {
++  font-size: 0.78rem;
++  color: var(--muted);
++}
++.gate-override-history-box ul {
++  margin: 6px 0 0;
++  padding-left: 16px;
++}
++.gate-override-confirm {
++  border-color: var(--ink);
++  background: var(--ink);
++  color: var(--paper);
++}
++
+ .rg-lb-bar {
+   display: flex;
+   justify-content: space-between;
+diff --git a/index.html b/index.html
+index 342eb1b..48e5099 100644
+--- a/index.html
++++ b/index.html
+@@ -425,6 +425,26 @@
+     </form>
+   </dialog>
+ 
++  <dialog id="gate-override-dialog" class="rg-publish-dialog gate-override-dialog" aria-labelledby="gate-override-title">
++    <form method="dialog" id="gate-override-form">
++      <p class="rg-publish-kicker">PORTE E — CONTRÔLE GÉOMÉTRIQUE</p>
++      <h2 id="gate-override-title">Forçage explicite architecte</h2>
++      <p id="gate-override-summary" class="rg-publish-caption"></p>
++      <p id="gate-override-fidelity" class="rg-publish-warning"></p>
++      <label class="gate-override-label" for="gate-override-reason">Motif tracé obligatoire</label>
++      <textarea id="gate-override-reason" rows="3" maxlength="240" required placeholder="Expliquez pourquoi ce rendu IA peut être publié malgré l’alerte géométrique…"></textarea>
++      <p id="gate-override-error" class="gate-override-error" role="alert"></p>
++      <details class="gate-override-history-box">
++        <summary>Historique des forçages de la session</summary>
++        <ul id="gate-override-history"></ul>
++      </details>
++      <div class="rg-publish-actions">
++        <button id="gate-override-cancel" type="button" class="btn-toggle btn-small">Annuler (garder hors livrables)</button>
++        <button id="gate-override-confirm" type="button" class="btn-toggle btn-small gate-override-confirm">Valider le forçage tracé</button>
++      </div>
++    </form>
++  </dialog>
++
+   </section>
+   </template>
+ </body>
+diff --git a/js/app.js b/js/app.js
+index 3062b89..4e5862f 100644
+--- a/js/app.js
++++ b/js/app.js
+@@ -245,18 +245,18 @@ window.startProjectViewer = () => {
+                 }
+                 const decision = DeliverableGate.evaluate({ ...target, fidelity });
+                 if (!decision.eligible) {
+-                  const reason = window.prompt(
+-                    `Porte E — ${decision.reason}.\nCe rendu IA n’est pas classé « Fidèle au plan ». Indiquez un motif tracé pour forcer son affectation au ${label.toLowerCase()} (Annuler pour conserver hors livrables) :`
+-                  );
+-                  if (!reason || !reason.trim()) {
++                  const overrideRes = await requestGateOverride({
++                    targetId: target.id,
++                    targetLabel: shot.label,
++                    destination: label,
++                    decisionReason: decision.reason,
++                    fidelity
++                  });
++                  if (!overrideRes) {
+                     status.textContent = `Affectation refusée (Porte E) : ${decision.reason}.`;
+                     return;
+                   }
+-                  payload.fidelityOverride = DeliverableGate.sanitizeOverride({
+-                    reason: reason.trim(),
+-                    fidelityVersion: fidelity?.version ?? 0,
+-                    verdict: fidelity?.verdict || 'missing'
+-                  });
++                  payload.fidelityOverride = overrideRes.override;
+                 }
+               }
+               const res = await setImageFlags(target.id, payload);
+@@ -423,6 +423,23 @@ window.startProjectViewer = () => {
+     'bytedance-seed/seedream-5-0-flash': { label: 'Seedream 5.0 Flash — brouillon rapide, ≈ 0,018 $', estimate: 'Brouillon rapide : ≈ 0,018 $ pour une image 1K (4,31 $ par million de jetons image). Pour comparer des ambiances avant le rendu final.' }
+   };
+ 
++  const gateOverrideHistory = typeof GateReviewUI !== 'undefined' ? GateReviewUI.createOverrideHistory() : null;
++  async function requestGateOverride({ targetId, targetLabel, destination, decisionReason, fidelity }) {
++    const dialogEl = document.getElementById('gate-override-dialog');
++    if (typeof GateReviewUI !== 'undefined' && dialogEl) {
++      return GateReviewUI.openGateOverrideDialog(dialogEl, {
++        targetId,
++        targetLabel,
++        destination,
++        decisionReason,
++        fidelity,
++        history: gateOverrideHistory,
++        gateApi: typeof DeliverableGate !== 'undefined' ? DeliverableGate : null
++      });
++    }
++    return null;
++  }
++
+   function choosePublicationTargets(label, fidelity = null) {
+     if (!publishDialog?.showModal) return Promise.resolve(null);
+     const form = document.getElementById('rg-publish-form');
+@@ -440,25 +457,23 @@ window.startProjectViewer = () => {
+     book.checked = false;
+     publishDialog.returnValue = '';
+     return new Promise(resolve => {
+-      publishDialog.addEventListener('close', () => {
++      publishDialog.addEventListener('close', async () => {
+         const chosen = publishDialog.returnValue === 'save' ? { catalog: catalog.checked, book: book.checked } : null;
+         // Porte E : tout rendu IA non « faithful » exige un forçage explicite tracé pour entrer dans les livrables.
+         if (chosen && !decision.eligible && (chosen.catalog || chosen.book)) {
+-          const reason = window.prompt(
+-            `Porte E — ${decision.reason}.\nIndiquez le motif de forçage architecte pour publier ce rendu dans les livrables (Annuler pour le garder hors livrables) :`
+-          );
+-          if (!reason || !reason.trim()) {
++          const dest = [chosen.catalog ? 'Catalogue' : '', chosen.book ? 'Cahier de plans' : ''].filter(Boolean).join(' & ');
++          const overrideRes = await requestGateOverride({
++            targetId: 'photor-draft',
++            targetLabel: label,
++            destination: dest || 'Livrables',
++            decisionReason: decision.reason,
++            fidelity
++          });
++          if (!overrideRes) {
+             resolve({ catalog: false, book: false });
+             return;
+           }
+-          const fidelityOverride = typeof DeliverableGate !== 'undefined'
+-            ? DeliverableGate.sanitizeOverride({
+-                reason: reason.trim(),
+-                fidelityVersion: fidelity?.version ?? 0,
+-                verdict: fidelity?.verdict || 'missing'
+-              })
+-            : { acceptedAt: new Date().toISOString(), acceptedBy: 'architect', reason: reason.trim(), fidelityVersion: fidelity?.version ?? 0, verdict: fidelity?.verdict || 'missing' };
+-          resolve({ ...chosen, fidelityOverride });
++          resolve({ ...chosen, fidelityOverride: overrideRes.override });
+           return;
+         }
+         resolve(chosen);
+@@ -705,9 +720,17 @@ window.startProjectViewer = () => {
+       } else {
+         metaEl.textContent = item.generator || (isPlanLike ? 'Planche architecturale' : 'Capture locale de la maquette Three.js');
+       }
++      let currentFidelity = aiImage?.fidelity || null;
++      let inspectorHandle = null;
+       if (aiImage && (aiImage.reference || item.id !== 'plan-2d-presentation')) {
+         fidelityFor(aiImage, aiImage.reference || baseUrl).then(result => {
+-          if (result && currentItem === item) metaEl.textContent += ` · ${FidelityCheck.describe(result)}`;
++          if (result && currentItem === item) {
++            currentFidelity = result;
++            metaEl.textContent += ` · ${FidelityCheck.describe(result)}`;
++            if (inspectorHandle && typeof inspectorHandle.updateFidelity === 'function') {
++              inspectorHandle.updateFidelity(result);
++            }
++          }
+         });
+       }
+       dlLink.href = aiImage ? aiImage.file : baseUrl;
+@@ -724,8 +747,17 @@ window.startProjectViewer = () => {
+           if (enable) {
+             fullImg.classList.add('hidden');
+             compareView.classList.remove('hidden');
+-            compare3D.src = baseUrl;
+-            compareGen.src = aiImage.file;
++            if (typeof GateReviewUI !== 'undefined' && typeof GateReviewUI.renderFidelityInspector === 'function') {
++              inspectorHandle = GateReviewUI.renderFidelityInspector(compareView, {
++                beforeUrl: baseUrl,
++                afterUrl: aiImage.file,
++                label: item.label,
++                fidelity: currentFidelity
++              });
++            } else {
++              if (compare3D) compare3D.src = baseUrl;
++              if (compareGen) compareGen.src = aiImage.file;
++            }
+             Icons.label(btnCompare, 'gallery', 'Afficher une seule vue');
+           } else {
+             compareView.classList.add('hidden');
+@@ -1284,15 +1316,17 @@ window.startProjectViewer = () => {
+         : `${s.model}${s.cost ? ` · ${s.cost}` : ''} · illustratif, non contractuel`;
+       const include = box.querySelector('[data-sublime-include]');
+       include.checked = page.sublimedInclude;
+-      include.addEventListener('change', () => {
++      include.addEventListener('change', async () => {
+         if (include.checked && blocked) {
+-          const reason = window.prompt(
+-            `Porte E — ${decision.reason}.\nIndiquez le motif de forçage architecte pour inclure cette version d’ambiance dans le cahier :`
+-          );
+-          if (!reason || !reason.trim()) { include.checked = false; return; }
+-          s.fidelityOverride = typeof DeliverableGate !== 'undefined'
+-            ? DeliverableGate.sanitizeOverride({ reason: reason.trim(), fidelityVersion: s.fidelity?.version ?? 0, verdict: s.fidelity?.verdict || 'missing' })
+-            : { acceptedAt: new Date().toISOString(), acceptedBy: 'architect', reason: reason.trim(), fidelityVersion: s.fidelity?.version ?? 0, verdict: s.fidelity?.verdict || 'missing' };
++          const overrideRes = await requestGateOverride({
++            targetId: s.id || 'photor-planche',
++            targetLabel: page.label || page.name || 'Planche IA',
++            destination: 'Cahier de plans',
++            decisionReason: decision.reason,
++            fidelity: s.fidelity
++          });
++          if (!overrideRes) { include.checked = false; return; }
++          s.fidelityOverride = overrideRes.override;
+         }
+         page.sublimedInclude = include.checked; bookChanged();
+       });
+diff --git a/js/editor.js b/js/editor.js
+index 799a98c..5865180 100644
+--- a/js/editor.js
++++ b/js/editor.js
+@@ -969,9 +969,98 @@
+     });
+ 
+     if (S.tool === 'camera' || (S.sel && S.sel.kind === 'camera')) drawCameras();
++    if (S.reviewOverlay) drawReviewOverlay();
+     drawDraft();
+   }
+ 
++  function setReviewOverlay(overlay) {
++    S.reviewOverlay = overlay || null;
++    if (!overlay) S.reviewFocus = null;
++    draw();
++  }
++
++  function focusWorldPoint(x, z, targetScale = 95) {
++    if (!Number.isFinite(x) || !Number.isFinite(z)) return;
++    const rect = canvas.getBoundingClientRect();
++    const scale = Math.max(S.view.scale, Number(targetScale) || 95);
++    S.view.scale = Math.min(240, Math.max(12, scale));
++    S.view.x = rect.width / 2 - x * S.view.scale;
++    S.view.y = rect.height / 2 - z * S.view.scale;
++    S.reviewFocus = { x, z };
++    draw();
++  }
++
++  function drawReviewOverlay() {
++    const ov = S.reviewOverlay;
++    if (!ov) return;
++    const k = S.view.scale;
++    const COLORS = {
++      green: { stroke: '#15803d', fill: 'rgba(21,128,61,0.16)' },
++      orange: { stroke: '#d97706', fill: 'rgba(217,119,6,0.20)' },
++      red: { stroke: '#dc2626', fill: 'rgba(220,38,38,0.22)' },
++      muted: { stroke: '#6b7280', fill: 'rgba(107,114,128,0.10)' }
++    };
++    ctx.save();
++    (ov.rooms || []).forEach(r => {
++      const palette = COLORS[r.color] || COLORS.green;
++      ctx.fillStyle = palette.fill;
++      ctx.strokeStyle = palette.stroke;
++      ctx.lineWidth = r.color === 'green' ? 1.5 : 2.2;
++      ctx.setLineDash(r.color === 'green' ? [5, 3] : [3, 3]);
++      if (r.poly && r.poly.length >= 3) {
++        ctx.beginPath();
++        r.poly.forEach((p, idx) => { const s = toScreen(p[0], p[1]); idx ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y); });
++        ctx.closePath();
++        ctx.fill(); ctx.stroke();
++      } else if (r.bounds) {
++        const p1 = toScreen(r.bounds.xMin, r.bounds.zMin);
++        const p2 = toScreen(r.bounds.xMax, r.bounds.zMax);
++        ctx.fillRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
++        ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
++      }
++    });
++    ctx.setLineDash([]);
++    (ov.walls || []).forEach(w => {
++      if (!w.from || !w.to) return;
++      const palette = COLORS[w.color] || COLORS.green;
++      const a = toScreen(w.from[0], w.from[1]);
++      const b = toScreen(w.to[0], w.to[1]);
++      ctx.strokeStyle = palette.stroke;
++      ctx.lineWidth = Math.max(3.5, (w.thick || 0.2) * k);
++      ctx.lineCap = 'round';
++      ctx.globalAlpha = w.color === 'muted' ? 0.35 : 0.85;
++      ctx.beginPath();
++      ctx.moveTo(a.x, a.y);
++      ctx.lineTo(b.x, b.y);
++      ctx.stroke();
++    });
++    ctx.globalAlpha = 1;
++    (ov.markers || []).forEach(m => {
++      if (!m.position || !Number.isFinite(m.position.x) || !Number.isFinite(m.position.z)) return;
++      const palette = COLORS[m.color] || COLORS.orange;
++      const s = toScreen(m.position.x, m.position.z);
++      ctx.fillStyle = palette.fill;
++      ctx.strokeStyle = palette.stroke;
++      ctx.lineWidth = 2.5;
++      ctx.beginPath();
++      ctx.arc(s.x, s.y, 10, 0, Math.PI * 2);
++      ctx.fill();
++      ctx.stroke();
++      label(m.label || m.type, s.x, s.y - 16, 10, palette.stroke, 700);
++    });
++    if (S.reviewFocus && Number.isFinite(S.reviewFocus.x) && Number.isFinite(S.reviewFocus.z)) {
++      const f = toScreen(S.reviewFocus.x, S.reviewFocus.z);
++      ctx.strokeStyle = '#dc2626';
++      ctx.lineWidth = 2.5;
++      ctx.setLineDash([4, 3]);
++      ctx.beginPath();
++      ctx.arc(f.x, f.y, 20, 0, Math.PI * 2);
++      ctx.stroke();
++      ctx.setLineDash([]);
++    }
++    ctx.restore();
++  }
++
+   function drawDraft() {
+     const k = S.view.scale;
+     const h = S.hover;
+@@ -2578,5 +2667,5 @@
+   toast('Importez l\'image d\'un plan, ou ouvrez l\'exemple Villa Serena');
+   window.__editor = S; // débogage
+   // API interne pour les modules complémentaires (lecture IA, caméras…)
+-  window.EditorAPI = { S, commit, refreshPanel, draw, toast, fitView, setTool, select, switchLevel, loadProject, projectPanel, openProjectInfoDialog, planPdfImport, applyPdfImportSelection, finishRectification, finishScaleControl, restoreOriginalPlanImage, FURNITURE, OPENINGS, wallLen, projectOnWall, slugify, r2, round, allLevelItems, toProjectJson };
++  window.EditorAPI = { S, commit, refreshPanel, draw, toast, fitView, setTool, select, switchLevel, loadProject, projectPanel, openProjectInfoDialog, planPdfImport, applyPdfImportSelection, finishRectification, finishScaleControl, restoreOriginalPlanImage, setReviewOverlay, focusWorldPoint, FURNITURE, OPENINGS, wallLen, projectOnWall, slugify, r2, round, allLevelItems, toProjectJson };
+ })();
+diff --git a/js/editorAI.js b/js/editorAI.js
+index 548b226..959e374 100644
+--- a/js/editorAI.js
++++ b/js/editorAI.js
+@@ -444,7 +444,9 @@ Rules:
+   const E = window.EditorAPI;
+   const $ = id => document.getElementById(id);
+   const sel = $('ai-model');
++  const dlgAi = $('dlg-ai');
+   let pendingProposal = null;
++  let pendingSession = null;
+   const applyButton = $('ai-apply');
+   const review = $('ai-review');
+   MODELS.forEach(m => {
+@@ -453,16 +455,58 @@ Rules:
+     opt.textContent = m.label;
+     sel.appendChild(opt);
+   });
++  function clearPendingReview() {
++    pendingProposal = null;
++    pendingSession = null;
++    applyButton.disabled = true;
++    if (dlgAi) dlgAi.classList.remove('is-review-docked');
++    if (typeof E.setReviewOverlay === 'function') E.setReviewOverlay(null);
++  }
++  function renderPendingReview() {
++    if (!pendingProposal || !pendingSession) return;
++    Review.renderReview(review, pendingProposal.assessment, {
++      mode: pendingProposal.opts.mode,
++      session: pendingSession,
++      onFocus: item => {
++        const target = pendingSession.getFocusTarget(item.id);
++        if (target && typeof E.focusWorldPoint === 'function') {
++          E.focusWorldPoint(target.x, target.z, target.scale);
++        }
++      },
++      onCorrect: item => {
++        if (item.type === 'pièce') {
++          const next = prompt(`Nom corrigé pour « ${item.label || 'pièce'} » :`, item.label || '');
++          return next === null ? false : next;
++        }
++        return 'Vérifié sur le plan source';
++      },
++      onChange: () => {
++        if (typeof E.setReviewOverlay === 'function') E.setReviewOverlay(pendingSession.getOverlayItems());
++        applyButton.disabled = !pendingSession.canApply();
++        renderPendingReview();
++      }
++    });
++    if (typeof E.setReviewOverlay === 'function') E.setReviewOverlay(pendingSession.getOverlayItems());
++    applyButton.disabled = !pendingSession.canApply();
++  }
+   applyButton.disabled = true;
+   applyButton.addEventListener('click', () => {
+     if (!pendingProposal) return;
+-    const { out, opts } = pendingProposal;
+-    applyResult(out, opts);
+-    pendingProposal = null;
+-    applyButton.disabled = true;
+-    $('dlg-ai').close();
++    if (pendingSession && !pendingSession.canApply()) {
++      $('ai-status').textContent = 'Traitez d’abord toutes les anomalies bloquantes (en rouge) avant d’appliquer.';
++      return;
++    }
++    const finalOut = pendingSession ? pendingSession.applyDecisions(pendingProposal.out) : pendingProposal.out;
++    const { opts } = pendingProposal;
++    applyResult(finalOut, opts);
++    clearPendingReview();
++    dlgAi.close();
+     E.toast('Proposition IA appliquée — vérifiez le tracé dans l’éditeur.');
+   });
++  dlgAi.addEventListener('close', () => {
++    dlgAi.classList.remove('is-review-docked');
++    if (typeof E.setReviewOverlay === 'function') E.setReviewOverlay(null);
++  });
+   try { const saved = localStorage.getItem('ed-ai-model'); if (MODELS.some(m => m.id === saved)) sel.value = saved; } catch (e) { /* stockage indisponible */ }
+   function updateCostEstimate() {
+     const selected = MODELS.find(model => model.id === sel.value);
+@@ -491,10 +535,10 @@ Rules:
+     if (!S.planImg) { E.toast('Importez d\'abord l\'image du plan', true); return; }
+     const calibrated = refreshScaleStatus();
+     $('ai-mode').value = S.p.walls.length ? 'merge' : 'replace';
+-    pendingProposal = null;
+-    applyButton.disabled = true;
++    clearPendingReview();
+     review.textContent = '';
+-    $('dlg-ai').showModal();
++    if (dlgAi.open) dlgAi.close();
++    dlgAi.showModal();
+     if (!calibrated) {
+       $('ai-status').textContent = CALIBRATION_REQUIRED_MSG;
+       $('ai-run').disabled = true;
+@@ -512,7 +556,7 @@ Rules:
+       $('ai-run').disabled = true;
+     }
+   };
+-  $('ai-cancel').onclick = () => $('dlg-ai').close();
++  $('ai-cancel').onclick = () => { clearPendingReview(); dlgAi.close(); };
+ 
+   $('ai-run').onclick = async () => {
+     const S = E.S;
+@@ -528,8 +572,7 @@ Rules:
+     try { localStorage.setItem('ed-ai-model', model); } catch (e) { /* stockage indisponible */ }
+     const opts = { scale: 'calibrated', furniture: $('ai-furniture').checked, mode: $('ai-mode').value };
+     const img = prepareImage();
+-    pendingProposal = null;
+-    applyButton.disabled = true;
++    clearPendingReview();
+     review.textContent = 'La lecture est une proposition : rien ne sera ajouté au projet avant votre validation.';
+     $('ai-run').disabled = true;
+     const t0 = performance.now();
+@@ -554,14 +597,31 @@ Rules:
+       const ai = parseJson(data.choices[0].message.content);
+       const out = convert(ai, img, opts);
+       const assessment = assessProposal(ai, out, opts);
+-      Review.renderReview(review, assessment, opts);
+-      if (!out.walls.length || !out.rooms.length) throw new Error('La proposition ne contient pas assez de murs et de pièces pour être relue. Le projet n’a pas été modifié.');
++      if (!out.walls.length || !out.rooms.length) {
++        Review.renderReview(review, assessment, opts);
++        throw new Error('La proposition ne contient pas assez de murs et de pièces pour être relue. Le projet n’a pas été modifié.');
++      }
+       pendingProposal = { out, opts, assessment };
+-      applyButton.disabled = false;
++      pendingSession = typeof Review.createReviewSession === 'function'
++        ? Review.createReviewSession(assessment, out)
++        : null;
++      if (pendingSession) {
++        // Passe le dialogue en panneau latéral non modal pour laisser le plan et la superposition visibles.
++        if (dlgAi.open) dlgAi.close();
++        dlgAi.classList.add('is-review-docked');
++        if (typeof dlgAi.show === 'function') dlgAi.show();
++        renderPendingReview();
++      } else {
++        Review.renderReview(review, assessment, opts);
++        applyButton.disabled = false;
++      }
+       const cost = data.usage && data.usage.cost !== undefined ? ` · coût ${Number(data.usage.cost).toFixed(3)} $` : '';
+       const secs = ((performance.now() - t0) / 1000).toFixed(0);
+       const verifyNote = out.toVerify.length ? ` · ${out.toVerify.length} élément(s) à vérifier` : '';
+-      $('ai-status').textContent = `Proposition prête : ${out.walls.length} murs, ${assessment.mappedOpenings} ouvertures rattachées, ${out.rooms.length} pièces, ${out.columns.length} poteaux${opts.furniture ? `, ${out.furniture.length} meubles` : ''}${verifyNote} · ${secs} s${cost}. Rien n’est encore appliqué.`;
++      const blockNote = pendingSession && !pendingSession.canApply()
++        ? ` · ${pendingSession.getBlockingPending().length} anomalie(s) bloquante(s) à traiter`
++        : '';
++      $('ai-status').textContent = `Proposition prête : ${out.walls.length} murs, ${assessment.mappedOpenings} ouvertures rattachées, ${out.rooms.length} pièces, ${out.columns.length} poteaux${opts.furniture ? `, ${out.furniture.length} meubles` : ''}${verifyNote}${blockNote} · ${secs} s${cost}. Rien n’est encore appliqué.`;
+     } catch (e) {
+       $('ai-status').textContent = '✗ ' + e.message;
+     } finally {
+diff --git a/js/gateReviewUI.js b/js/gateReviewUI.js
+new file mode 100644
+index 0000000..2a11dce
+--- /dev/null
++++ b/js/gateReviewUI.js
+@@ -0,0 +1,401 @@
++/**
++ * Revue visuelle de fidélité IA (comparateur rideau + grille 3×3 worstTile / addedTile)
++ * et dialogue dédié de forçage Porte E (sans window.prompt, motif obligatoire, historique tracé).
++ */
++(function (root, factory) {
++  const api = factory(root);
++  if (typeof module === 'object' && module.exports) module.exports = api;
++  if (typeof window !== 'undefined') window.GateReviewUI = api;
++})(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
++  'use strict';
++
++  const ROW_LABELS = ['haut', 'milieu', 'bas'];
++  const COL_LABELS = ['gauche', 'centre', 'droite'];
++
++  function zoneName(row, col) {
++    if (row === 1 && col === 1) return 'centre';
++    const r = ROW_LABELS[row] || '';
++    const c = COL_LABELS[col] || '';
++    return r && c ? `${r}-${c}` : 'zone';
++  }
++
++  /**
++   * Construit les 9 cellules de la grille 3×3 à partir d'un résultat FidelityCheck.
++   * Met en évidence worstTile (structure perdue/déplacée) et addedTile (élément ajouté).
++   */
++  function tileGridCells(fidelity) {
++    const worst = fidelity && fidelity.worstTile && Number.isInteger(fidelity.worstTile.row) && Number.isInteger(fidelity.worstTile.col)
++      ? fidelity.worstTile
++      : null;
++    const added = fidelity && fidelity.addedTile && Number.isInteger(fidelity.addedTile.row) && Number.isInteger(fidelity.addedTile.col)
++      ? fidelity.addedTile
++      : null;
++    const cells = [];
++    for (let row = 0; row < 3; row++) {
++      for (let col = 0; col < 3; col++) {
++        const isWorst = Boolean(worst && worst.row === row && worst.col === col && worst.score < 0.42);
++        const isAdded = Boolean(added && added.row === row && added.col === col && added.score < 0.48);
++        const kind = isWorst && isAdded ? 'both' : isWorst ? 'worst' : isAdded ? 'added' : 'ok';
++        const score = isWorst ? worst.score : isAdded ? added.score : null;
++        const zone = zoneName(row, col);
++        let label = '';
++        if (kind === 'both') label = `Écart géométrique & ajout (${zone})`;
++        else if (kind === 'worst') label = `Écart géométrique ${Math.round(worst.score * 100)} % (${zone})`;
++        else if (kind === 'added') label = `Élément ajouté ${Math.round(added.score * 100)} % (${zone})`;
++        cells.push({ index: row * 3 + col, row, col, zone, kind, score, label });
++      }
++    }
++    return cells;
++  }
++
++  function explainFidelity(fidelity) {
++    if (!fidelity) return 'Contrôle géométrique absent ou non calculé.';
++    const parts = [];
++    if (Number.isFinite(fidelity.score)) {
++      parts.push(`Score global ${Math.round(fidelity.score * 100)} %`);
++    }
++    if (fidelity.verdict === 'faithful') parts.push('Verdict : Fidèle au plan.');
++    else if (fidelity.verdict === 'review') parts.push('Verdict : À vérifier face à la maquette.');
++    else if (fidelity.verdict === 'unfaithful') parts.push('Verdict : Écart géométrique important.');
++    if (fidelity.worstTile && fidelity.worstTile.score < 0.42) {
++      parts.push(`Zone la plus modifiée : ${zoneName(fidelity.worstTile.row, fidelity.worstTile.col)} (${Math.round(fidelity.worstTile.score * 100)} %).`);
++    }
++    if (fidelity.addedTile && fidelity.addedTile.score < 0.48) {
++      parts.push(`Éléments ajoutés non présents sur la source : ${zoneName(fidelity.addedTile.row, fidelity.addedTile.col)} (${Math.round(fidelity.addedTile.score * 100)} %).`);
++    }
++    return parts.join(' ');
++  }
++
++  function validateReason(raw) {
++    const reason = typeof raw === 'string' ? raw.trim() : '';
++    if (!reason) {
++      return { ok: false, reason: '', error: 'Un motif explicite est obligatoire pour tracer un forçage Porte E.' };
++    }
++    if (reason.length < 3) {
++      return { ok: false, reason, error: 'Précisez le motif en au moins 3 caractères.' };
++    }
++    return { ok: true, reason: reason.slice(0, 240), error: '' };
++  }
++
++  function resolveGate(gateApi) {
++    if (gateApi) return gateApi;
++    if (root && root.DeliverableGate) return root.DeliverableGate;
++    if (typeof require === 'function') {
++      try { return require('./deliverableGate.js'); } catch { return null; }
++    }
++    return null;
++  }
++
++  /**
++   * Historique structuré des forçages Porte E.
++   * Valide systématiquement un motif non vide et assainit via DeliverableGate.sanitizeOverride.
++   */
++  function createOverrideHistory(initialEntries) {
++    const entries = Array.isArray(initialEntries) ? initialEntries.slice() : [];
++
++    function list() {
++      return entries.map(e => Object.assign({}, e));
++    }
++
++    function forTarget(targetId) {
++      return entries.filter(e => e.targetId === targetId).map(e => Object.assign({}, e));
++    }
++
++    function recordOverride(params, gateApi) {
++      const p = params || {};
++      const check = validateReason(p.reason);
++      if (!check.ok) return { ok: false, error: check.error, override: null, record: null };
++      const gate = resolveGate(gateApi);
++      const fidelity = p.fidelity || null;
++      const rawOverride = {
++        reason: check.reason,
++        acceptedBy: p.acceptedBy || 'architect',
++        acceptedAt: p.acceptedAt || new Date().toISOString(),
++        fidelityVersion: fidelity && Number.isFinite(fidelity.version) ? fidelity.version : (p.fidelityVersion ?? 0),
++        verdict: (fidelity && fidelity.verdict) || p.verdict || 'missing'
++      };
++      const override = gate && typeof gate.sanitizeOverride === 'function'
++        ? gate.sanitizeOverride(rawOverride)
++        : rawOverride;
++      if (!override) {
++        return { ok: false, error: 'Impossible de valider le motif de forçage.', override: null, record: null };
++      }
++      const record = {
++        targetId: p.targetId || '',
++        targetLabel: p.targetLabel || p.targetId || 'Rendu IA',
++        destination: p.destination || 'Livrable',
++        reason: override.reason,
++        acceptedAt: override.acceptedAt,
++        acceptedBy: override.acceptedBy,
++        verdict: override.verdict,
++        fidelityVersion: override.fidelityVersion
++      };
++      entries.push(record);
++      return { ok: true, error: '', override, record };
++    }
++
++    return { list, forTarget, recordOverride };
++  }
++
++  /**
++   * Ouvre un dialogue dédié (sans window.prompt) pour expliquer la Porte E,
++   * exiger un motif non vide et consigner le forçage dans l'historique.
++   */
++  function openGateOverrideDialog(dialogEl, opts) {
++    const options = opts || {};
++    const history = options.history || createOverrideHistory();
++    if (!dialogEl) return Promise.resolve(null);
++    const doc = dialogEl.ownerDocument;
++    const reasonEl = dialogEl.querySelector('#gate-override-reason');
++    const summaryEl = dialogEl.querySelector('#gate-override-summary');
++    const fidelityEl = dialogEl.querySelector('#gate-override-fidelity');
++    const errorEl = dialogEl.querySelector('#gate-override-error');
++    const historyListEl = dialogEl.querySelector('#gate-override-history');
++    const confirmBtn = dialogEl.querySelector('#gate-override-confirm');
++    const cancelBtn = dialogEl.querySelector('#gate-override-cancel');
++    if (!reasonEl || !confirmBtn || !cancelBtn) return Promise.resolve(null);
++
++    if (summaryEl) {
++      const dest = options.destination ? ` pour « ${options.destination} »` : '';
++      const target = options.targetLabel ? ` (« ${options.targetLabel} »)` : '';
++      summaryEl.textContent = `Porte E${target}${dest} — ${options.decisionReason || 'Ce rendu IA n’est pas classé « Fidèle au plan ».'}`;
++    }
++    if (fidelityEl) {
++      fidelityEl.textContent = explainFidelity(options.fidelity);
++    }
++    if (errorEl) errorEl.textContent = '';
++    reasonEl.value = '';
++
++    if (historyListEl && doc) {
++      while (historyListEl.firstChild) historyListEl.removeChild(historyListEl.firstChild);
++      const past = history.list().slice(-5).reverse();
++      if (!past.length) {
++        const li = doc.createElement('li');
++        li.textContent = 'Aucun forçage enregistré sur cette session.';
++        historyListEl.appendChild(li);
++      } else {
++        past.forEach(item => {
++          const li = doc.createElement('li');
++          const stamp = item.acceptedAt ? item.acceptedAt.slice(0, 16).replace('T', ' ') : '';
++          li.textContent = `${stamp} · ${item.targetLabel} (${item.destination}) — « ${item.reason} »`;
++          historyListEl.appendChild(li);
++        });
++      }
++    }
++
++    return new Promise(resolve => {
++      let settled = false;
++      function cleanup() {
++        confirmBtn.removeEventListener('click', onConfirm);
++        cancelBtn.removeEventListener('click', onCancel);
++        dialogEl.removeEventListener('cancel', onCancel);
++      }
++      function finish(val) {
++        if (settled) return;
++        settled = true;
++        cleanup();
++        if (typeof dialogEl.close === 'function' && dialogEl.open) dialogEl.close();
++        resolve(val);
++      }
++      function onCancel(e) {
++        if (e && typeof e.preventDefault === 'function') e.preventDefault();
++        finish(null);
++      }
++      function onConfirm(e) {
++        if (e && typeof e.preventDefault === 'function') e.preventDefault();
++        const res = history.recordOverride({
++          targetId: options.targetId,
++          targetLabel: options.targetLabel,
++          destination: options.destination,
++          reason: reasonEl.value,
++          fidelity: options.fidelity
++        }, options.gateApi);
++        if (!res.ok) {
++          if (errorEl) errorEl.textContent = res.error;
++          if (typeof reasonEl.focus === 'function') reasonEl.focus();
++          return;
++        }
++        finish({ override: res.override, record: res.record });
++      }
++
++      confirmBtn.addEventListener('click', onConfirm);
++      cancelBtn.addEventListener('click', onCancel);
++      dialogEl.addEventListener('cancel', onCancel);
++      if (typeof dialogEl.showModal === 'function') dialogEl.showModal();
++      if (typeof reasonEl.focus === 'function') reasonEl.focus();
++    });
++  }
++
++  /**
++   * Construit l'inspecteur Avant / Après avec curseur rideau et grille 3×3 (worstTile / addedTile).
++   * S'appuie uniquement sur createElement / textContent (aucun innerHTML).
++   */
++  function renderFidelityInspector(container, opts) {
++    if (!container || typeof container.ownerDocument === 'undefined') return null;
++    const doc = container.ownerDocument;
++    while (container.firstChild) container.removeChild(container.firstChild);
++    const { beforeUrl, afterUrl, label, fidelity } = opts || {};
++
++    const toolbar = doc.createElement('div');
++    toolbar.className = 'rg-inspector-toolbar';
++
++    const modeBtn = doc.createElement('button');
++    modeBtn.type = 'button';
++    modeBtn.className = 'btn-toggle btn-small';
++    modeBtn.textContent = 'Affichage : Rideau Avant/Après';
++    toolbar.appendChild(modeBtn);
++
++    const gridToggle = doc.createElement('label');
++    gridToggle.className = 'rg-inspector-check';
++    const gridCb = doc.createElement('input');
++    gridCb.type = 'checkbox';
++    gridCb.checked = true;
++    gridToggle.appendChild(gridCb);
++    gridToggle.appendChild(doc.createTextNode(' Grille 3×3 de fidélité'));
++    toolbar.appendChild(gridToggle);
++
++    const legend = doc.createElement('span');
++    legend.className = 'rg-inspector-legend';
++    legend.textContent = explainFidelity(fidelity);
++    toolbar.appendChild(legend);
++    container.appendChild(toolbar);
++
++    // Vue rideau Avant / Après
++    const sliderWrap = doc.createElement('div');
++    sliderWrap.className = 'rg-slider-stage';
++
++    const imgBefore = doc.createElement('img');
++    imgBefore.className = 'rg-slider-before';
++    imgBefore.src = beforeUrl || '';
++    imgBefore.alt = `${label || 'Vue'} — Source 3D`;
++    sliderWrap.appendChild(imgBefore);
++
++    const afterClip = doc.createElement('div');
++    afterClip.className = 'rg-slider-after-clip';
++    afterClip.style.clipPath = 'inset(0 0 0 50%)';
++    const imgAfter = doc.createElement('img');
++    imgAfter.className = 'rg-slider-after';
++    imgAfter.src = afterUrl || '';
++    imgAfter.alt = `${label || 'Vue'} — Rendu IA`;
++    afterClip.appendChild(imgAfter);
++    sliderWrap.appendChild(afterClip);
++
++    const dividerLine = doc.createElement('div');
++    dividerLine.className = 'rg-slider-line';
++    dividerLine.style.left = '50%';
++    sliderWrap.appendChild(dividerLine);
++
++    const tagBefore = doc.createElement('span');
++    tagBefore.className = 'rg-compare-label rg-slider-tag-left';
++    tagBefore.textContent = 'Avant · Source 3D';
++    sliderWrap.appendChild(tagBefore);
++
++    const tagAfter = doc.createElement('span');
++    tagAfter.className = 'rg-compare-label rg-slider-tag-right';
++    tagAfter.textContent = 'Après · Rendu IA';
++    sliderWrap.appendChild(tagAfter);
++
++    const gridOverlay = doc.createElement('div');
++    gridOverlay.className = 'rg-fidelity-grid';
++    gridOverlay.setAttribute('aria-label', 'Grille 3×3 des écarts géométriques');
++    const cells = tileGridCells(fidelity);
++    cells.forEach(cell => {
++      const div = doc.createElement('div');
++      div.className = `rg-fidelity-cell is-${cell.kind}`;
++      div.setAttribute('data-tile-row', String(cell.row));
++      div.setAttribute('data-tile-col', String(cell.col));
++      div.setAttribute('data-tile-kind', cell.kind);
++      if (cell.label) {
++        const badge = doc.createElement('span');
++        badge.className = 'rg-fidelity-cell-label';
++        badge.textContent = cell.label;
++        div.appendChild(badge);
++      }
++      gridOverlay.appendChild(div);
++    });
++    sliderWrap.appendChild(gridOverlay);
++
++    const range = doc.createElement('input');
++    range.type = 'range';
++    range.className = 'rg-slider-range';
++    range.min = '0';
++    range.max = '100';
++    range.value = '50';
++    range.setAttribute('aria-label', 'Curseur de comparaison Avant / Après');
++    const updateSplit = () => {
++      const pct = Number(range.value);
++      afterClip.style.clipPath = `inset(0 0 0 ${pct}%)`;
++      dividerLine.style.left = `${pct}%`;
++    };
++    range.addEventListener('input', updateSplit);
++    sliderWrap.appendChild(range);
++    container.appendChild(sliderWrap);
++
++    // Vue côte-à-côte alternative
++    const sideWrap = doc.createElement('div');
++    sideWrap.className = 'rg-compare-side hidden';
++    const panelA = doc.createElement('div');
++    panelA.className = 'rg-compare-panel';
++    const lblA = doc.createElement('span');
++    lblA.className = 'rg-compare-label';
++    lblA.textContent = 'Avant · Source 3D';
++    const imgA = doc.createElement('img');
++    imgA.src = beforeUrl || '';
++    imgA.alt = 'Source 3D';
++    panelA.appendChild(lblA);
++    panelA.appendChild(imgA);
++
++    const panelB = doc.createElement('div');
++    panelB.className = 'rg-compare-panel';
++    const lblB = doc.createElement('span');
++    lblB.className = 'rg-compare-label';
++    lblB.textContent = 'Après · Rendu IA';
++    const imgB = doc.createElement('img');
++    imgB.src = afterUrl || '';
++    imgB.alt = 'Rendu IA';
++    panelB.appendChild(lblB);
++    panelB.appendChild(imgB);
++    sideWrap.appendChild(panelA);
++    sideWrap.appendChild(panelB);
++    container.appendChild(sideWrap);
++
++    let mode = 'slider';
++    modeBtn.addEventListener('click', () => {
++      mode = mode === 'slider' ? 'side' : 'slider';
++      sliderWrap.classList.toggle('hidden', mode !== 'slider');
++      sideWrap.classList.toggle('hidden', mode !== 'side');
++      modeBtn.textContent = mode === 'slider' ? 'Affichage : Rideau Avant/Après' : 'Affichage : Côte-à-côte';
++    });
++    gridCb.addEventListener('change', () => {
++      gridOverlay.classList.toggle('hidden', !gridCb.checked);
++    });
++
++    return { cells, updateFidelity(nextFidelity) {
++      legend.textContent = explainFidelity(nextFidelity);
++      const nextCells = tileGridCells(nextFidelity);
++      Array.from(gridOverlay.children).forEach((node, i) => {
++        const c = nextCells[i];
++        if (!c) return;
++        node.className = `rg-fidelity-cell is-${c.kind}`;
++        node.setAttribute('data-tile-kind', c.kind);
++        while (node.firstChild) node.removeChild(node.firstChild);
++        if (c.label) {
++          const badge = doc.createElement('span');
++          badge.className = 'rg-fidelity-cell-label';
++          badge.textContent = c.label;
++          node.appendChild(badge);
++        }
++      });
++    } };
++  }
++
++  return {
++    zoneName,
++    tileGridCells,
++    explainFidelity,
++    validateReason,
++    createOverrideHistory,
++    openGateOverrideDialog,
++    renderFidelityInspector
++  };
++});
+diff --git a/js/planProposalReview.js b/js/planProposalReview.js
+index 015bcb4..5221f75 100644
+--- a/js/planProposalReview.js
++++ b/js/planProposalReview.js
+@@ -5,6 +5,8 @@
+ })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+   'use strict';
+ 
++  const VALID_ACTIONS = new Set(['accepted', 'corrected', 'ignored']);
++
+   function formatPosition(pos) {
+     if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.z)) return 'position inconnue';
+     return `x ${pos.x.toFixed(2)} m, z ${pos.z.toFixed(2)} m`;
+@@ -48,10 +50,327 @@
+     return { warnings, unmatchedOpenings, mappedOpenings, toVerify, uncertainCount, topology };
+   }
+ 
++  function centroidOfProposal(proposal) {
++    const pts = [];
++    if (proposal && Array.isArray(proposal.walls)) {
++      proposal.walls.forEach(w => {
++        if (Array.isArray(w.from) && w.from.length >= 2) pts.push({ x: w.from[0], z: w.from[1] });
++        if (Array.isArray(w.to) && w.to.length >= 2) pts.push({ x: w.to[0], z: w.to[1] });
++      });
++    }
++    if (!pts.length && proposal && Array.isArray(proposal.rooms)) {
++      proposal.rooms.forEach(r => {
++        if (r && r.bounds) {
++          pts.push({
++            x: (Number(r.bounds.xMin) + Number(r.bounds.xMax)) / 2,
++            z: (Number(r.bounds.zMin) + Number(r.bounds.zMax)) / 2
++          });
++        }
++      });
++    }
++    if (!pts.length) return { x: 0, z: 0 };
++    const sum = pts.reduce((acc, p) => ({ x: acc.x + p.x, z: acc.z + p.z }), { x: 0, z: 0 });
++    return { x: sum.x / pts.length, z: sum.z / pts.length };
++  }
++
++  function posMatch(a, b, tol = 0.25) {
++    if (!a || !b || !Number.isFinite(a.x) || !Number.isFinite(a.z) || !Number.isFinite(b.x) || !Number.isFinite(b.z)) return false;
++    return Math.hypot(a.x - b.x, a.z - b.z) <= tol;
++  }
++
++  /**
++   * Machine à états pure pour la revue visuelle d'une proposition IA/vectorielle.
++   * Classe chaque élément en vert (fiable / validé), orange (à vérifier / incertain) ou rouge (erreur bloquante).
++   * Tant qu'une erreur bloquante reste en attente, canApply() renvoie false.
++   */
++  function createReviewSession(assessment, proposal) {
++    const safeAssessment = assessment || {};
++    const safeProposal = proposal || { walls: [], rooms: [], columns: [], furniture: [] };
++    const items = [];
++    const topo = safeAssessment.topology;
++
++    if (topo && Array.isArray(topo.errors)) {
++      topo.errors.forEach((err, idx) => {
++        const text = typeof err === 'string' ? err : (err && err.reason) || String(err);
++        const pos = (err && typeof err === 'object' && err.position && Number.isFinite(err.position.x) && Number.isFinite(err.position.z))
++          ? { x: err.position.x, z: err.position.z }
++          : null;
++        items.push({
++          id: `topo-err-${idx}`,
++          source: 'topology',
++          type: 'topologie',
++          severity: 'error',
++          label: `Anomalie topologique #${idx + 1}`,
++          reason: text,
++          position: pos,
++          uncertain: false,
++          status: 'pending',
++          correction: null
++        });
++      });
++    }
++
++    const toVerify = Array.isArray(safeAssessment.toVerify) ? safeAssessment.toVerify : [];
++    toVerify.forEach((entry, idx) => {
++      if (!entry) return;
++      const isBlocking = entry.blocking === true || entry.severity === 'error';
++      const pos = entry.position && Number.isFinite(entry.position.x) && Number.isFinite(entry.position.z)
++        ? { x: entry.position.x, z: entry.position.z }
++        : null;
++      items.push({
++        id: `verify-${idx}`,
++        source: 'toVerify',
++        type: entry.type || 'élément',
++        severity: isBlocking ? 'error' : 'warning',
++        label: entry.label || '',
++        reason: entry.reason || 'À vérifier.',
++        position: pos,
++        uncertain: Boolean(entry.uncertain),
++        status: 'pending',
++        correction: null,
++        raw: entry
++      });
++    });
++
++    function findItem(id) {
++      return items.find(it => it.id === id) || null;
++    }
++
++    function resolveItem(id, action, correction) {
++      if (!VALID_ACTIONS.has(action)) {
++        throw new Error(`Action de revue invalide : ${action}`);
++      }
++      const item = findItem(id);
++      if (!item) return null;
++      item.status = action;
++      item.correction = correction !== undefined && correction !== null && String(correction).trim()
++        ? String(correction).trim()
++        : null;
++      return Object.assign({}, item);
++    }
++
++    function resetItem(id) {
++      const item = findItem(id);
++      if (!item) return null;
++      item.status = 'pending';
++      item.correction = null;
++      return Object.assign({}, item);
++    }
++
++    function getItems() {
++      return items.map(it => Object.assign({}, it));
++    }
++
++    function getBlockingPending() {
++      return items.filter(it => it.severity === 'error' && it.status === 'pending').map(it => Object.assign({}, it));
++    }
++
++    function canApply() {
++      const hasWalls = Array.isArray(safeProposal.walls) && safeProposal.walls.length > 0;
++      const hasRooms = Array.isArray(safeProposal.rooms) && safeProposal.rooms.length > 0;
++      if (proposal && (!hasWalls || !hasRooms)) return false;
++      return getBlockingPending().length === 0;
++    }
++
++    function getFocusTarget(id) {
++      const item = findItem(id);
++      if (!item) return null;
++      if (item.position && Number.isFinite(item.position.x) && Number.isFinite(item.position.z)) {
++        return { x: item.position.x, z: item.position.z, scale: 95, exact: true };
++      }
++      const center = centroidOfProposal(safeProposal);
++      return { x: center.x, z: center.z, scale: 55, exact: false };
++    }
++
++    function itemColor(item) {
++      if (item.status === 'accepted' || item.status === 'corrected') return 'green';
++      if (item.status === 'ignored') return 'muted';
++      return item.severity === 'error' ? 'red' : 'orange';
++    }
++
++    function wallOverlayColor(wall) {
++      const mid = (Array.isArray(wall.from) && Array.isArray(wall.to))
++        ? { x: (wall.from[0] + wall.to[0]) / 2, z: (wall.from[1] + wall.to[1]) / 2 }
++        : null;
++      const matching = mid ? items.find(it => it.type === 'mur' && posMatch(it.position, mid, 0.35)) : null;
++      if (matching) return itemColor(matching);
++      if (wall.uncertain === true) return 'orange';
++      return 'green';
++    }
++
++    function roomOverlayColor(room) {
++      const mid = room && room.bounds
++        ? { x: (room.bounds.xMin + room.bounds.xMax) / 2, z: (room.bounds.zMin + room.bounds.zMax) / 2 }
++        : null;
++      const matching = mid ? items.find(it => it.type === 'pièce' && (posMatch(it.position, mid, 0.5) || (it.label && room.name && it.label.toUpperCase() === room.name.toUpperCase()))) : null;
++      if (matching) return itemColor(matching);
++      if (room.uncertain === true) return 'orange';
++      return 'green';
++    }
++
++    function getOverlayItems() {
++      const walls = (safeProposal.walls || []).map((w, idx) => ({
++        index: idx,
++        from: w.from,
++        to: w.to,
++        thick: w.thick || 0.2,
++        type: w.type || 'ext',
++        color: wallOverlayColor(w),
++        openings: (w.openings || []).map(o => ({
++          type: o.type,
++          at: o.at,
++          w: o.w,
++          color: o.uncertain === true ? 'orange' : 'green'
++        }))
++      }));
++      const rooms = (safeProposal.rooms || []).map((r, idx) => ({
++        index: idx,
++        id: r.id,
++        name: r.name,
++        bounds: r.bounds,
++        poly: r.poly || null,
++        color: roomOverlayColor(r)
++      }));
++      const markers = items.map(it => ({
++        id: it.id,
++        type: it.type,
++        label: it.label || it.type,
++        reason: it.reason,
++        severity: it.severity,
++        status: it.status,
++        position: it.position,
++        color: itemColor(it)
++      }));
++      return {
++        walls,
++        rooms,
++        markers,
++        counts: {
++          green: walls.filter(w => w.color === 'green').length + rooms.filter(r => r.color === 'green').length,
++          orange: walls.filter(w => w.color === 'orange').length + rooms.filter(r => r.color === 'orange').length + markers.filter(m => m.color === 'orange').length,
++          red: markers.filter(m => m.color === 'red').length
++        }
++      };
++    }
++
++    function applyDecisions(baseProposal) {
++      const src = baseProposal || safeProposal;
++      const ignoredWallPositions = items
++        .filter(it => it.type === 'mur' && it.status === 'ignored' && it.position)
++        .map(it => it.position);
++      const ignoredRoomItems = items.filter(it => it.type === 'pièce' && it.status === 'ignored');
++      const correctedRoomItems = items.filter(it => it.type === 'pièce' && it.status === 'corrected' && it.correction);
++
++      const walls = (src.walls || []).filter(w => {
++        if (!w.uncertain || !ignoredWallPositions.length) return true;
++        const mid = { x: (w.from[0] + w.to[0]) / 2, z: (w.from[1] + w.to[1]) / 2 };
++        return !ignoredWallPositions.some(p => posMatch(p, mid, 0.35));
++      });
++
++      const rooms = (src.rooms || []).filter(r => {
++        if (!r.uncertain || !ignoredRoomItems.length) return true;
++        const mid = r.bounds ? { x: (r.bounds.xMin + r.bounds.xMax) / 2, z: (r.bounds.zMin + r.bounds.zMax) / 2 } : null;
++        return !ignoredRoomItems.some(it => (mid && posMatch(it.position, mid, 0.5)) || (it.label && r.name && it.label.toUpperCase() === r.name.toUpperCase()));
++      }).map(r => {
++        const mid = r.bounds ? { x: (r.bounds.xMin + r.bounds.xMax) / 2, z: (r.bounds.zMin + r.bounds.zMax) / 2 } : null;
++        const corr = correctedRoomItems.find(it => (mid && posMatch(it.position, mid, 0.5)) || (it.label && r.name && it.label.toUpperCase() === r.name.toUpperCase()));
++        return corr ? Object.assign({}, r, { name: corr.correction.toUpperCase(), uncertain: false }) : r;
++      });
++
++      return Object.assign({}, src, {
++        walls,
++        rooms,
++        reviewDecisions: getItems().map(it => ({
++          id: it.id,
++          type: it.type,
++          severity: it.severity,
++          status: it.status,
++          correction: it.correction
++        }))
++      });
++    }
++
++    return {
++      getItems,
++      getBlockingPending,
++      resolveItem,
++      resetItem,
++      canApply,
++      getFocusTarget,
++      getOverlayItems,
++      applyDecisions
++    };
++  }
++
++  function statusBadgeLabel(status, severity) {
++    if (status === 'accepted') return 'Accepté';
++    if (status === 'corrected') return 'Corrigé';
++    if (status === 'ignored') return 'Ignoré';
++    return severity === 'error' ? 'Bloquant' : 'À vérifier';
++  }
++
++  function appendInteractiveActions(doc, li, item, session, opts) {
++    const bar = doc.createElement('div');
++    bar.className = 'ed-ai-item-actions';
++
++    const badge = doc.createElement('span');
++    const colorClass = (item.status === 'accepted' || item.status === 'corrected')
++      ? 'is-green'
++      : item.status === 'ignored'
++        ? 'is-muted'
++        : item.severity === 'error' ? 'is-red' : 'is-orange';
++    badge.className = `ed-ai-badge ${colorClass}`;
++    badge.textContent = statusBadgeLabel(item.status, item.severity);
++    bar.appendChild(badge);
++
++    if (item.position && typeof opts.onFocus === 'function') {
++      const btnFocus = doc.createElement('button');
++      btnFocus.type = 'button';
++      btnFocus.className = 'ed-ai-btn';
++      btnFocus.textContent = 'Voir sur le plan';
++      btnFocus.addEventListener('click', () => opts.onFocus(item));
++      bar.appendChild(btnFocus);
++    }
++
++    const actions = [
++      ['accepted', 'Accepter'],
++      ['corrected', 'Corriger'],
++      ['ignored', 'Ignorer']
++    ];
++    actions.forEach(([actionKey, label]) => {
++      const btn = doc.createElement('button');
++      btn.type = 'button';
++      btn.className = `ed-ai-btn${item.status === actionKey ? ' is-active' : ''}`;
++      btn.setAttribute('data-review-action', actionKey);
++      btn.setAttribute('data-review-id', item.id);
++      btn.textContent = label;
++      btn.addEventListener('click', () => {
++        let correction = null;
++        if (actionKey === 'corrected' && typeof opts.onCorrect === 'function') {
++          correction = opts.onCorrect(item);
++          if (correction === false) return;
++        }
++        session.resolveItem(item.id, actionKey, correction);
++        if (typeof opts.onChange === 'function') opts.onChange(session);
++      });
++      bar.appendChild(btn);
++    });
++
++    if (item.correction) {
++      const note = doc.createElement('span');
++      note.className = 'ed-ai-pos';
++      note.textContent = `Correction : ${item.correction}`;
++      bar.appendChild(note);
++    }
++
++    li.appendChild(bar);
++  }
++
+   function renderReview(container, assessment, opts) {
+     if (!container || typeof container.ownerDocument === 'undefined') return;
+     const doc = container.ownerDocument;
+     while (container.firstChild) container.removeChild(container.firstChild);
++    const session = opts && opts.session ? opts.session : null;
+ 
+     const modeP = doc.createElement('p');
+     modeP.textContent = (opts && opts.mode === 'replace')
+@@ -59,20 +378,48 @@
+       : 'Mode : ajouter au tracé existant.';
+     container.appendChild(modeP);
+ 
++    if (session) {
++      const pendingErrors = session.getBlockingPending();
++      const gateP = doc.createElement('p');
++      gateP.className = pendingErrors.length ? 'ed-ai-err' : 'ed-ai-ok';
++      gateP.textContent = pendingErrors.length
++        ? `${pendingErrors.length} anomalie(s) bloquante(s) en rouge : traitez-les (Accepter, Corriger ou Ignorer) pour débloquer l’application.`
++        : 'Aucune anomalie bloquante en attente · Légende sur le plan : vert = fiable/validé, orange = à vérifier, rouge = erreur bloquante.';
++      container.appendChild(gateP);
++    }
++
+     const topo = assessment && assessment.topology;
+     if (topo) {
+       const topoTitle = doc.createElement('h4');
+       topoTitle.textContent = `Validation topologique — score ${topo.score}/100 (${topo.valid ? 'conforme' : 'anomalies détectées'})`;
+       container.appendChild(topoTitle);
+-      const topoItems = []
+-        .concat((topo.errors || []).map(text => ({ text, isErr: true })))
+-        .concat((topo.warnings || []).map(text => ({ text, isErr: false })));
+-      if (topoItems.length) {
++      const topoErrSessionItems = session
++        ? session.getItems().filter(it => it.source === 'topology')
++        : [];
++      const topoWarnings = topo.warnings || [];
++      if (topoErrSessionItems.length || (!session && (topo.errors || []).length) || topoWarnings.length) {
+         const ul = doc.createElement('ul');
+-        topoItems.forEach(entry => {
++        if (session) {
++          topoErrSessionItems.forEach(item => {
++            const li = doc.createElement('li');
++            li.className = item.status === 'pending' ? 'ed-ai-err' : '';
++            const span = doc.createElement('span');
++            span.textContent = item.reason;
++            li.appendChild(span);
++            appendInteractiveActions(doc, li, item, session, opts);
++            ul.appendChild(li);
++          });
++        } else {
++          (topo.errors || []).forEach(text => {
++            const li = doc.createElement('li');
++            li.className = 'ed-ai-err';
++            li.textContent = text;
++            ul.appendChild(li);
++          });
++        }
++        topoWarnings.forEach(text => {
+           const li = doc.createElement('li');
+-          if (entry.isErr) li.className = 'ed-ai-err';
+-          li.textContent = entry.text;
++          li.textContent = text;
+           ul.appendChild(li);
+         });
+         container.appendChild(ul);
+@@ -87,7 +434,8 @@
+     if (toVerify.length) {
+       const ul = doc.createElement('ul');
+       ul.className = 'ed-ai-verify-list';
+-      toVerify.forEach(item => {
++      const sessionVerify = session ? session.getItems().filter(it => it.source === 'toVerify') : [];
++      toVerify.forEach((item, idx) => {
+         const li = doc.createElement('li');
+         const typeTag = doc.createElement('strong');
+         typeTag.textContent = `[${item.type || 'élément'}] `;
+@@ -98,6 +446,9 @@
+         pos.className = 'ed-ai-pos';
+         pos.textContent = `(${formatPosition(item.position)})`;
+         li.appendChild(pos);
++        if (session && sessionVerify[idx]) {
++          appendInteractiveActions(doc, li, sessionVerify[idx], session, opts);
++        }
+         ul.appendChild(li);
+       });
+       container.appendChild(ul);
+@@ -122,5 +473,11 @@
+     }
+   }
+ 
+-  return { assessProposal, formatPosition, formatToVerifyItem, renderReview };
++  return {
++    assessProposal,
++    createReviewSession,
++    formatPosition,
++    formatToVerifyItem,
++    renderReview
++  };
+ });
+diff --git a/js/workspace.js b/js/workspace.js
+index 5294b78..a5e2d63 100644
+--- a/js/workspace.js
++++ b/js/workspace.js
+@@ -15,7 +15,7 @@
+   const common = ['motion', 'houseDataCore', 'viewOrder', 'deliverableGate', 'costEstimate'];
+   const viewer = ['icons', 'data', 'projectLoader', 'scene', 'variantState', 'solarStudy', 'realism', 'assets', 'presentationPlan',
+     'renderStudio', 'aiSequence', 'scrollTour', 'walkController', 'minimap', 'clientFinishes', 'solarOptions', 'clientTools', 'clientVariants',
+-    'clientDecisions', 'clientFeedback', 'woodGrain', 'pdfIdentity', 'clientBrochure', 'sheetClassifier', 'planBook', 'aiPrompt', 'fidelityCheck', 'app', 'presentMode'];
++    'clientDecisions', 'clientFeedback', 'woodGrain', 'pdfIdentity', 'clientBrochure', 'sheetClassifier', 'planBook', 'aiPrompt', 'fidelityCheck', 'gateReviewUI', 'app', 'presentMode'];
+   const scripts = new Map();
+   const status = el('workspace-status');
+   let active = 'cover';
+@@ -73,6 +73,8 @@
+       const content = document.importNode(template.content, true);
+       document.body.append(content);
+       document.body.append(el('book-dialog')); // L’export peut s’ouvrir depuis le dossier, indépendamment du canvas.
++      const gateDlg = el('gate-override-dialog');
++      if (gateDlg) document.body.append(gateDlg);
+       markup = el('visit-workspace');
+       markup.hidden = active !== 'visit';
+     }
+diff --git a/privatePortal.js b/privatePortal.js
+index 9280699..dfea173 100644
+--- a/privatePortal.js
++++ b/privatePortal.js
+@@ -19,7 +19,7 @@ const viewerFiles = new Set(['js/portal-context.js', 'js/houseDataCore.js', 'js/
+   'js/scene.js', 'js/variantState.js', 'js/solarStudy.js', 'js/realism.js', 'js/assets.js', 'js/presentationPlan.js',
+   'js/renderStudio.js', 'js/aiSequence.js', 'js/scrollTour.js', 'js/walkController.js', 'js/minimap.js', 'js/solarOptions.js',
+   'js/clientFinishes.js', 'js/clientTools.js', 'js/clientVariants.js', 'js/clientFeedback.js', 'js/clientBrochure.js',
+-  'js/aiPrompt.js', 'js/fidelityCheck.js', 'js/deliverableGate.js', 'js/app.js', 'js/workspace.js', 'css/workspace.css', 'js/clientDecisions.js', 'css/style.css', 'css/clientTools.css',
++  'js/aiPrompt.js', 'js/fidelityCheck.js', 'js/deliverableGate.js', 'js/gateReviewUI.js', 'js/app.js', 'js/workspace.js', 'css/workspace.css', 'js/clientDecisions.js', 'css/style.css', 'css/clientTools.css',
+   'css/tokens.css', 'css/motion.css', 'js/icons.js', 'js/motion.js', 'js/presentMode.js', 'js/viewOrder.js', 'js/costEstimate.js', 'js/sheetClassifier.js', 'js/woodGrain.js', 'js/planBook.js', 'assets/vendor/jspdf-4.2.1.umd.min.js', 'assets/vendor/pdf.min.js', 'assets/vendor/pdf.worker.min.js', 'js/home.js', 'js/coverImage.js', 'css/accueil.css', 'css/presentation.css', 'assets/fonts/manrope.woff2', 'assets/fonts/source-serif-4.woff2']);
+ const publicFiles = new Set(['portal.html', 'js/portal.js', 'css/portal.css', 'css/tokens.css', 'assets/fonts/manrope.woff2', 'assets/fonts/source-serif-4.woff2']);
+ 
+diff --git a/tests/visual-review-gate.test.cjs b/tests/visual-review-gate.test.cjs
+new file mode 100644
+index 0000000..f0f601b
+--- /dev/null
++++ b/tests/visual-review-gate.test.cjs
+@@ -0,0 +1,252 @@
++'use strict';
++
++const test = require('node:test');
++const assert = require('node:assert/strict');
++const fs = require('node:fs');
++const path = require('node:path');
++
++const PlanProposalReview = require('../js/planProposalReview.js');
++const GateReviewUI = require('../js/gateReviewUI.js');
++const DeliverableGate = require('../js/deliverableGate.js');
++
++function createMockDoc() {
++  class MockNode {
++    constructor(tag, text) {
++      this.tagName = tag;
++      this.textContent = text || '';
++      this.className = '';
++      this.children = [];
++      this.attrs = {};
++      this.listeners = {};
++      this.style = {};
++      this.value = '';
++      this.checked = false;
++      this.open = false;
++      this.ownerDocument = doc;
++      this.classList = {
++        add: c => { if (!this.className.split(/\s+/).includes(c)) this.className = (this.className + ' ' + c).trim(); },
++        remove: c => { this.className = this.className.split(/\s+/).filter(x => x && x !== c).join(' '); },
++        toggle: (c, force) => {
++          const has = this.className.split(/\s+/).includes(c);
++          const next = force === undefined ? !has : Boolean(force);
++          if (next) this.classList.add(c); else this.classList.remove(c);
++        }
++      };
++    }
++    get firstChild() { return this.children[0] || null; }
++    appendChild(child) { this.children.push(child); return child; }
++    removeChild(child) {
++      const idx = this.children.indexOf(child);
++      if (idx >= 0) this.children.splice(idx, 1);
++      return child;
++    }
++    setAttribute(k, v) { this.attrs[k] = String(v); }
++    getAttribute(k) { return this.attrs[k] || null; }
++    addEventListener(ev, fn) { (this.listeners[ev] ||= []).push(fn); }
++    removeEventListener(ev, fn) {
++      this.listeners[ev] = (this.listeners[ev] || []).filter(f => f !== fn);
++    }
++    dispatch(ev, payload) { (this.listeners[ev] || []).slice().forEach(fn => fn(payload || {})); }
++    showModal() { this.open = true; }
++    close() { this.open = false; }
++    focus() {}
++    querySelector(sel) {
++      const all = this.querySelectorAll(sel);
++      return all[0] || null;
++    }
++    querySelectorAll(sel) {
++      const out = [];
++      const walk = n => {
++        n.children.forEach(c => {
++          const matchId = sel.startsWith('#') && c.attrs.id === sel.slice(1);
++          const matchAttr = sel.startsWith('[') && (() => {
++            const m = sel.match(/^\[([^=\]]+)(?:="([^"]*)")?\]$/);
++            if (!m) return false;
++            return m[2] === undefined ? (m[1] in c.attrs) : c.attrs[m[1]] === m[2];
++          })();
++          if (matchId || matchAttr) out.push(c);
++          walk(c);
++        });
++      };
++      walk(this);
++      return out;
++    }
++  }
++  const doc = {
++    createElement: tag => new MockNode(tag),
++    createTextNode: text => new MockNode('#text', text)
++  };
++  return doc;
++}
++
++test('Lot 7 — Revue visuelle IA : code couleur vert/orange/rouge, focus et blocage tant qu’une erreur bloquante persiste', () => {
++  const proposal = {
++    walls: [
++      { from: [0, 0], to: [6, 0], thick: 0.25, type: 'ext', openings: [] },
++      { from: [6, 0], to: [6, 4], thick: 0.15, type: 'int', uncertain: true, openings: [] }
++    ],
++    rooms: [
++      { id: 'sejour', name: 'SÉJOUR', bounds: { xMin: 0, xMax: 6, zMin: 0, zMax: 4 } }
++    ],
++    columns: [],
++    furniture: [],
++    topology: {
++      valid: false,
++      score: 65,
++      errors: ['Périmètre non fermé au coin nord-est'],
++      warnings: []
++    },
++    toVerify: [
++      {
++        type: 'mur',
++        label: 'Cloison est',
++        reason: 'Trait flou non coté',
++        position: { x: 6, z: 2 },
++        uncertain: true
++      }
++    ]
++  };
++  const assessment = PlanProposalReview.assessProposal({ openings: [] }, proposal, { mode: 'replace' });
++  const session = PlanProposalReview.createReviewSession(assessment, proposal);
++
++  // Tant que l'erreur topologique bloquante n'est pas résolue, canApply() vaut false.
++  assert.equal(session.canApply(), false);
++  assert.equal(session.getBlockingPending().length, 1);
++
++  const overlayBefore = session.getOverlayItems();
++  assert.equal(overlayBefore.walls[0].color, 'green');
++  assert.equal(overlayBefore.walls[1].color, 'orange');
++  assert.equal(overlayBefore.markers.find(m => m.id === 'topo-err-0').color, 'red');
++  assert.equal(overlayBefore.markers.find(m => m.id === 'verify-0').color, 'orange');
++
++  // Clic sur l'élément à vérifier → cible de zoom exacte
++  const focus = session.getFocusTarget('verify-0');
++  assert.equal(focus.x, 6);
++  assert.equal(focus.z, 2);
++  assert.equal(focus.exact, true);
++
++  // Résoudre uniquement l'élément orange ne débloque pas l'erreur bloquante rouge
++  session.resolveItem('verify-0', 'accepted');
++  assert.equal(session.canApply(), false);
++  assert.equal(session.getOverlayItems().walls[1].color, 'green');
++
++  // Résoudre l'anomalie bloquante débloque l'application
++  session.resolveItem('topo-err-0', 'corrected', 'Fermeture vérifiée');
++  assert.equal(session.canApply(), true);
++  assert.equal(session.getOverlayItems().markers.find(m => m.id === 'topo-err-0').color, 'green');
++
++  // Rendu DOM sûr avec boutons Accepter / Corriger / Ignorer
++  const doc = createMockDoc();
++  const container = doc.createElement('div');
++  let focused = null;
++  PlanProposalReview.renderReview(container, assessment, {
++    mode: 'replace',
++    session,
++    onFocus: it => { focused = it.id; },
++    onChange: () => {}
++  });
++  const actionButtons = container.querySelectorAll('[data-review-action]');
++  assert.ok(actionButtons.length >= 6, 'Chaque élément dispose des actions Accepter/Corriger/Ignorer');
++  assert.equal(focused, null);
++});
++
++test('Lot 7 — Inspecteur de fidélité : grille 3×3 surligne worstTile et addedTile', () => {
++  const fidelity = {
++    version: 2,
++    score: 0.35,
++    recall: 0.40,
++    verdict: 'unfaithful',
++    worstTile: { row: 0, col: 2, score: 0.21 },
++    addedTile: { row: 2, col: 1, score: 0.32 }
++  };
++  const cells = GateReviewUI.tileGridCells(fidelity);
++  assert.equal(cells.length, 9);
++  assert.equal(cells[2].kind, 'worst');
++  assert.equal(cells[2].zone, 'haut-droite');
++  assert.equal(cells[7].kind, 'added');
++  assert.equal(cells[7].zone, 'bas-centre');
++  assert.equal(cells[4].kind, 'ok');
++
++  // Même tuile touchée par worstTile et addedTile -> 'both'
++  const bothCells = GateReviewUI.tileGridCells({
++    score: 0.3,
++    verdict: 'unfaithful',
++    worstTile: { row: 1, col: 1, score: 0.2 },
++    addedTile: { row: 1, col: 1, score: 0.3 }
++  });
++  assert.equal(bothCells[4].kind, 'both');
++  assert.equal(bothCells[4].zone, 'centre');
++});
++
++test('Lot 7 — Dialogue Porte E : motif obligatoire, historique tracé et zéro window.prompt dans app.js', async () => {
++  const doc = createMockDoc();
++  const dialog = doc.createElement('dialog');
++  const makeChild = (tag, id) => {
++    const el = doc.createElement(tag);
++    el.setAttribute('id', id);
++    dialog.appendChild(el);
++    return el;
++  };
++  makeChild('p', 'gate-override-summary');
++  makeChild('p', 'gate-override-fidelity');
++  const reasonInput = makeChild('textarea', 'gate-override-reason');
++  const errorEl = makeChild('p', 'gate-override-error');
++  makeChild('ul', 'gate-override-history');
++  const cancelBtn = makeChild('button', 'gate-override-cancel');
++  const confirmBtn = makeChild('button', 'gate-override-confirm');
++
++  const history = GateReviewUI.createOverrideHistory();
++  const fidelity = { version: 2, score: 0.41, verdict: 'review', worstTile: { row: 1, col: 0, score: 0.33 } };
++
++  const promise = GateReviewUI.openGateOverrideDialog(dialog, {
++    targetId: 'photor-sejour',
++    targetLabel: 'Séjour',
++    destination: 'Catalogue',
++    decisionReason: 'Écart local sur le mur ouest',
++    fidelity,
++    history,
++    gateApi: DeliverableGate
++  });
++
++  assert.equal(dialog.open, true);
++
++  // Tentative de validation avec motif vide -> rejetée, dialogue toujours ouvert
++  reasonInput.value = '   ';
++  confirmBtn.dispatch('click');
++  assert.equal(dialog.open, true);
++  assert.ok(errorEl.textContent.length > 0);
++  assert.equal(history.list().length, 0);
++
++  // Saisie d'un motif valide -> accepté, assaini par DeliverableGate, journalisé dans l'historique
++  reasonInput.value = 'Mobilier décoratif ajouté sur la terrasse, gros œuvre conforme.';
++  confirmBtn.dispatch('click');
++
++  const res = await promise;
++  assert.equal(dialog.open, false);
++  assert.ok(res && res.override);
++  assert.equal(res.override.reason, 'Mobilier décoratif ajouté sur la terrasse, gros œuvre conforme.');
++  assert.equal(history.list().length, 1);
++  assert.equal(history.forTarget('photor-sejour')[0].destination, 'Catalogue');
++  assert.equal(
++    DeliverableGate.evaluate({ id: 'photor-sejour', ai: true, fidelity, fidelityOverride: res.override }).eligible,
++    true
++  );
++
++  // Vérifier annulation propre
++  const cancelPromise = GateReviewUI.openGateOverrideDialog(dialog, {
++    targetId: 'photor-chambre',
++    targetLabel: 'Chambre',
++    destination: 'Cahier de plans',
++    decisionReason: 'Contrôle absent',
++    history,
++    gateApi: DeliverableGate
++  });
++  cancelBtn.dispatch('click');
++  assert.equal(await cancelPromise, null);
++
++  // Vérification statique : plus aucun window.prompt pour Porte E dans js/app.js et dialogue présent dans index.html
++  const appSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
++  assert.equal(appSource.includes('window.prompt('), false, 'js/app.js ne doit plus utiliser window.prompt pour la Porte E');
++  const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
++  assert.ok(indexHtml.includes('id="gate-override-dialog"'), 'index.html doit contenir le dialogue #gate-override-dialog');
++});
+-- 
+2.34.1
+

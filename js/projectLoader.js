@@ -798,23 +798,43 @@ window.HouseAuto = HouseAuto;
   if (typeof HOUSE_DATA === 'undefined' || typeof XMLHttpRequest === 'undefined') return;
   const params = new URLSearchParams(location.search);
   const requested = params.get('project');
-  let name = window.PORTAL_CONTEXT?.project || requested || 'residence-verandas';
-  window.ACTIVE_PROJECT_SLUG = /^[a-z0-9-]{1,60}$/.test(name) ? name : 'villa-serena';
-  if (!/^[a-z0-9-]{1,60}$/.test(name)) { console.warn('Nom de projet invalide :', name); return; }
+  let name = window.PORTAL_CONTEXT?.project || requested || '';
+  if (!name) {
+    const listXhr = new XMLHttpRequest();
+    listXhr.open('GET', `api/projects?t=${Date.now()}`, false);
+    try {
+      listXhr.send();
+      if (listXhr.status === 200) {
+        const items = JSON.parse(listXhr.responseText);
+        if (Array.isArray(items) && items.length) {
+          const picked = items.find(item => item && item.default) || items[0];
+          if (picked && typeof picked.slug === 'string') name = picked.slug;
+        }
+      }
+    } catch (e) { /* erreur gérée ci-dessous */ }
+  }
+  if (!name) {
+    window.ACTIVE_PROJECT_SLUG = '';
+    window.PROJECT_LOAD_ERROR = 'Aucun projet disponible. Créez ou importez un projet depuis l’éditeur.';
+    console.warn(window.PROJECT_LOAD_ERROR);
+    return;
+  }
+  if (!/^[a-z0-9-]{1,60}$/.test(name)) {
+    window.ACTIVE_PROJECT_SLUG = '';
+    window.PROJECT_LOAD_ERROR = `Identifiant de projet invalide : ${name}`;
+    console.warn(window.PROJECT_LOAD_ERROR);
+    return;
+  }
+  window.ACTIVE_PROJECT_SLUG = name;
   const xhr = new XMLHttpRequest();
   xhr.open('GET', `projects/${name}/project.json?t=${Date.now()}`, false);
   try { xhr.send(); } catch (e) { console.warn('Projet introuvable :', name); }
-  if (xhr.status !== 200 && !window.PORTAL_CONTEXT?.project && name !== 'villa-serena' && !requested) {
-    name = 'villa-serena';
-    window.ACTIVE_PROJECT_SLUG = name;
-    xhr.open('GET', `projects/${name}/project.json?t=${Date.now()}`, false);
-    try { xhr.send(); } catch (e) { console.warn('Projet introuvable :', name); }
-  }
   if (xhr.status !== 200) {
+    window.PROJECT_LOAD_ERROR = `Projet introuvable : ${name}`;
     if (window.PORTAL_CONTEXT?.role) {
       window.PROJECT_ACCESS_FAILED = true;
       location.replace('portal.html?session=inaccessible');
-    } else console.warn('Projet introuvable :', name);
+    } else console.warn(window.PROJECT_LOAD_ERROR);
     return;
   }
 

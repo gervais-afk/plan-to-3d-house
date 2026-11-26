@@ -10,7 +10,7 @@
   <title>ArchiCam Studio</title>
   <link rel="icon" type="image/svg+xml" href="assets/archicam-icon.svg">
   <link rel="stylesheet" href="css/tokens.css">
-  <link rel="preload" as="image" href="assets/studio/plan-rdc.jpg">
+  <link rel="preload" as="image" href="assets/studio/plan-villa-a-rdc.jpg">
   <link rel="stylesheet" href="css/studio.css">
   <script src="js/woodGrain.js" defer></script>
   <script src="js/studio.js" defer></script>
@@ -44,26 +44,44 @@
       </ul>
     </section>
 
-    <!-- Tirage encadré : plan commercial colorisé (recadré sans cartouche ni nom), RDC / R+1 -->
+    <!-- Tirages encadrés : plans ultra-réalistes fidèles et planches complètes en défilement continu -->
     <figure class="studio-print" id="studio-print">
       <div class="print-frame">
         <div class="print-mat">
-          <div class="print-stage" id="print-stage">
-            <img class="print-img is-active" src="assets/studio/plan-rdc.jpg" alt="Plan commercial colorisé d’une maison : rez-de-chaussée meublé et coté" width="936" height="874" fetchpriority="high" data-level="rdc">
-            <img class="print-img" src="assets/studio/plan-etage.jpg" alt="Plan commercial colorisé d’une maison : étage meublé et coté" width="936" height="874" loading="lazy" decoding="async" data-level="r1">
+          <div class="print-stage" id="print-stage" role="region" aria-roledescription="carrousel" aria-label="Planches et plans ultra-réalistes de l’atelier">
+            <img class="print-img is-active" src="assets/studio/plan-villa-a-rdc.jpg" alt="Plan ultra-réaliste du rez-de-chaussée d’une villa à galeries couvertes, fidèle au plan d’origine" width="1280" height="960" fetchpriority="high" data-slide="0" data-ref="PL. 01" data-title="Plan RDC · Villa à galeries">
+            <img class="print-img" src="assets/studio/plan-villa-a-etage.jpg" alt="Plan ultra-réaliste de l’étage R+1 d’une villa à galeries couvertes, fidèle au plan d’origine" width="1280" height="960" loading="lazy" decoding="async" data-slide="1" data-ref="PL. 02" data-title="Plan R+1 · Villa à galeries">
+            <img class="print-img" src="assets/studio/coupe-villa-a.jpg" alt="Coupe transversale B–B d’origine à l’échelle 1/50 d’une villa R+1 à galeries couvertes" width="1800" height="1272" loading="lazy" decoding="async" data-slide="2" data-ref="PL. 03" data-title="Coupe B–B · Planche d’origine">
+            <img class="print-img" src="assets/studio/toiture-villa-a.jpg" alt="Plan de toiture d’origine à l’échelle 1/50 d’une villa R+1 à galeries couvertes" width="1272" height="1800" loading="lazy" decoding="async" data-slide="3" data-ref="PL. 04" data-title="Plan de toiture · Planche d’origine">
+            <img class="print-img" src="assets/studio/planche-villa-a.jpg" alt="Planche complète d’architecture réunissant façade, intérieur, plan colorisé et matériaux d’une villa R+1" width="1280" height="960" loading="lazy" decoding="async" data-slide="4" data-ref="PL. 05" data-title="Planche complète · Maison R+1">
+            <img class="print-img" src="assets/studio/plan-villa-b-rdc.jpg" alt="Plan ultra-réaliste de plain-pied d’une villa contemporaine à porche, fidèle au plan d’origine" width="1280" height="960" loading="lazy" decoding="async" data-slide="5" data-ref="PL. 06" data-title="Plan RDC · Villa de plain-pied">
+            <img class="print-img" src="assets/studio/planche-villa-b.jpg" alt="Planche complète d’architecture réunissant façade, séjour, plan colorisé et matériaux d’une villa de plain-pied" width="1280" height="960" loading="lazy" decoding="async" data-slide="6" data-ref="PL. 07" data-title="Planche complète · Plain-pied">
             <span class="print-loupe" id="print-loupe" aria-hidden="true"></span>
+            <span class="print-progress" id="print-progress" aria-hidden="true"></span>
           </div>
         </div>
       </div>
       <figcaption class="print-caption">
         <span class="print-ref" id="print-ref">PL. 01</span>
-        <span class="print-title" id="print-title">Rez-de-chaussée</span>
-        <span class="print-levels" role="group" aria-label="Niveau du plan">
-          <button type="button" data-level="rdc" aria-pressed="true">RDC</button>
-          <button type="button" data-level="r1" aria-pressed="false">R+1</button>
+        <span class="print-title" id="print-title" aria-live="polite">Plan RDC · Villa à galeries</span>
+        <span class="print-controls" role="group" aria-label="Navigation des tirages">
+          <button type="button" id="print-prev" aria-label="Tirage précédent">←</button>
+          <span class="print-counter" id="print-counter">01 / 07</span>
+          <button type="button" id="print-next" aria-label="Tirage suivant">→</button>
+          <button type="button" id="print-toggle" aria-pressed="false" aria-label="Mettre en pause le défilement" title="Pause / Lecture">❚❚</button>
+          <button type="button" id="print-expand" aria-label="Agrandir le tirage en plein écran" title="Voir en grand">⤢</button>
         </span>
       </figcaption>
-      <p class="print-note">Plan commercial colorisé · rendu d’ambiance illustratif non contractuel</p>
+      <div class="print-plates" role="group" aria-label="Sélection directe d’une planche">
+        <button type="button" data-slide="0" aria-pressed="true">RDC I</button>
+        <button type="button" data-slide="1" aria-pressed="false">R+1 I</button>
+        <button type="button" data-slide="2" aria-pressed="false">Coupe B–B</button>
+        <button type="button" data-slide="3" aria-pressed="false">Toiture I</button>
+        <button type="button" data-slide="4" aria-pressed="false">Planche I</button>
+        <button type="button" data-slide="5" aria-pressed="false">RDC II</button>
+        <button type="button" data-slide="6" aria-pressed="false">Planche II</button>
+      </div>
+      <p class="print-note">Planches d’origine et tirages ultra-réalistes fidèles aux plans · clic pour agrandir</p>
     </figure>
 
     <nav class="studio-doors" id="studio-doors" aria-label="Accès à l’atelier">
@@ -108,6 +126,23 @@
     <div class="index-empty" id="index-empty" hidden>
       <p>Aucun dossier dans l’atelier pour l’instant.</p>
       <a class="index-new" href="editor.html">Commencer un nouveau projet <span aria-hidden="true">↗</span></a>
+    </div>
+  </dialog>
+
+  <dialog class="print-lightbox" id="print-lightbox" aria-labelledby="print-lightbox-title">
+    <div class="print-lightbox-bar">
+      <div class="print-lightbox-meta">
+        <span class="print-ref" id="print-lightbox-ref">PL. 01</span>
+        <span class="print-title" id="print-lightbox-title">Planche</span>
+      </div>
+      <div class="print-lightbox-actions">
+        <button type="button" id="print-lightbox-prev" aria-label="Tirage précédent">←</button>
+        <button type="button" id="print-lightbox-next" aria-label="Tirage suivant">→</button>
+        <button type="button" id="print-lightbox-close" aria-label="Fermer l’aperçu">×</button>
+      </div>
+    </div>
+    <div class="print-lightbox-stage">
+      <img id="print-lightbox-img" alt="">
     </div>
   </dialog>
 </body>

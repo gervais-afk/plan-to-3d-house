@@ -231,3 +231,40 @@ body[data-workspace-view="visit"]:has(.masthead) :is(#portal-account, #viewer-ho
   body[data-workspace-view] #contenu { padding: 0; }
   .masthead, #workspace-status, #visit-workspace, .workspace-export { display: none !important; }
 }
+
+.workspace-variants-compare {
+  margin: 1.5rem 0;
+  padding: 1.25rem;
+  border: 1px solid var(--rule-soft, rgba(16, 40, 32, 0.14));
+  background: var(--paper-2, #f5f2eb);
+}
+.workspace-variants-compare[hidden] { display: none; }
+.workspace-variants-compare h3 {
+  margin: 0 0 1rem;
+  font: 600 1.05rem/1.3 var(--serif, Georgia, serif);
+  color: var(--ink);
+}
+.workspace-variants-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+.workspace-variant-card {
+  padding: 0.9rem;
+  border: 1px solid var(--rule-soft, rgba(16, 40, 32, 0.12));
+  background: var(--surface, #fff);
+  display: grid;
+  gap: 0.6rem;
+}
+.workspace-variant-card strong { font-size: 0.92rem; color: var(--ink); }
+.workspace-variant-svg {
+  border: 1px solid var(--rule-soft, rgba(16, 40, 32, 0.1));
+  background: #fbfaf7;
+  padding: 0.4rem;
+}
+.workspace-variant-svg svg { width: 100%; height: auto; display: block; }
+@media (max-width: 720px) {
+  .workspace-variants-pair { grid-template-columns: 1fr; }
+}
+

@@ -43,6 +43,26 @@ const PlanBook = (() => {
     }
     return null;
   }
+  function aiPromptModule() {
+    if (typeof AiPrompt !== 'undefined') return AiPrompt;
+    if (typeof globalThis !== 'undefined' && globalThis.AiPrompt) return globalThis.AiPrompt;
+    if (typeof module !== 'undefined' && typeof require === 'function') {
+      try { return require('./aiPrompt.js'); } catch (_) { return null; }
+    }
+    return null;
+  }
+  function warmCaptionForView(view, data) {
+    if (view?.notes && String(view.notes).trim()) return String(view.notes).trim();
+    const AP = aiPromptModule();
+    if (!AP || typeof AP.warmRoomCaption !== 'function') return '';
+    const rooms = data?.rooms || [];
+    const rawLabel = String(view?.label || '').toLowerCase();
+    const matched = (view?.room && rooms.find(r => r.id === view.room))
+      || rooms.find(r => r.name && rawLabel.includes(String(r.name).toLowerCase()));
+    const isInterior = Boolean(matched || view?.interior || view?.category === 'interior' || /s[ée]jour|salon|chambre|suite|cuisine|salle|bureau|hall|entr[ée]e|v[ée]randa/i.test(rawLabel));
+    if (!isInterior) return '';
+    return AP.warmRoomCaption(matched || { name: roomName(view?.label || '') }, { label: roomName(view?.label || '') });
+  }
 
   // ---------- Bibliothèques chargées à la demande ----------
   function script(src, ready, integrity) {
@@ -64,7 +84,7 @@ const PlanBook = (() => {
   }
   const loadJsPDF = () => script('assets/vendor/jspdf-4.2.1.umd.min.js', () => !!window.jspdf?.jsPDF, // copie locale vérifiée : fonctionne hors ligne
     'sha384-qovJwSBbRDPP5cEjCp8S0UP66wrvnjaa60XMOGzTNanrThcrGfXfnZkvgY8N1KT3').then(() => window.jspdf.jsPDF);
-  const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  const PDFJS = 'assets/vendor/';
   const loadPdfJs = () => script(`${PDFJS}pdf.min.js`, () => !!window.pdfjsLib).then(() => {
     window.pdfjsLib.GlobalWorkerOptions.workerSrc = `${PDFJS}pdf.worker.min.js`;
     return window.pdfjsLib;
@@ -328,14 +348,15 @@ const PlanBook = (() => {
       ? word : word.toLocaleLowerCase('fr-FR'));
     return lower.charAt(0).toLocaleUpperCase('fr-FR') + lower.slice(1);
   }
-  /** Bandeau-cartouche en pied de chaque planche. */
+  /** Bandeau-cartouche en pied de chaque planche (identité du cabinet ou ArchiCam Studio). */
   function strip(doc, data, sheet) {
     const i = info(data, sheet), y = H - M - STRIP, x0 = M, width = W - 2 * M;
+    const brandLabel = String(i.meta?.brand || 'ARCHICAM STUDIO').toUpperCase();
     doc.setFillColor(C.white).rect(x0, y, width, STRIP, 'F');
     doc.setDrawColor(C.ink).setLineWidth(0.35).rect(x0, y, width, STRIP);
     const cells = [
-      [46, 'PLAN / 3D', 'Cahier de plans', true],
-      [82, 'Projet', i.project], [70, 'Planche', sheet.title], [56, 'Maître d’œuvre', i.architect],
+      [50, brandLabel, 'Cahier de plans', true],
+      [78, 'Projet', i.project], [70, 'Planche', sheet.title], [56, 'Maître d’œuvre', i.architect],
       [36, 'Phase', i.phase], [28, 'Échelle', sheet.scale || ''], [26, 'Date', i.date], [16, 'Indice', i.revision]
     ];
     const fixed = cells.reduce((sum, cell) => sum + cell[0], 0);
@@ -344,8 +365,9 @@ const PlanBook = (() => {
       if (index) doc.setDrawColor(C.rule).setLineWidth(0.2).line(x, y + 2.5, x, y + STRIP - 2.5);
       if (brand) {
         doc.setFillColor(C.dark).rect(x, y, w, STRIP, 'F');
-        text(doc, label, x + 4, y + 7.6, 10, { bold: true, color: C.white, space: 0.4 });
-        text(doc, value.toUpperCase(), x + 4, y + 12.6, 5.6, { color: C.sand, space: 0.7 });
+        doc.setFillColor(C.gold).rect(x, y, w, 0.85, 'F');
+        text(doc, label, x + 4, y + 7.8, label.length > 16 ? 7.6 : 9.2, { bold: true, color: C.white, space: 0.45, maxWidth: w - 8 });
+        text(doc, value.toUpperCase(), x + 4, y + 12.8, 5.4, { color: C.sand, space: 0.7 });
       } else {
         text(doc, label.toUpperCase(), x + 3, y + 6, 5.4, { bold: true, color: C.muted, space: 0.6 });
         if (value) text(doc, value, x + 3, y + 12.2, 8.4, { bold: index === 2, maxWidth: w - 5 });
@@ -354,15 +376,20 @@ const PlanBook = (() => {
     });
     const numberW = width - fixed;
     doc.setFillColor(C.ink).rect(x, y, numberW, STRIP, 'F');
+    doc.setFillColor(C.gold).rect(x, y, numberW, 0.85, 'F');
     text(doc, 'N°', x + numberW / 2, y + 6, 5.4, { bold: true, color: C.sand, align: 'center', space: 0.6 });
     text(doc, sheet.code, x + numberW / 2, y + 12.6, 11, { bold: true, color: C.white, align: 'center' });
   }
   function sheetFrame(doc, data, sheet) {
     doc.setFillColor(C.paper).rect(0, 0, W, H, 'F');
-    doc.setDrawColor(C.ink).setLineWidth(0.5).rect(M, M, W - 2 * M, H - 2 * M);
+    doc.setDrawColor(C.ink).setLineWidth(0.45).rect(M, M, W - 2 * M, H - 2 * M);
+    doc.setDrawColor(C.sand).setLineWidth(0.16).rect(M + 1.4, M + 1.4, W - 2 * M - 2.8, H - 2 * M - STRIP - 2.8);
+    cropMarks(doc, M, M, W - 2 * M, H - 2 * M, C.sand, 4, 1.4);
     strip(doc, data, sheet);
-    kicker(doc, `${sheet.code} · ${sheet.section}`, M + 8, M + 10);
-    text(doc, sheet.title, M + 8, M + 22, 22, { serif: true, bold: true });
+    kicker(doc, `${sheet.code} · ${sheet.section}`, M + 8, M + 9.8, C.gold);
+    text(doc, sheet.title, M + 8, M + 20.5, 20.5, { serif: true, bold: true });
+    doc.setDrawColor(C.gold).setLineWidth(0.65).line(M + 8, M + 24.4, M + 32, M + 24.4);
+    doc.setDrawColor(C.rule).setLineWidth(0.2).line(M + 34, M + 24.4, W - M - 8, M + 24.4);
   }
   const content = { x: M + 8, y: M + 30, w: W - 2 * M - 16, h: H - 2 * M - STRIP - 38 };
 
@@ -579,7 +606,7 @@ const PlanBook = (() => {
    * `cell` pour la case Échelle du cartouche, `note` pour la ligne de source.
    */
   function printedScale(page, drawnWidthMm) {
-    const declared = Number(String(page.guess?.scale || '').split('/')[1]);
+    const declared = Number(String(page.scale || page.guess?.scale || '').split(/[/:]/)[1]);
     if (!declared || !page.paperMm?.w) return { cell: '', note: '' };
     const ratio = drawnWidthMm / page.paperMm.w;
     if (Math.abs(ratio - 1) < 0.03) return { cell: `1/${declared}`, note: `dessiné et imprimé au 1/${declared}` };
@@ -617,10 +644,11 @@ const PlanBook = (() => {
     sheet.scale = scale.cell;
     sheetFrame(doc, data, sheet);
 
-    // Tirage monté : ombre, feuille blanche, filet d'or, repères de coupe.
+    // Tirage monté : ombre, feuille blanche, passe-partout double filet (discipline + filet lin), repères de coupe.
     doc.setFillColor('#dcd6c9').rect(ix - pad + 1.4, iy - pad + 1.6, w + 2 * pad, h + 2 * pad, 'F');
     doc.setFillColor(C.white).rect(ix - pad, iy - pad, w + 2 * pad, h + 2 * pad, 'F');
-    doc.setDrawColor(tone).setLineWidth(0.3).rect(ix - pad, iy - pad, w + 2 * pad, h + 2 * pad);
+    doc.setDrawColor(tone).setLineWidth(0.35).rect(ix - pad, iy - pad, w + 2 * pad, h + 2 * pad);
+    doc.setDrawColor(C.rule).setLineWidth(0.12).rect(ix - 1.4, iy - 1.4, w + 2.8, h + 2.8);
     doc.addImage(page.data, 'JPEG', ix, iy, w, h);
     cropMarks(doc, ix - pad, iy - pad, w + 2 * pad, h + 2 * pad, tone, 4, 1.2);
 
@@ -633,7 +661,7 @@ const PlanBook = (() => {
     const levelLabel = Number.isInteger(page.level) && typeof SheetClassifier !== 'undefined' ? SheetClassifier.levelName(page.level) : '—';
     const rows = [
       ['Niveau', levelLabel],
-      ['Échelle dessinée', page.guess?.scale ? page.guess.scale : 'non indiquée'],
+      ['Échelle dessinée', page.scale || page.guess?.scale ? (page.scale || page.guess.scale) : 'non indiquée'],
       ['Échelle imprimée', scale.cell || '—'],
       ['Format d’origine', paperFormat(page.paperMm) || '—'],
       ['Source', `${page.name}${page.total > 1 ? ` · p. ${page.page}/${page.total}` : ''}`],
@@ -648,6 +676,24 @@ const PlanBook = (() => {
     });
     doc.setDrawColor(C.rule).line(sx, ry, sx + sw, ry);
     if (scale.note) ry = paragraph(doc, `Plan ${scale.note}. Les cotes inscrites font foi.`, sx, ry + 6, sw, 6.8, 1.4, C.muted, 3) + 2;
+    // Barre d'échelle graphique réelle si l'échelle imprimée 1/N est connue.
+    const printedDen = Number(String(scale.cell || '').split(/[/:]/)[1]);
+    if (Number.isFinite(printedDen) && printedDen > 0) {
+      const kScale = 1000 / printedDen;
+      const barM = [1, 2, 5, 10, 20].filter(m => m * kScale <= sw - 18).at(-1) || 1;
+      const barW = barM * kScale;
+      if (barW >= 8 && barW <= sw) {
+        const by = ry + 6;
+        for (let b = 0; b < 5; b++) {
+          doc.setFillColor(b % 2 ? C.white : C.ink).rect(sx + b * barW / 5, by, barW / 5, 1.4, 'F');
+        }
+        doc.setDrawColor(C.ink).setLineWidth(0.2).rect(sx, by, barW, 1.4);
+        text(doc, '0', sx, by + 4.4, 5.6, { color: C.muted });
+        text(doc, `${barM} m`, sx + barW, by + 4.4, 5.6, { align: 'center', color: C.muted });
+        text(doc, scale.cell, sx + sw, by + 4.2, 6, { bold: true, align: 'right', color: tone });
+        ry = by + 9;
+      }
+    }
     // Nord, pour les plans d'implantation et de niveau.
     if (['masse', 'situation', 'distribution', 'coffrage', 'fondation', 'toiture'].includes(page.type)) {
       northArrow(doc, sx + sw - 6, ry + 9, 4.2, C.ink, Number(data.config?.northDegrees) || 0);
@@ -656,7 +702,11 @@ const PlanBook = (() => {
     }
     // Surfaces de la maquette au même niveau : la planche et le modèle se contrôlent mutuellement.
     const rooms = page.type === 'distribution' && Number.isInteger(page.level) ? data.rooms.filter(r => (Number(r.level) || 0) === page.level) : [];
-    if (rooms.length && ry < content.y + content.h - 40) roomTable(doc, rooms.slice(0, Math.floor((content.y + content.h - ry - 20) / 6.2)), sx, ry + 4, sw);
+    if (rooms.length && ry < content.y + content.h - 46) roomTable(doc, rooms.slice(0, Math.floor((content.y + content.h - ry - 28) / 6.2)), sx, ry + 4, sw);
+    // Mentions d'authenticité en pied de colonne.
+    const footY = content.y + content.h - 4;
+    doc.setDrawColor(tone).setLineWidth(0.2).line(sx, footY - 4.2, sx + 14, footY - 4.2);
+    text(doc, 'PLANCHE ORIGINALE · INTÉGRITÉ GRAPHIQUE PRÉSERVÉE', sx, footY, 5.1, { bold: true, color: C.muted, space: 0.4, maxWidth: sw });
   }
 
   /**
@@ -726,6 +776,8 @@ const PlanBook = (() => {
     { id: 'axo', label: 'Axonométrie', hint: 'Vue d’ensemble de la maquette' },
     { id: 'cut', label: 'Écorché — vue en coupe', hint: 'Coupe horizontale, mobilier visible' },
     { id: 'plans', label: 'Plans cotés à l’échelle', hint: 'Une planche par niveau' },
+    { id: 'sections2d', label: 'Coupes 2D (maquette)', hint: 'Coupes A–A et B–B vectorielles exactes (si aucune coupe architecte)' },
+    { id: 'roof2d', label: 'Plan de toiture (maquette)', hint: 'Tracé vectoriel exact des pentes et débords (si aucun plan de toiture)' },
     { id: 'views', label: 'Ambiances', hint: 'Les images ajoutées au cahier (4 au plus)' },
     { id: 'spec', label: 'Descriptif sommaire', hint: 'Pièces, surfaces, revêtements' },
     { id: 'estimate', label: 'Estimation indicative (FCFA)', hint: 'Fourchette et métré', off: true }
@@ -741,10 +793,19 @@ const PlanBook = (() => {
     const ID = identityModule();
     const cabinet = explicitCabinet !== undefined ? explicitCabinet : (ID ? await ID.loadCabinetProfile() : null);
     const bookData = cabinet ? { ...data, cabinet } : data;
-    const hs = studio.hs;
+    const hs = studio?.hs || null;
     const on = id => (id === 'estimate' && includeEstimate !== undefined ? includeEstimate : sections[id] ?? !SECTIONS.find(s => s.id === id)?.off);
     // Planches de l'architecte : déjà lues et vérifiées dans la fenêtre de composition, sinon lues ici.
-    const annexes = (prepared || await readSheets(files, onStatus)).filter(page => page.include !== false);
+    const rawAnnexes = (prepared || await readSheets(files, onStatus)).filter(page => page.include !== false);
+    const annexes = await Promise.all(rawAnnexes.map(async page => {
+      if (typeof page.data === 'string' && page.data.startsWith('data:image/jpeg')) return page;
+      const src = page.data || page.imageUrl;
+      if (!src) return page;
+      const img = await loadImage(src);
+      const width = page.width || img.naturalWidth || img.width;
+      const height = page.height || img.naturalHeight || img.height;
+      return { ...page, width, height, data: jpeg(img, width, height, { background: C.white, quality: 0.9 }) };
+    }));
     const TYPES = typeof SheetClassifier !== 'undefined' ? SheetClassifier.TYPES : {};
     const DISCIPLINES = typeof SheetClassifier !== 'undefined' ? SheetClassifier.DISCIPLINES : {};
     const architect = annexes.flatMap(page => {
@@ -783,6 +844,18 @@ const PlanBook = (() => {
       ? levels.filter(level => !replacedLevels.has(level)).map(level => ({ id: 'plan', level, title: `Plan - ${levelName(level)}`, section: 'Plans · tirés de la maquette', order: 30 }))
       : [];
     const plans = [...generatedPlans, ...architect.filter(s => s.type === 'distribution')].sort((a, b) => (a.level ?? 99) - (b.level ?? 99));
+    const hasTechMod = typeof TechnicalDrawings !== 'undefined';
+    const hasArchitectSection = architect.some(s => s.type === 'coupe') || eligibleEditionSheets.some(s => /\bcoupe\b/i.test(s.title || ''));
+    const hasArchitectRoof = architect.some(s => s.type === 'toiture') || eligibleEditionSheets.some(s => /\btoiture\b/i.test(s.title || ''));
+    const generatedSections2d = hasTechMod && on('sections2d') && !hasArchitectSection && levels.length
+      ? [
+          { id: 'section2d', axis: 'x', title: 'Coupe longitudinale A–A', section: 'Coupes · tirées de la maquette' },
+          { id: 'section2d', axis: 'z', title: 'Coupe transversale B–B', section: 'Coupes · tirées de la maquette' }
+        ]
+      : [];
+    const generatedRoof2d = hasTechMod && on('roof2d') && !hasArchitectRoof && levels.length
+      ? [{ id: 'roof2d', title: 'Plan de toiture', section: 'Toiture · tiré de la maquette' }]
+      : [];
     // Ordre d'un dossier d'architecte : situation et masse, plans, façades et coupes, toiture, volumétrie,
     // images et notice, puis structure (BET) et lots techniques, enfin les documents non identifiés.
     const sheets = [{ id: 'cover', title: 'Couverture', section: 'Présentation' },
@@ -791,9 +864,11 @@ const PlanBook = (() => {
       ...(on('plans') && eligibleEditionSheets.length ? eligibleEditionSheets : []),
       ...plans,
       ...byOrder(31, 100),
-      ...(on('axo') ? [{ id: 'axo', title: 'Axonométrie', section: 'Volumétrie' }] : []),
-      ...(on('cut') ? [{ id: 'cut', title: 'Écorché — vue en coupe', section: 'Volumétrie' }] : []),
-      ...(on('views') ? [{ id: 'views', title: views.length ? 'Ambiances' : 'Vues de la maquette', section: 'Images' }] : []),
+      ...generatedSections2d,
+      ...generatedRoof2d,
+      ...(on('axo') && hs ? [{ id: 'axo', title: 'Axonométrie', section: 'Volumétrie' }] : []),
+      ...(on('cut') && hs ? [{ id: 'cut', title: 'Écorché — vue en coupe', section: 'Volumétrie' }] : []),
+      ...(on('views') && (views.length || hs) ? [{ id: 'views', title: views.length ? 'Ambiances' : 'Vues de la maquette', section: 'Images' }] : []),
       ...(on('spec') ? [{ id: 'spec', title: 'Descriptif sommaire', section: 'Notice' }] : []),
       ...(estimate ? [{ id: 'estimate', title: 'Estimation indicative', section: 'Économie' }] : []),
       ...byOrder(100, 900),
@@ -801,12 +876,15 @@ const PlanBook = (() => {
     sheets.forEach((sheet, i) => { sheet.code = i ? `PL-${String(i).padStart(2, '0')}` : 'PL-00'; });
     const planBox = { x: content.x, y: content.y, w: content.w - 92, h: content.h };
     sheets.filter(s => s.id === 'plan').forEach(s => { s.denominator = planScale(levelBounds(data, s.level), planBox); s.scale = `1:${s.denominator}`; });
+    const topBounds = levelBounds(data, levels[levels.length - 1] || 0);
+    const defaultTechScale = topBounds.valid ? planScale(topBounds, planBox) : 100;
+    sheets.filter(s => s.id === 'section2d' || s.id === 'roof2d').forEach(s => { s.denominator = defaultTechScale; s.scale = `1:${defaultTechScale}`; });
 
     const doc = new JsPDF({ unit: 'mm', format: 'a3', orientation: 'landscape', compress: true });
     const title = nameForDisplay(data.meta?.name || 'Projet');
     doc.setProperties({ title: `${title} — Cahier de plans`, subject: 'Cahier de plans et présentation du projet', creator: 'ArchiCam Studio' });
 
-    // Couverture : meilleure vue éligible (façade/cover d’abord), sinon capture éligible, sinon axonométrie 3D.
+    // Couverture : meilleure vue éligible (façade/cover d’abord), sinon capture éligible, sinon axonométrie 3D (si scène active).
     const heroW = 2600, heroH = Math.round(heroW * H / W); // image d'ouverture pleine page
     const pickedCover = typeof DeliverableGate !== 'undefined' ? DeliverableGate.pickCover(media) : null;
     const heroView = views[0] || (pickedCover
@@ -814,7 +892,9 @@ const PlanBook = (() => {
           ...(pickedCover.kind === 'render' ? { sourceKind: 'render3d' } : {}) }
       : null);
     const heroSource = heroView?.source || null;
-    const hero = heroSource ? jpeg(await loadImage(heroSource), heroW, heroH) : render(hs, axonometric(data, hs), heroW, heroH);
+    const hero = heroSource
+      ? jpeg(await loadImage(heroSource), heroW, heroH)
+      : (hs ? render(hs, axonometric(data, hs), heroW, heroH) : null);
     // Plan de distribution réel du projet pour la couverture : planche de l'architecte si elle existe.
     const coverPlan = await coverPlanSource(data, annexes, media.images || []);
 
@@ -841,21 +921,45 @@ const PlanBook = (() => {
       } else if (sheet.id === 'art') {
         sheetFrame(doc, bookData, sheet);
         const image = await loadImage(sheet.source);
-        const ratio = Math.min(content.w / image.naturalWidth, content.h / image.naturalHeight);
+        const pad = 4;
+        const ratio = Math.min((content.w - 2 * pad) / image.naturalWidth, (content.h - 2 * pad) / image.naturalHeight);
         const w = image.naturalWidth * ratio, h = image.naturalHeight * ratio;
-        doc.setFillColor(C.paper).rect(content.x + (content.w - w) / 2, content.y + (content.h - h) / 2, w, h, 'F');
-        doc.addImage(jpeg(image, image.naturalWidth, image.naturalHeight, { quality: 0.98, background: C.paper }), 'JPEG', content.x + (content.w - w) / 2, content.y + (content.h - h) / 2, w, h);
+        const ix = content.x + (content.w - w) / 2, iy = content.y + (content.h - h) / 2;
+        doc.setFillColor('#dcd6c9').rect(ix - pad + 1.4, iy - pad + 1.6, w + 2 * pad, h + 2 * pad, 'F');
+        doc.setFillColor(C.white).rect(ix - pad, iy - pad, w + 2 * pad, h + 2 * pad, 'F');
+        doc.setDrawColor(C.gold).setLineWidth(0.32).rect(ix - pad, iy - pad, w + 2 * pad, h + 2 * pad);
+        doc.addImage(jpeg(image, image.naturalWidth, image.naturalHeight, { quality: 0.96, background: C.white }), 'JPEG', ix, iy, w, h);
+        cropMarks(doc, ix - pad, iy - pad, w + 2 * pad, h + 2 * pad, C.gold, 4, 1.2);
       } else if (sheet.id === 'plan') {
         sheetFrame(doc, bookData, sheet);
         drawPlan(doc, data, sheet.level, planBox, sheet.denominator);
         roomTable(doc, data.rooms.filter(r => (Number(r.level) || 0) === sheet.level), planBox.x + planBox.w + 12, content.y + 2, 80);
+      } else if (sheet.id === 'section2d' && typeof TechnicalDrawings !== 'undefined') {
+        sheetFrame(doc, bookData, sheet);
+        const sec = TechnicalDrawings.drawSectionPDF(doc, data, planBox, sheet.denominator, { axis: sheet.axis, label: sheet.title });
+        sideNote(doc, planBox.x + planBox.w + 10, content.y, 82, sheet.title,
+          'Coupe verticale vectorielle générée directement depuis la géométrie exacte de la maquette : murs coupés, dalles, niveaux, ouvertures et toiture.',
+          [['Plan de coupe', `${sec.axis === 'x' ? 'z' : 'x'} = ${fr2.format(sec.cutPos || 0)} m`],
+            ['Hauteur sous plafond', `${fr2.format(sec.wallH || 0)} m`],
+            ['Murs coupés', String(sec.cutWalls?.length || 0)],
+            ['Pièces traversées', String(sec.cutRooms?.length || 0)]]);
+      } else if (sheet.id === 'roof2d' && typeof TechnicalDrawings !== 'undefined') {
+        sheetFrame(doc, bookData, sheet);
+        const roof = TechnicalDrawings.drawRoofPlanPDF(doc, data, planBox, sheet.denominator);
+        sideNote(doc, planBox.x + planBox.w + 10, content.y, 82, 'Plan de toiture',
+          'Tracé vectoriel généré directement depuis l’emprise réelle de la maquette : débords, faîtage, arêtiers et pentes.',
+          [['Type', roof.typeLabel || 'Toiture'],
+            ['Pente', `${fr.format(roof.slopePercent || 0)} % (${roof.pitchDeg || 0}°)`],
+            ['Égout / Faîtage', `+${fr2.format(roof.eaveY || 0)} m / +${fr2.format(roof.ridgeY || 0)} m`],
+            ['Débord', `${fr2.format(roof.overhang || 0)} m`],
+            ['Surface couverture', `${fr.format(roof.roofArea || 0)} m²`]]);
       } else if (sheet.id === 'views') await viewsSheet(doc, bookData, sheet, views, studio);
       else if (sheet.id === 'spec') specification(doc, bookData, sheet);
       else if (sheet.id === 'estimate') estimateSheet(doc, bookData, sheet, estimate);
       else if (sheet.id === 'annex') architectSheet(doc, bookData, sheet);
       else if (sheet.id === 'diptych') await diptychSheet(doc, bookData, sheet);
     }
-    const slug = (window.ACTIVE_PROJECT_SLUG || data.meta?.slug || 'projet').replace(/[^a-z0-9-]/gi, '-');
+    const slug = (data.meta?.slug || window.ACTIVE_PROJECT_SLUG || 'projet').replace(/[^a-z0-9-]/gi, '-');
     doc.save(`${slug}-cahier-de-plans.pdf`);
     const missing = ID ? ID.missingFields(bookData, { cabinet }) : { missing: [], message: '' };
     return { pages: sheets.length, annexes: annexes.length, excluded: excluded.map(e => ({ label: e.view.label, reason: e.reason })), missingFields: missing };
@@ -892,10 +996,12 @@ const PlanBook = (() => {
     text(doc, sub, 14, 27, 8.2, { bold: true, color: C.muted, space: 0.5 });
 
     // Cartouche officiel d'architecture (Haut Droite)
+    const brandName = String(i.meta?.brand || 'ARCHICAM STUDIO').toUpperCase();
     const cw = 98, ch = 23, cx = W - 14 - cw, cy = 11;
     doc.setFillColor(C.white).rect(cx, cy, cw, ch, 'F');
+    doc.setFillColor(C.gold).rect(cx, cy, cw, 0.8, 'F');
     doc.setDrawColor(C.ink).setLineWidth(0.35).rect(cx, cy, cw, ch);
-    text(doc, 'ARCHICAM STUDIO', cx + cw / 2, cy + 5.5, 8.5, { align: 'center', bold: true, color: C.gold, space: 1.4 });
+    text(doc, brandName, cx + cw / 2, cy + 5.6, brandName.length > 22 ? 7.2 : 8.5, { align: 'center', bold: true, color: C.gold, space: 1.2, maxWidth: cw - 8 });
     doc.setDrawColor(C.rule).setLineWidth(0.2).line(cx, cy + 8, cx + cw, cy + 8);
     text(doc, 'PLANCHE DE SYNTHÈSE DU PROJET', cx + cw / 2, cy + 12.8, 7.2, { align: 'center', bold: true, color: C.ink, space: 0.4 });
     doc.setDrawColor(C.rule).setLineWidth(0.2).line(cx, cy + 15.5, cx + cw, cy + 15.5);
@@ -905,38 +1011,44 @@ const PlanBook = (() => {
 
     // Boussole Nord
     const nx = cx - 12, ny = cy + ch / 2;
-    doc.setDrawColor(C.ink).setLineWidth(0.25).circle(nx, ny, 5);
-    doc.setFillColor(C.ink).triangle(nx, ny - 4.5, nx - 1.5, ny + 1.5, nx + 1.5, ny + 1.5, 'F');
-    text(doc, 'N', nx, ny - 6.5, 6, { bold: true, align: 'center' });
+    northArrow(doc, nx, ny, 5, C.ink, Number(data.config?.northDegrees) || 0);
 
-    // Résolution intelligente des vues
-    const findView = (...keys) => {
+    // Résolution intelligente et générique des vues (zéro case vide sur un nouveau projet)
+    const usedSrc = new Set();
+    const pickView = (...keys) => {
       for (const k of keys) {
-        const v = views.find(x => x.id?.includes(k) || x.source?.includes(k) || x.label?.toLowerCase().includes(k.toLowerCase()));
-        if (v?.source) return v.source;
+        const v = views.find(x => x.source && !usedSrc.has(x.source) && (x.id?.includes(k) || x.source?.includes(k) || x.label?.toLowerCase().includes(k.toLowerCase())));
+        if (v) { usedSrc.add(v.source); return v; }
       }
+      return null;
+    };
+    const nextAnyView = () => {
+      const v = views.find(x => x.source && !usedSrc.has(x.source) && x.category !== 'plan');
+      if (v) { usedSrc.add(v.source); return v; }
       return null;
     };
 
     const drawBox = async (title, x, y, w, h, src, fallbackFn) => {
       kicker(doc, title, x, y - 2);
+      doc.setFillColor('#dcd6c9').rect(x + 0.9, y + 1.0, w, h, 'F');
       doc.setFillColor(C.white).rect(x, y, w, h, 'F');
-      doc.setDrawColor(C.sand).setLineWidth(0.25).rect(x, y, w, h);
+      doc.setDrawColor(C.sand).setLineWidth(0.28).rect(x, y, w, h);
       if (src) {
         try {
           const img = await loadImage(src);
           doc.addImage(jpeg(img, Math.round(w * 10), Math.round(h * 10)), 'JPEG', x, y, w, h);
+          doc.setDrawColor(C.sand).setLineWidth(0.24).rect(x, y, w, h);
           return;
         } catch {}
       }
-      if (fallbackFn) fallbackFn(x, y, w, h);
+      if (fallbackFn) fallbackFn(x + 2, y + 2, w - 4, h - 4);
     };
 
     // --- Colonne GAUCHE (Plan 2D + Tableau + Nuancier) ---
-    // Plan 2D d'aménagement (X = 14, Y = 38, W = 158, H = 145)
-    const planSrc = findView('photor-plan-2d', 'plan-2d', 'plan') || data.config?.planImage?.url;
+    const planSrc = pickView('photor-plan-2d', 'plan-2d', 'plan')?.source || data.config?.planImage?.url;
     await drawBox("PLAN D'AMÉNAGEMENT · REZ-DE-CHAUSSÉE", 14, 38, 158, 145, planSrc, (x, y, w, h) => {
-      drawPlan(doc, data, 0, { x, y, w, h }, 100);
+      const b0 = levelBounds(data, 0);
+      if (b0.valid) drawPlan(doc, data, 0, { x, y, w, h }, planScale(b0, { w, h }));
     });
 
     // Tableau des surfaces (X = 14, Y = 194, W = 86, H = 84)
@@ -964,11 +1076,11 @@ const PlanBook = (() => {
     // Matériauthèque & Finitions (X = 108, Y = 194, W = 64, H = 84)
     kicker(doc, 'MATÉRIAUTHÈQUE & FINITIONS', 108, 192);
     const swatches = [
-      { label: 'Enduit à la chaux vert sauge', color: '#7D8C7C', sub: 'Murs extérieurs' },
-      { label: 'Pierre calcaire flammée', color: '#C5BCAC', sub: 'Piliers & perron' },
+      { label: 'Enduit minéral façade', color: '#8A9688', sub: 'Murs extérieurs' },
+      { label: 'Pierre naturelle', color: '#C5BCAC', sub: 'Piliers & soubassement' },
       { label: 'Menuiseries alu noir mat', color: '#272B2D', sub: 'Baies & vitrages' },
-      { label: 'Parquet chêne massif', color: '#C49F6E', sub: 'Séjour & chambres' },
-      { label: 'Toiture tuiles sombres / zinc', color: '#3A4247', sub: 'Couverture' }
+      { label: 'Revêtement sols intérieurs', color: '#C49F6E', sub: 'Séjour & chambres' },
+      { label: 'Couverture & charpente', color: '#3A4247', sub: 'Toiture & débords' }
     ];
     swatches.forEach((sw, idx) => {
       const sy = 196 + idx * 15.5;
@@ -979,27 +1091,50 @@ const PlanBook = (() => {
     });
 
     // --- Colonne CENTRALE (X = 180, W = 114) ---
-    const extSrc = findView('photor-perspective-01', 'perspective-01', 'facade') || views[0]?.source;
-    await drawBox("MAQUETTE GÉNÉRALE · PERSPECTIVE D'ACCUEIL", 180, 38, 114, 73, extSrc, (x, y, w, h) => {
+    const extView = pickView('photor-perspective-01', 'perspective-01', 'facade') || nextAnyView();
+    const extSrc = extView?.source || null;
+    await drawBox(extView?.label ? roomName(extView.label).toUpperCase() : "VOLUMÉTRIE · PERSPECTIVE D'ACCUEIL", 180, 38, 114, 73, extSrc, (x, y, w, h) => {
       if (hs) doc.addImage(render(hs, axonometric(data, hs), 1200, 770), 'JPEG', x, y, w, h);
+      else if (typeof TechnicalDrawings !== 'undefined') TechnicalDrawings.drawRoofPlanPDF(doc, data, { x, y, w, h }, 150);
     });
 
-    const sejourSrc = findView('photor-sejour-veranda', 'sejour', 'salon');
-    await drawBox("SÉJOUR CATHÉDRALE & VÉRANDA", 180, 122, 114, 73, sejourSrc);
+    const v2 = pickView('photor-sejour-veranda', 'sejour', 'salon') || nextAnyView();
+    const sejourSrc = v2?.source || null;
+    await drawBox(v2?.label ? roomName(v2.label).toUpperCase() : 'COUPE LONGITUDINALE A–A (MAQUETTE)', 180, 122, 114, 73, sejourSrc, (x, y, w, h) => {
+      if (typeof TechnicalDrawings !== 'undefined') TechnicalDrawings.drawSectionPDF(doc, data, { x, y, w, h }, 150, { axis: 'x', label: 'Coupe A–A' });
+    });
 
-    const verandaSrc = findView('photor-perspective-02', 'perspective-02', 'terrasse');
-    await drawBox("VÉRANDA ARRIÈRE & JARDIN PAYSAGER", 180, 206, 114, 73, verandaSrc);
+    const v3 = pickView('photor-perspective-02', 'perspective-02', 'terrasse') || nextAnyView();
+    const verandaSrc = v3?.source || null;
+    await drawBox(v3?.label ? roomName(v3.label).toUpperCase() : 'PLAN DE TOITURE (MAQUETTE)', 180, 206, 114, 73, verandaSrc, (x, y, w, h) => {
+      if (typeof TechnicalDrawings !== 'undefined') TechnicalDrawings.drawRoofPlanPDF(doc, data, { x, y, w, h }, 150);
+    });
 
     // --- Colonne DROITE (X = 302, W = 104) ---
-    const cuisineSrc = findView('photor-cuisine', 'cuisine');
-    await drawBox("CUISINE CONTEMPORAINE", 302, 38, 104, 62, cuisineSrc);
+    const v4 = pickView('photor-cuisine', 'cuisine') || nextAnyView();
+    const cuisineSrc = v4?.source || null;
+    await drawBox(v4?.label ? roomName(v4.label).toUpperCase() : 'COUPE TRANSVERSALE B–B', 302, 38, 104, 62, cuisineSrc, (x, y, w, h) => {
+      if (typeof TechnicalDrawings !== 'undefined') TechnicalDrawings.drawSectionPDF(doc, data, { x, y, w, h }, 150, { axis: 'z', label: 'Coupe B–B' });
+    });
 
-    const suiteSrc = findView('photor-suite-parentale', 'suite', 'chambre');
-    await drawBox("SUITE PARENTALE & BALCON", 302, 111, 104, 62, suiteSrc);
+    const v5 = pickView('photor-suite-parentale', 'suite', 'chambre') || nextAnyView();
+    const suiteSrc = v5?.source || null;
+    await drawBox(v5?.label ? roomName(v5.label).toUpperCase() : (levels.length > 1 ? 'PLAN ÉTAGE 1 (MAQUETTE)' : 'SCHÉMA VOLUMÉTRIQUE'), 302, 111, 104, 62, suiteSrc, (x, y, w, h) => {
+      if (levels.length > 1) {
+        const b1 = levelBounds(data, levels[1]);
+        if (b1.valid) drawPlan(doc, data, levels[1], { x, y, w, h }, planScale(b1, { w, h }));
+      } else if (hs) {
+        doc.addImage(render(hs, axonometric(data, hs, Math.PI / 2), 1040, 620), 'JPEG', x, y, w, h);
+      } else {
+        planEmblem(doc, data, 0, { x: x + 6, y: y + 6, w: w - 12, h: h - 12 }, C.ink, { wall: 0.55, partition: 0.25, roomColor: C.muted });
+      }
+    });
 
-    const coupeSrc = findView('photor-coupe-bb', 'coupe');
+    const coupeView = pickView('photor-coupe-bb', 'coupe');
+    const coupeSrc = coupeView?.source || null;
     await drawBox("COUPE PERSPECTIVE 3D · ÉCORCHÉ", 302, 184, 104, 95, coupeSrc, (x, y, w, h) => {
       if (hs) doc.addImage(render(hs, axonometric(data, hs, -Math.PI / 2), 1200, 1000, { section: true }), 'JPEG', x, y, w, h);
+      else if (typeof TechnicalDrawings !== 'undefined') TechnicalDrawings.drawSectionPDF(doc, data, { x, y, w, h }, 125, { axis: 'x', label: 'Coupe A–A' });
     });
 
     // Bas de page éditorial : mention véridique selon les sources réellement affichées sur la planche.
@@ -1017,8 +1152,8 @@ const PlanBook = (() => {
       boardNote = viewSourceCaption(null, data, { fallbackKind: 'unknown', plural: true });
     }
     doc.setDrawColor(C.rule).setLineWidth(0.2).line(14, 287, W - 14, 287);
-    text(doc, 'ARCHICAM STUDIO · PLANCHE DE SYNTHÈSE ARCHITECTURALE', 14, 291.5, 6.4, { bold: true, color: C.ink, space: 0.4 });
-    text(doc, `Édition Monographe Privée · ${boardNote}`, W - 14, 291.5, 6.2, { align: 'right', color: C.muted });
+    text(doc, `${brandName} · PLANCHE DE SYNTHÈSE ARCHITECTURALE`, 14, 291.5, 6.4, { bold: true, color: C.ink, space: 0.4 });
+    text(doc, `Édition Monographe · ${boardNote}`, W - 14, 291.5, 6.2, { align: 'right', color: C.muted });
   }
 
   async function exportSynthesisBoard({ data, studio, screen = null, onStatus = () => {} }) {
@@ -1078,16 +1213,18 @@ const PlanBook = (() => {
     const coverJpeg = jpeg(images[0].img, 2600, Math.round(2600 * PH / PW));
     drawCatalogCover(doc, data, coverJpeg, images[0].view, images.length, { cabinet });
 
-    // Une planche par image.
+    // Une planche par image avec descriptif chaleureux de la pièce.
     images.forEach(({ view, img }, n) => {
       doc.addPage('a4', 'landscape');
       doc.setFillColor(C.paper).rect(0, 0, PW, PH, 'F');
-      const iw = PW - 20, ih = PH - 40;
+      const iw = PW - 20, ih = PH - 42;
       doc.addImage(jpeg(img, 2400, Math.round(2400 * ih / iw)), 'JPEG', 10, 10, iw, ih);
-      text(doc, String(n + 1).padStart(2, '0'), 10, PH - 17, 18, { serif: true, bold: true, color: C.gold });
-      text(doc, roomName(view.label), 26, PH - 19.5, 13, { serif: true, bold: true, maxWidth: 150 });
-      if (view.notes) paragraph(doc, view.notes, 26, PH - 13.5, 170, 7.6, 1.4, C.muted, 2);
-      text(doc, `${title} · ${view.kind || 'Vue'}`, PW - 10, PH - 19.5, 7.4, { color: C.muted, align: 'right' });
+      doc.setDrawColor(C.gold).setLineWidth(0.25).rect(10, 10, iw, ih);
+      text(doc, String(n + 1).padStart(2, '0'), 10, PH - 18, 18, { serif: true, bold: true, color: C.gold });
+      text(doc, roomName(view.label), 26, PH - 20.5, 13, { serif: true, bold: true, maxWidth: 165 });
+      const roomCaption = warmCaptionForView(view, data);
+      if (roomCaption) paragraph(doc, roomCaption, 26, PH - 14.2, 188, 7.6, 1.38, C.muted, 2);
+      text(doc, `${title} · ${view.kind || 'Vue'}`, PW - 10, PH - 20.5, 7.4, { color: C.muted, align: 'right' });
       text(doc, `${n + 2} / ${images.length + 2}`, PW - 10, PH - 13.5, 7.4, { bold: true, align: 'right' });
     });
 
@@ -1144,6 +1281,7 @@ const PlanBook = (() => {
     doc.setFillColor('#0f1411'); alpha(doc, 0.35); doc.rect(card.x + 1.6, card.y + 1.8, card.w, card.h, 'F'); alpha(doc, 1);
     doc.setFillColor(C.paper).rect(card.x, card.y, card.w, card.h, 'F');
     if (WG) WG.drawPdf(doc, { x: card.x, y: card.y, w: card.w, h: card.h, color: '#e7dfcf', lineWidth: 0.14, seed: 5, knots: 1, spacing: 5.5 });
+    doc.setDrawColor(C.sand).setLineWidth(0.18).rect(card.x + 2.4, card.y + 2.4, card.w - 4.8, card.h - 4.8);
     doc.setFillColor(C.gold).rect(card.x, card.y, card.w, 1.1, 'F');
     const cx = card.x + 9;
     const catKicker = ['CATALOGUE DES ESPACES INTÉRIEURS', i.revision && `INDICE ${i.revision}`].filter(Boolean).join(' · ');
@@ -1183,17 +1321,23 @@ const PlanBook = (() => {
     const ID = identityModule();
     const panelX = 262, x = 280, w = W - x - 16;
     doc.setFillColor(C.dark).rect(0, 0, W, H, 'F');
-    doc.addImage(hero, 'JPEG', 0, 0, W, H);
+    if (hero) doc.addImage(hero, 'JPEG', 0, 0, W, H);
     // Voile : l'image se fond dans le panneau de droite, et s'assombrit légèrement en pied.
-    veil(doc, 150, 0, panelX - 150, H, C.dark, 0, 0.9);
-    doc.setFillColor(C.dark); alpha(doc, 0.9); doc.rect(panelX, 0, W - panelX, H, 'F'); alpha(doc, 1);
-    veil(doc, 0, H - 70, panelX, 70, C.dark, 0, 0.55, { vertical: true });
+    if (hero) {
+      veil(doc, 150, 0, panelX - 150, H, C.dark, 0, 0.9);
+      doc.setFillColor(C.dark); alpha(doc, 0.9); doc.rect(panelX, 0, W - panelX, H, 'F'); alpha(doc, 1);
+      veil(doc, 0, H - 70, panelX, 70, C.dark, 0, 0.55, { vertical: true });
+    } else if (WG) {
+      WG.drawPdf(doc, { x: 0, y: 0, w: panelX, h: H, color: '#263129', lineWidth: 0.16, seed: 7, knots: 1, spacing: 6.4 });
+    }
     if (WG) WG.drawPdf(doc, { x: panelX, y: 0, w: W - panelX, h: H, color: '#2c382f', lineWidth: 0.2, seed: 11, knots: 2, spacing: 5.4 });
+    doc.setDrawColor(C.gold).setLineWidth(0.18).line(panelX, 10, panelX, H - 10);
+    doc.setDrawColor('#465448').setLineWidth(0.15).rect(panelX + 6, 12, W - panelX - 18, H - 24);
     cropMarks(doc, 10, 10, W - 20, H - 20, C.gold);
 
     // Tranche : la signature court le long du bord gauche, comme le dos d'un portfolio.
     doc.setFont('helvetica', 'bold').setFontSize(6.2).setTextColor(C.sand);
-    const spine = ['ARCHICAM STUDIO', 'CAHIER DE PLANS', i.project.toUpperCase(), i.year].filter(Boolean).join('   ·   ');
+    const spine = [(i.meta?.brand || 'ARCHICAM STUDIO').toUpperCase(), 'CAHIER DE PLANS', i.project.toUpperCase(), i.year].filter(Boolean).join('   ·   ');
     doc.text(spine, 6.2, H - 22, { angle: 90, charSpace: 1.1 });
 
     // Emblème du plan : le rez-de-chaussée en filets d'or, sur un cartel translucide.
@@ -1227,7 +1371,8 @@ const PlanBook = (() => {
     text(doc, (i.meta?.brand || 'ARCHICAM STUDIO').toUpperCase(), x, 24, 9.5, { bold: true, color: C.gold, space: 1.6 });
     text(doc, 'CAHIER DE PLANS', x + w, 24, 6.8, { bold: true, color: C.sand, align: 'right', space: 1.2 });
     doc.setDrawColor(C.sand).setLineWidth(0.3).line(x, 28.5, x + w, 28.5);
-    const coverKicker = [i.phase, i.revision && `indice ${i.revision}`].filter(Boolean).join(' · ') || 'Cahier de plans';
+    const annexCount = sheets.filter(s => s.id === 'annex').length;
+    const coverKicker = [i.phase, i.revision && `indice ${i.revision}`, `${Math.max(1, sheets.length - 1)} planches${annexCount ? ` · ${annexCount} annexe${annexCount > 1 ? 's' : ''} architecte` : ''}`].filter(Boolean).join(' · ') || 'Cahier de plans';
     kicker(doc, coverKicker, x, 50, C.sand);
 
     // Titre : grand, serif, sur deux ou trois lignes.
@@ -1292,19 +1437,25 @@ const PlanBook = (() => {
         try { shots.push({ label: view.label, kind: view.kind, image: await loadImage(view.source) }); } catch { /* vue illisible ignorée */ }
       }
     }
-    if (!shots.length) {
+    if (!shots.length && studio && typeof studio.capture === 'function') {
       const authored = (data.renderShots || []).filter(s => !s.night).slice(0, 4);
       shots = authored.map(shot => ({ label: shot.label || 'Vue', kind: 'Capture de la maquette', capture: shot }));
     }
-    const gap = 6, cols = shots.length > 1 ? 2 : 1, rowsCount = Math.ceil(shots.length / cols) || 1;
-    const cw = (content.w - gap * (cols - 1)) / cols, ch = (content.h - gap * (rowsCount - 1)) / rowsCount - 7;
+    const gap = 8, cols = shots.length > 1 ? 2 : 1, rowsCount = Math.ceil(shots.length / cols) || 1;
+    const captionH = 12;
+    const cw = (content.w - gap * (cols - 1)) / cols, ch = (content.h - gap * (rowsCount - 1)) / rowsCount - captionH;
     shots.forEach((shot, n) => {
-      const x = content.x + (n % cols) * (cw + gap), y = content.y + Math.floor(n / cols) * (ch + 7 + gap);
+      const x = content.x + (n % cols) * (cw + gap), y = content.y + Math.floor(n / cols) * (ch + captionH + gap);
       const px = 1800, py = Math.round(px * ch / cw);
       const dataUrl = shot.image ? jpeg(shot.image, px, py) : studio.capture(shot.capture, px, py, 1, { clean: true });
+      doc.setFillColor('#dcd6c9').rect(x + 1.0, y + 1.2, cw, ch, 'F');
       doc.addImage(dataUrl, 'JPEG', x, y, cw, ch);
-      text(doc, `${String(n + 1).padStart(2, '0')}  ${roomName(shot.label)}`, x, y + ch + 5, 8.4, { bold: true, maxWidth: cw - 40 });
-      text(doc, shot.kind || '', x + cw, y + ch + 5, 7, { color: C.muted, align: 'right' });
+      doc.setDrawColor(C.gold).setLineWidth(0.28).rect(x, y, cw, ch);
+      text(doc, String(n + 1).padStart(2, '0'), x, y + ch + 4.8, 9, { serif: true, bold: true, color: C.gold });
+      text(doc, roomName(shot.label), x + 8, y + ch + 4.8, 8.6, { serif: true, bold: true, maxWidth: cw - 48 });
+      text(doc, shot.kind || '', x + cw, y + ch + 4.8, 6.8, { color: C.muted, align: 'right' });
+      const warm = warmCaptionForView(shot, data);
+      if (warm) text(doc, warm, x + 8, y + ch + 9.2, 6.6, { color: C.muted, maxWidth: cw - 10 });
     });
     if (!shots.length) text(doc, 'Aucune vue disponible : générez des rendus depuis la galerie de la visite.', content.x, content.y + 10, 10, { color: C.muted });
   }
@@ -1318,14 +1469,16 @@ const PlanBook = (() => {
     doc.setDrawColor(C.ink).setLineWidth(0.4).line(x, y + 2.5, x + w, y + 2.5);
     y += 8.5;
     const rooms = data.rooms.slice().sort((a, b) => (a.level - b.level) || Number(b.habitable) - Number(a.habitable) || (b.area || 0) - (a.area || 0));
-    const rowH = Math.min(9.5, (content.h - 66) / Math.max(1, rooms.length));
-    rooms.forEach(room => {
+    const maxVisible = Math.min(rooms.length, 22);
+    const rowH = Math.min(9.2, (content.h - 66) / Math.max(1, maxVisible));
+    rooms.slice(0, maxVisible).forEach((room, idx) => {
+      if (idx % 2 === 1) doc.setFillColor('#ece8dc').rect(x - 1.5, y - rowH * 0.62, w + 3, rowH, 'F');
       text(doc, roomName(room.name), x, y, 8.2, { bold: room.habitable, maxWidth: 74 });
       text(doc, room.level ? `Étage ${room.level}` : 'RDC', x + 78, y, 8, { color: C.muted });
       text(doc, `${fr.format(room.area || 0)} m²`, x + 108, y, 8);
       text(doc, FLOORS[room.floorType] || room.floorType || '—', x + 134, y, 8, { maxWidth: 46 });
       text(doc, room.desc || '—', x + 184, y, 7.6, { color: C.muted, maxWidth: w - 186 });
-      doc.setDrawColor(C.rule).setLineWidth(0.15).line(x, y + rowH / 2, x + w, y + rowH / 2);
+      doc.setDrawColor(C.rule).setLineWidth(0.15).line(x, y + rowH * 0.38, x + w, y + rowH * 0.38);
       y += rowH;
     });
     // Enveloppe.

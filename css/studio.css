@@ -91,7 +91,7 @@
 
 /* Tirage encadré du plan */
 /* Largeur bornée par la hauteur d'écran : tirage, légende et mention tiennent sans défilement. */
-.studio-print { grid-area: print; align-self: center; justify-self: end; width: min(100%, calc(100vh - 340px), 680px); width: min(100%, calc(100svh - 340px), 680px); min-width: min(100%, 380px); margin: 0; perspective: 1400px; }
+.studio-print { grid-area: print; align-self: center; justify-self: end; width: min(100%, calc((100vh - 300px) * 1.25), 720px); width: min(100%, calc((100svh - 300px) * 1.25), 720px); min-width: min(100%, 380px); margin: 0; perspective: 1400px; }
 .print-frame {
   position: relative; padding: 10px; background: #1B231E;
   box-shadow:
@@ -103,9 +103,9 @@
   transform-style: preserve-3d;
 }
 .print-frame::before { content: ""; position: absolute; inset: 4px; border: 1px solid rgba(217, 183, 117, .55); pointer-events: none; }
-.print-mat { padding: clamp(16px, 2.4vw, 30px); background: var(--mat); box-shadow: inset 0 0 0 1px rgba(201, 203, 191, .9), inset 0 2px 10px rgba(22, 28, 25, .08); }
-.print-stage { position: relative; aspect-ratio: 936 / 874; overflow: hidden; background: #F4F1EA; box-shadow: 0 0 0 1px rgba(22, 28, 25, .12); cursor: zoom-in; }
-.print-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 1.1s var(--ease); }
+.print-mat { padding: clamp(12px, 1.8vw, 22px); background: var(--mat); box-shadow: inset 0 0 0 1px rgba(201, 203, 191, .9), inset 0 2px 10px rgba(22, 28, 25, .08); }
+.print-stage { position: relative; aspect-ratio: 4 / 3; overflow: hidden; background: #F7F5F0; box-shadow: 0 0 0 1px rgba(22, 28, 25, .12); cursor: zoom-in; }
+.print-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #F7F5F0; opacity: 0; transition: opacity 1s var(--ease); }
 .print-img.is-active { opacity: 1; }
 /* Dévoilement du tirage à l'ouverture, comme une feuille qu'on découvre */
 .print-stage { animation: print-reveal 1.6s var(--ease-out) .35s both; }
@@ -113,23 +113,65 @@
 @keyframes print-reveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 @keyframes print-scan { 0% { left: 0; opacity: 1; } 90% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
 
+/* Barre de progression discrète du défilement automatique */
+.print-progress {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: var(--gold); transform-origin: left; transform: scaleX(0); pointer-events: none; z-index: 2;
+}
+.print-progress.is-running { animation: print-progress-bar var(--slide-ms, 6500ms) linear forwards; }
+@keyframes print-progress-bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
 /* Loupe de lecture des cotes */
 .print-loupe {
   position: absolute; width: 168px; height: 168px; border-radius: 50%; pointer-events: none; opacity: 0;
   transform: translate(-50%, -50%) scale(.85); transition: opacity .25s var(--ease), transform .35s var(--ease-out);
-  background-repeat: no-repeat; background-color: #F4F1EA;
+  background-repeat: no-repeat; background-color: #F7F5F0;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, .9), 0 0 0 3px var(--gold), 0 18px 40px -12px rgba(22, 28, 25, .55);
 }
 .print-stage.is-zooming .print-loupe { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 
-.print-caption { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--rule); }
-.print-ref { font-size: 10.5px; font-weight: 800; letter-spacing: .24em; color: var(--gold-deep); }
-.print-title { font-family: var(--serif, Georgia, serif); font-size: 1.15rem; font-style: italic; color: var(--ink); }
-.print-levels { display: inline-flex; padding: 3px; border: 1px solid var(--rule); border-radius: 999px; background: rgba(251, 250, 246, .8); }
-.print-levels button { min-width: 52px; padding: 7px 14px; border: 0; border-radius: 999px; background: none; font: inherit; font-size: 11px; font-weight: 800; letter-spacing: .14em; color: var(--ink-2); cursor: pointer; transition: background .4s var(--ease), color .4s var(--ease); }
-.print-levels button[aria-pressed="true"] { background: var(--ink); color: var(--linen); }
-.print-levels button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-.print-note { margin: 10px 0 0; font-size: 10.5px; letter-spacing: .06em; color: var(--muted); }
+.print-caption { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.print-ref { font-size: 10.5px; font-weight: 800; letter-spacing: .24em; color: var(--gold-deep); white-space: nowrap; }
+.print-title { font-family: var(--serif, Georgia, serif); font-size: 1.08rem; font-style: italic; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.print-controls { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--rule); background: rgba(251, 250, 246, .9); padding: 2px; }
+.print-controls button {
+  min-width: 30px; height: 28px; padding: 0 7px; border: 0; background: none;
+  font: inherit; font-size: 11px; font-weight: 700; color: var(--ink-2); cursor: pointer;
+  transition: background .25s var(--ease), color .25s var(--ease);
+}
+.print-controls button:hover, .print-controls button:focus-visible { background: var(--ink); color: var(--linen); }
+.print-controls button[aria-pressed="true"] { background: var(--gold-deep); color: var(--linen); }
+.print-controls button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.print-counter { padding: 0 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .1em; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Index direct des 5 planches : filet architectural, zéro pastille */
+.print-plates { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin-top: 10px; padding-bottom: 6px; border-bottom: 1px solid rgba(201, 203, 191, .65); }
+.print-plates button {
+  position: relative; padding: 4px 0; border: 0; background: none;
+  font: inherit; font-size: 10.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--muted); cursor: pointer; transition: color .25s var(--ease); white-space: nowrap;
+}
+.print-plates button::after { content: ""; position: absolute; left: 0; right: 0; bottom: -7px; height: 2px; background: var(--gold); transform: scaleX(0); transform-origin: left; transition: transform .35s var(--ease-out); }
+.print-plates button:hover, .print-plates button:focus-visible { color: var(--ink); }
+.print-plates button[aria-pressed="true"] { color: var(--ink); }
+.print-plates button[aria-pressed="true"]::after { transform: scaleX(1); }
+.print-plates button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.print-note { margin: 8px 0 0; font-size: 10.5px; letter-spacing: .06em; color: var(--muted); }
+
+/* Visionneuse plein écran des tirages */
+.print-lightbox {
+  width: min(94vw, 1340px); max-width: 94vw; max-height: 92vh; padding: 18px 20px;
+  border: 1px solid rgba(179, 134, 70, .45); background: var(--linen); color: var(--ink);
+  box-shadow: 0 40px 100px -30px rgba(10, 14, 12, .7);
+}
+.print-lightbox::backdrop { background: rgba(16, 22, 18, .78); backdrop-filter: blur(6px); }
+.print-lightbox-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--rule); margin-bottom: 14px; }
+.print-lightbox-meta { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.print-lightbox-actions { display: flex; align-items: center; gap: 6px; }
+.print-lightbox-actions button { min-width: 36px; height: 36px; border: 1px solid var(--rule); background: var(--mat); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+.print-lightbox-actions button:hover, .print-lightbox-actions button:focus-visible { border-color: var(--gold); background: var(--ink); color: var(--linen); }
+.print-lightbox-stage { display: grid; place-items: center; background: #F7F5F0; border: 1px solid var(--rule); overflow: hidden; }
+.print-lightbox-stage img { display: block; max-width: 100%; max-height: calc(92vh - 110px); width: auto; height: auto; object-fit: contain; }
 
 /* Les deux portes */
 .studio-doors { grid-area: doors; align-self: start; display: grid; border-top: 1px solid var(--rule); max-width: 38rem; }
@@ -206,6 +248,10 @@
 .index-item:hover .index-thumb img, .index-item:focus-visible .index-thumb img { filter: none; transform: scale(1.04); }
 .index-item:hover .index-arrow, .index-item:focus-visible .index-arrow { transform: translateX(5px); }
 .index-item:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.index-row { display: flex; flex-direction: column; }
+.index-quick { display: flex; align-items: center; gap: 16px; padding: 0 2px 14px 130px; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.index-quick a { color: var(--gold-deep); text-decoration: none; border-bottom: 1px solid transparent; padding-bottom: 2px; transition: border-color .25s var(--ease), color .25s var(--ease); }
+.index-quick a:hover, .index-quick a:focus-visible { color: var(--ink); border-bottom-color: var(--gold); }
 .index-empty { padding: 32px 0; color: var(--ink-2); }
 .index-new { color: var(--gold-deep); font-weight: 700; }
 

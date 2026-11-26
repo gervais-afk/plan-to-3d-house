@@ -6,7 +6,7 @@ class ClientFeedback {
     const role = window.PORTAL_CONTEXT?.role;
     this.decisionTarget = window.PORTAL_CONTEXT?.decision || null;
     this.canComment = role !== 'read' && !this.decisionTarget;
-    this.canReview = role === 'architect';
+    this.canReview = !role || role === 'architect';
     const el = id => document.getElementById(`feedback-${id}`);
     this.panel = document.getElementById('client-feedback');
     this.fields = el('fields');
@@ -132,7 +132,16 @@ class ClientFeedback {
     const room = hit.object.userData.room || offsets.map(([dx, dz]) => sameLevel.find(r => roomContains(r, x + dx, z + dz))).find(Boolean);
     const normal = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
     const point = hit.point.clone().addScaledVector(normal, 0.025);
-    this.draft = { point: point.toArray(), pose: this.variants.capturePose(), room: room?.id || '' };
+    const nearestWall = this.findNearestWall(x, z, level);
+    this.draft = {
+      point: point.toArray(),
+      pose: this.variants.capturePose(),
+      room: room?.id || '',
+      wallId: nearestWall?.id || '',
+      wallLabel: nearestWall?.label || '',
+      level,
+      source: '3d'
+    };
     this.cancel(false);
     this.draftAnchor?.remove();
     const draft = this.tools.makeAnchor();
@@ -144,8 +153,28 @@ class ClientFeedback {
     this.draftAnchor = draft;
     this.panel.open = true;
     this.form.hidden = false;
-    document.getElementById('feedback-anchor').textContent = room ? `Remarque · ${room.name}` : 'Remarque · Hors pièce';
+    const anchorParts = ['Remarque', room ? room.name : 'Hors pièce'];
+    if (nearestWall?.label) anchorParts.push(nearestWall.label);
+    document.getElementById('feedback-anchor').textContent = anchorParts.join(' · ');
     this.text.focus();
+  }
+
+  findNearestWall(x, z, level) {
+    const walls = (HOUSE_DATA?.walls || []).map((w, idx) => ({ w, idx }))
+      .filter(({ w }) => (Number(w?.level) || 0) === level && Array.isArray(w.from) && Array.isArray(w.to));
+    let best = null, bestDist = 0.55;
+    for (const { w, idx } of walls) {
+      const [x1, z1] = w.from, [x2, z2] = w.to;
+      const dx = x2 - x1, dz = z2 - z1, l2 = dx * dx + dz * dz;
+      const t = l2 > 1e-9 ? Math.max(0, Math.min(1, ((x - x1) * dx + (z - z1) * dz) / l2)) : 0;
+      const d = Math.hypot(x - (x1 + t * dx), z - (z1 + t * dz));
+      if (d < bestDist) {
+        bestDist = d;
+        const kind = w.type === 'ext' ? 'Mur extérieur' : 'Cloison';
+        best = { id: w.id || `wall-${idx}`, label: `${kind} #${idx + 1}` };
+      }
+    }
+    return best;
   }
 
   async post(button) {
@@ -185,6 +214,7 @@ class ClientFeedback {
         const row = document.createElement('li');
         const message = document.createElement('p');
         message.textContent = note.text;
+        const metaLine = [note.wallLabel, note.source === '2d' ? 'Plan 2D' : 'Visite 3D'].filter(Boolean).join(' · ');
         const view = document.createElement('button');
         view.type = 'button';
         view.className = 'btn-toggle btn-small';
@@ -194,8 +224,13 @@ class ClientFeedback {
           this.selected = note.id;
           this.rebuildAnchors();
         });
+        if (metaLine) {
+          const meta = document.createElement('small');
+          meta.textContent = metaLine;
+          row.append(meta);
+        }
         row.append(message, view);
-        if (window.PORTAL_CONTEXT?.role) this.addReview(row, note);
+        if (window.PORTAL_CONTEXT?.role || this.canReview) this.addReview(row, note);
         block.append(row);
       }
       this.list.append(title, block);
@@ -264,7 +299,9 @@ class ClientFeedback {
       button.setAttribute('aria-label', `Remarque : ${note.text.slice(0, 70)}`);
       const card = document.createElement('div');
       card.className = 'client-room-card';
-      card.textContent = note.text;
+      const roomObj = HOUSE_DATA.rooms.find(r => r.id === note.room);
+      const headerTxt = [roomObj?.name, note.wallLabel].filter(Boolean).join(' · ');
+      card.textContent = headerTxt ? `${headerTxt} — ${note.text}` : note.text;
       el.classList.toggle('is-open', note.id === this.selected);
       button.setAttribute('aria-expanded', String(note.id === this.selected));
       button.addEventListener('click', () => {

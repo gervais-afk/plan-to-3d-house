@@ -1,0 +1,1094 @@
+From 95b991894e4b49b9030aaa7638defa4d56357121 Mon Sep 17 00:00:00 2001
+From: ArchiCam Dev <dev@archicam.local>
+Date: Wed, 25 Nov 2026 18:08:11 +0000
+Subject: [PATCH] =?UTF-8?q?Lot=205=20=E2=80=94=20Lecture=20vectorielle=20d?=
+ =?UTF-8?q?es=20PDF=20d'architecte?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ editor.html                       |   1 +
+ js/pdfVectorExtract.js            | 823 ++++++++++++++++++++++++++++++
+ tests/pdf-vector-extract.test.cjs | 227 ++++++++
+ 3 files changed, 1051 insertions(+)
+ create mode 100644 js/pdfVectorExtract.js
+ create mode 100644 tests/pdf-vector-extract.test.cjs
+
+diff --git a/editor.html b/editor.html
+index fd5dc3d..1af3bf5 100644
+--- a/editor.html
++++ b/editor.html
+@@ -402,6 +402,7 @@
+   <script src="js/pdfIdentity.js"></script>
+   <script src="js/sheetClassifier.js"></script>
+   <script src="js/planBook.js"></script>
++  <script src="js/pdfVectorExtract.js"></script>
+   <script src="js/clientBrochurePremium.js"></script>
+   <script src="js/aiPrompt.js"></script>
+   <script src="js/fidelityCheck.js"></script>
+diff --git a/js/pdfVectorExtract.js b/js/pdfVectorExtract.js
+new file mode 100644
+index 0000000..a0b9cbd
+--- /dev/null
++++ b/js/pdfVectorExtract.js
+@@ -0,0 +1,823 @@
++/**
++ * LECTURE VECTORIELLE DES PDF D'ARCHITECTE (module pur, déterministe, sans réseau)
++ *
++ * Analyse directement les flux PDF.js (`getOperatorList()` + `getTextContent()`) pour extraire :
++ *  - les murs (paires de traits parallèles distants de 0,08 à 0,40 m) ;
++ *  - les portes (arcs de battement en quart de cercle) ;
++ *  - les fenêtres (traits de menuiserie parallèles serrés dans l'axe d'un mur ou d'une baie) ;
++ *  - les textes des pièces (noms et surfaces éventuelles) ;
++ *  - la proposition d'échelle lue dans le cartouche (JAMAIS appliquée silencieusement sans confirmation).
++ *
++ * Principe directeur : rien n'est deviné ni supprimé en silence. Tout segment, arc ou texte non
++ * interprété avec certitude est consigné dans `toVerify` (« À vérifier ») avec ses coordonnées.
++ * L'IA, si elle est appelée ensuite (`mergeAiAnnotations`), ne peut que nommer les pièces ou lever
++ * des ambiguïtés — jamais déplacer un mur vectoriel.
++ */
++const PdfVectorExtract = (() => {
++  // Codes d'opérateurs PDF.js (compatibles PDF.js 3.x / 4.x)
++  const DEFAULT_OPS = {
++    save: 10,
++    restore: 11,
++    transform: 12,
++    moveTo: 13,
++    lineTo: 14,
++    curveTo: 15,
++    curveTo2: 16,
++    curveTo3: 17,
++    closePath: 18,
++    rectangle: 19,
++    stroke: 20,
++    closeStroke: 21,
++    fill: 22,
++    eoFill: 23,
++    fillStroke: 24,
++    eoFillStroke: 25,
++    closeFillStroke: 26,
++    closeEOFillStroke: 27,
++    endPath: 28,
++    constructPath: 91
++  };
++
++  const PT_PER_METER_1_1 = 72 / 0.0254; // 2834.645669... points PDF par mètre réel au 1:1
++  const WALL_MIN_THICK = 0.08;
++  const WALL_MAX_THICK = 0.40;
++  const WALL_MIN_LEN = 0.25;
++  const DOOR_MIN_RADIUS = 0.55;
++  const DOOR_MAX_RADIUS = 1.35;
++  const WINDOW_MIN_GAP = 0.012;
++  const WINDOW_MAX_GAP = 0.075;
++  const WINDOW_MIN_LEN = 0.40;
++  const WINDOW_MAX_LEN = 5.0;
++
++  const r3 = v => Math.round(v * 1000) / 1000;
++  const r2 = v => Math.round(v * 100) / 100;
++
++  function multiplyMatrix(m1, m2) {
++    return [
++      m1[0] * m2[0] + m1[2] * m2[1],
++      m1[1] * m2[0] + m1[3] * m2[1],
++      m1[0] * m2[2] + m1[2] * m2[3],
++      m1[1] * m2[2] + m1[3] * m2[3],
++      m1[0] * m2[4] + m1[2] * m2[5] + m1[4],
++      m1[1] * m2[4] + m1[3] * m2[5] + m1[5]
++    ];
++  }
++
++  function applyMatrix(m, x, y) {
++    return [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
++  }
++
++  function ptsPerMeterForDenominator(denominator) {
++    const d = Number(denominator);
++    if (!Number.isFinite(d) || d <= 0) return null;
++    return PT_PER_METER_1_1 / d;
++  }
++
++  /**
++   * Détecte une échelle inscrite dans le texte du PDF (ex. « Échelle 1/100 », « 1:50 »).
++   * Retourne uniquement une PROPOSITION (`confirmed: false`), jamais validée automatiquement.
++   */
++  function detectScaleProposal(textItems = []) {
++    const joined = textItems.map(t => String(t?.str || '')).join(' ');
++    const explicit = joined.match(/(?:ech(?:elle)?|éch(?:elle)?|scale|ec\.?)\s*[:=]?\s*1\s*[:/]\s*(\d{2,4})\b/i);
++    const bare = !explicit ? joined.match(/\b1\s*[:/]\s*(20|25|50|75|100|125|150|200|250|500)\b/) : null;
++    const match = explicit || bare;
++    if (!match) return null;
++    const denominator = Number(match[1]);
++    if (!Number.isFinite(denominator) || denominator < 5 || denominator > 5000) return null;
++    return {
++      denominator,
++      label: `1/${denominator}`,
++      ptsPerMeter: ptsPerMeterForDenominator(denominator),
++      confirmed: false,
++      source: explicit ? 'cartouche' : 'texte'
++    };
++  }
++
++  /**
++   * Confirme une échelle proposée contre une cote témoin mesurée sur le PDF.
++   * Si l'écart dépasse 2 %, l'échelle du cartouche est signalée incohérente et la cote témoin prévaut
++   * (avec avertissement explicite).
++   */
++  function confirmScale({ detectedDenominator = null, witnessPdfPoints, witnessRealMeters, tolerance = 0.02 } = {}) {
++    const pts = Number(witnessPdfPoints);
++    const real = Number(witnessRealMeters);
++    if (!Number.isFinite(pts) || pts <= 0 || !Number.isFinite(real) || real <= 0) {
++      throw new Error('Une cote témoin valide (distance PDF en points et longueur réelle en mètres) est requise.');
++    }
++    const measuredPtsPerMeter = pts / real;
++    const measuredDenominator = PT_PER_METER_1_1 / measuredPtsPerMeter;
++    let consistent = true;
++    let relativeError = 0;
++    let warning = '';
++    if (Number.isFinite(Number(detectedDenominator)) && Number(detectedDenominator) > 0) {
++      const expectedPtsPerMeter = ptsPerMeterForDenominator(detectedDenominator);
++      relativeError = Math.abs(measuredPtsPerMeter - expectedPtsPerMeter) / expectedPtsPerMeter;
++      consistent = relativeError <= tolerance;
++      if (!consistent) {
++        warning = `Écart de ${(relativeError * 100).toFixed(1)} % entre l’échelle 1/${detectedDenominator} du cartouche et la cote témoin (${real} m).`;
++      }
++    }
++    return {
++      confirmed: true,
++      ptsPerMeter: measuredPtsPerMeter,
++      denominator: Math.round(measuredDenominator * 10) / 10,
++      detectedDenominator: detectedDenominator ? Number(detectedDenominator) : null,
++      consistent,
++      relativeError: Math.round(relativeError * 10000) / 10000,
++      warning
++    };
++  }
++
++  /**
++   * Parcourt un operatorList PDF.js (`{ fnArray, argsArray }`) et retourne les primitives géométriques
++   * (segments droits et courbes de Bézier cubiques) en coordonnées PDF (points).
++   */
++  function parseOperatorList(operatorList, ops = DEFAULT_OPS) {
++    const OPS = { ...DEFAULT_OPS, ...(ops || {}) };
++    const fnArray = operatorList?.fnArray || [];
++    const argsArray = operatorList?.argsArray || [];
++    const segments = [];
++    const curves = [];
++
++    let ctm = [1, 0, 0, 1, 0, 0];
++    const stack = [];
++    let cur = null;
++    let subStart = null;
++    let pendingSegs = [];
++    let pendingCurves = [];
++
++    const flush = () => {
++      if (pendingSegs.length) segments.push(...pendingSegs);
++      if (pendingCurves.length) curves.push(...pendingCurves);
++      pendingSegs = [];
++      pendingCurves = [];
++      cur = null;
++      subStart = null;
++    };
++    const clear = () => {
++      pendingSegs = [];
++      pendingCurves = [];
++      cur = null;
++      subStart = null;
++    };
++
++    const pushSeg = (p1, p2) => {
++      if (Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) > 1e-3) {
++        pendingSegs.push({ x1: p1[0], y1: p1[1], x2: p2[0], y2: p2[1] });
++      }
++    };
++
++    const execPathOp = (op, args) => {
++      if (op === OPS.moveTo) {
++        const pt = applyMatrix(ctm, args[0], args[1]);
++        cur = pt;
++        subStart = pt;
++      } else if (op === OPS.lineTo) {
++        const pt = applyMatrix(ctm, args[0], args[1]);
++        if (cur) pushSeg(cur, pt);
++        cur = pt;
++      } else if (op === OPS.curveTo) {
++        const p1 = applyMatrix(ctm, args[0], args[1]);
++        const p2 = applyMatrix(ctm, args[2], args[3]);
++        const p3 = applyMatrix(ctm, args[4], args[5]);
++        if (cur) pendingCurves.push({ p0: cur, p1, p2, p3 });
++        cur = p3;
++      } else if (op === OPS.curveTo2) {
++        const p2 = applyMatrix(ctm, args[0], args[1]);
++        const p3 = applyMatrix(ctm, args[2], args[3]);
++        if (cur) pendingCurves.push({ p0: cur, p1: cur, p2, p3 });
++        cur = p3;
++      } else if (op === OPS.curveTo3) {
++        const p1 = applyMatrix(ctm, args[0], args[1]);
++        const p3 = applyMatrix(ctm, args[2], args[3]);
++        if (cur) pendingCurves.push({ p0: cur, p1, p2: p3, p3 });
++        cur = p3;
++      } else if (op === OPS.closePath) {
++        if (cur && subStart) pushSeg(cur, subStart);
++        cur = subStart;
++      } else if (op === OPS.rectangle) {
++        const [x, y, w, h] = args;
++        const a = applyMatrix(ctm, x, y);
++        const b = applyMatrix(ctm, x + w, y);
++        const c = applyMatrix(ctm, x + w, y + h);
++        const d = applyMatrix(ctm, x, y + h);
++        pushSeg(a, b); pushSeg(b, c); pushSeg(c, d); pushSeg(d, a);
++        cur = a; subStart = a;
++      }
++    };
++
++    for (let i = 0; i < fnArray.length; i++) {
++      const fn = fnArray[i];
++      const args = argsArray[i] || [];
++      if (fn === OPS.save) {
++        stack.push(ctm.slice());
++      } else if (fn === OPS.restore) {
++        ctm = stack.pop() || [1, 0, 0, 1, 0, 0];
++      } else if (fn === OPS.transform) {
++        ctm = multiplyMatrix(ctm, args);
++      } else if (fn === OPS.constructPath) {
++        const subOps = args[0] || [];
++        const flat = args[1] || [];
++        let k = 0;
++        for (const sub of subOps) {
++          if (sub === OPS.moveTo || sub === OPS.lineTo) {
++            execPathOp(sub, [flat[k], flat[k + 1]]); k += 2;
++          } else if (sub === OPS.curveTo) {
++            execPathOp(sub, [flat[k], flat[k + 1], flat[k + 2], flat[k + 3], flat[k + 4], flat[k + 5]]); k += 6;
++          } else if (sub === OPS.curveTo2 || sub === OPS.curveTo3) {
++            execPathOp(sub, [flat[k], flat[k + 1], flat[k + 2], flat[k + 3]]); k += 4;
++          } else if (sub === OPS.rectangle) {
++            execPathOp(sub, [flat[k], flat[k + 1], flat[k + 2], flat[k + 3]]); k += 4;
++          } else if (sub === OPS.closePath) {
++            execPathOp(sub, []);
++          }
++        }
++      } else if (
++        fn === OPS.moveTo || fn === OPS.lineTo || fn === OPS.curveTo ||
++        fn === OPS.curveTo2 || fn === OPS.curveTo3 || fn === OPS.closePath || fn === OPS.rectangle
++      ) {
++        execPathOp(fn, args);
++      } else if (fn === OPS.closeStroke || fn === OPS.closeFillStroke || fn === OPS.closeEOFillStroke) {
++        execPathOp(OPS.closePath, []);
++        flush();
++      } else if (fn === OPS.stroke || fn === OPS.fill || fn === OPS.eoFill || fn === OPS.fillStroke || fn === OPS.eoFillStroke) {
++        flush();
++      } else if (fn === OPS.endPath) {
++        clear();
++      }
++    }
++    // Certains générateurs laissent un chemin sans opérateur stroke final dans un flux minimal
++    if (pendingSegs.length || pendingCurves.length) flush();
++
++    return { segments, curves };
++  }
++
++  function segInfo(s) {
++    const dx = s.x2 - s.x1;
++    const dz = s.z2 - s.z1;
++    const len = Math.hypot(dx, dz);
++    if (len < 1e-6) return null;
++    // Direction canonique (toujours dans le demi-plan angle in [0, pi))
++    let ux = dx / len, uz = dz / len;
++    if (ux < -1e-6 || (Math.abs(ux) <= 1e-6 && uz < 0)) { ux = -ux; uz = -uz; }
++    const nx = -uz, nz = ux;
++    const t1 = s.x1 * ux + s.z1 * uz;
++    const t2 = s.x2 * ux + s.z2 * uz;
++    const offset = s.x1 * nx + s.z1 * nz;
++    return {
++      ...s,
++      len,
++      ux,
++      uz,
++      nx,
++      nz,
++      tMin: Math.min(t1, t2),
++      tMax: Math.max(t1, t2),
++      offset
++    };
++  }
++
++  /** Détecte les murs comme paires de segments parallèles espacés de 0,08 à 0,40 m. */
++  function detectWalls(rawSegments) {
++    const segs = rawSegments.map(segInfo).filter(s => s && s.len >= 0.05);
++    const used = new Set();
++    const candidates = [];
++
++    for (let i = 0; i < segs.length; i++) {
++      for (let j = i + 1; j < segs.length; j++) {
++        const a = segs[i], b = segs[j];
++        const dot = Math.abs(a.ux * b.ux + a.uz * b.uz);
++        if (dot < 0.996) continue; // ~5° max
++        const sep = Math.abs(a.offset - b.offset);
++        if (sep < WALL_MIN_THICK - 1e-4 || sep > WALL_MAX_THICK + 1e-4) continue;
++        const ovMin = Math.max(a.tMin, b.tMin);
++        const ovMax = Math.min(a.tMax, b.tMax);
++        const overlap = ovMax - ovMin;
++        if (overlap < WALL_MIN_LEN) continue;
++        candidates.push({ i, j, sep, ovMin, ovMax, overlap, score: overlap - sep * 0.25 });
++      }
++    }
++
++    candidates.sort((a, b) => b.score - a.score);
++    const walls = [];
++    for (const c of candidates) {
++      if (used.has(c.i) || used.has(c.j)) continue;
++      const a = segs[c.i], b = segs[c.j];
++      used.add(c.i);
++      used.add(c.j);
++      const midOff = (a.offset + b.offset) / 2;
++      const from = [r3(a.ux * c.ovMin + a.nx * midOff), r3(a.uz * c.ovMin + a.nz * midOff)];
++      const to = [r3(a.ux * c.ovMax + a.nx * midOff), r3(a.uz * c.ovMax + a.nz * midOff)];
++      const thick = r3(c.sep);
++      walls.push({
++        from,
++        to,
++        thick,
++        type: thick >= 0.18 ? 'ext' : 'int',
++        level: 0,
++        openings: [],
++        provenance: 'vector',
++        locked: true
++      });
++    }
++
++    // Marquer aussi les petits traits de fermeture d'extrémité de mur (bouchons de longueur ~thick)
++    for (let i = 0; i < segs.length; i++) {
++      if (used.has(i)) continue;
++      const s = segs[i];
++      if (s.len > WALL_MAX_THICK + 0.05) continue;
++      const mx = (s.x1 + s.x2) / 2, mz = (s.z1 + s.z2) / 2;
++      const touchesWallEnd = walls.some(w => {
++        const dFrom = Math.hypot(mx - w.from[0], mz - w.from[1]);
++        const dTo = Math.hypot(mx - w.to[0], mz - w.to[1]);
++        return Math.min(dFrom, dTo) <= w.thick * 0.8 + 0.05;
++      });
++      if (touchesWallEnd) used.add(i);
++    }
++
++    const remaining = segs.filter((_s, idx) => !used.has(idx));
++    return { walls, remaining };
++  }
++
++  /** Détecte les fenêtres : faisceaux de traits parallèles serrés (0,012–0,075 m) dans ou contre un mur. */
++  function detectWindows(remainingSegs, walls) {
++    const used = new Set();
++    const windows = [];
++
++    // Grouper les segments parallèles très proches (menuiserie de fenêtre : 2 ou 3 traits parallèles)
++    for (let i = 0; i < remainingSegs.length; i++) {
++      if (used.has(i)) continue;
++      const a = remainingSegs[i];
++      if (a.len < WINDOW_MIN_LEN || a.len > WINDOW_MAX_LEN) continue;
++      const group = [i];
++      for (let j = i + 1; j < remainingSegs.length; j++) {
++        if (used.has(j)) continue;
++        const b = remainingSegs[j];
++        if (Math.abs(a.ux * b.ux + a.uz * b.uz) < 0.996) continue;
++        const sep = Math.abs(a.offset - b.offset);
++        if (sep < WINDOW_MIN_GAP || sep > WINDOW_MAX_GAP) continue;
++        const ov = Math.min(a.tMax, b.tMax) - Math.max(a.tMin, b.tMin);
++        if (ov < Math.min(a.len, b.len) * 0.7) continue;
++        group.push(j);
++      }
++      if (group.length < 2) continue;
++
++      // Calcul du centre et de la largeur de la fenêtre
++      const members = group.map(idx => remainingSegs[idx]);
++      const tMin = Math.min(...members.map(m => m.tMin));
++      const tMax = Math.max(...members.map(m => m.tMax));
++      const midOff = members.reduce((acc, m) => acc + m.offset, 0) / members.length;
++      const width = tMax - tMin;
++      const midT = (tMin + tMax) / 2;
++      const cx = a.ux * midT + a.nx * midOff;
++      const cz = a.uz * midT + a.nz * midOff;
++
++      // Rattachement au mur colinéaire ou hôte le plus proche
++      const host = findHostWall(walls, cx, cz, a.ux, a.uz, 0.35);
++      if (host) {
++        group.forEach(idx => used.add(idx));
++        const opening = {
++          type: 'window',
++          level: 0,
++          at: r3(host.at),
++          w: r3(width),
++          h: 1.25,
++          sill: 0.9,
++          provenance: 'vector'
++        };
++        host.wall.openings.push(opening);
++        windows.push({ wallIndex: host.wallIndex, ...opening, center: [r3(cx), r3(cz)] });
++      }
++    }
++
++    const leftovers = remainingSegs.filter((_s, idx) => !used.has(idx));
++    return { windows, remaining: leftovers };
++  }
++
++  function findHostWall(walls, cx, cz, dirX, dirZ, maxDist = 0.35) {
++    let best = null;
++    for (let wi = 0; wi < walls.length; wi++) {
++      const w = walls[wi];
++      const dx = w.to[0] - w.from[0];
++      const dz = w.to[1] - w.from[1];
++      const len = Math.hypot(dx, dz);
++      if (len < 1e-4) continue;
++      const ux = dx / len, uz = dz / len;
++      if (dirX !== null && dirZ !== null && Math.abs(ux * dirX + uz * dirZ) < 0.95) continue;
++      const rx = cx - w.from[0], rz = cz - w.from[1];
++      const proj = rx * ux + rz * uz;
++      const perp = Math.abs(-rx * uz + rz * ux);
++      if (proj < -0.15 || proj > len + 0.15) continue;
++      if (perp > maxDist) continue;
++      if (!best || perp < best.dist) {
++        best = { wall: w, wallIndex: wi, at: Math.max(0, Math.min(len, proj)), dist: perp, len, ux, uz };
++      }
++    }
++    return best;
++  }
++
++  /**
++   * Détecte les portes à partir des courbes de Bézier cubiques (arcs de quart de cercle).
++   * Un arc de porte typique de rayon R a une corde ~ R*sqrt(2) et des tangentes aux extrémités
++   * approximativement perpendiculaires.
++   */
++  function detectDoors(curves, walls, remainingSegs) {
++    const doors = [];
++    const unmatchedCurves = [];
++    const consumedSegIndices = new Set();
++
++    for (const c of curves) {
++      const t0x = c.p1[0] - c.p0[0], t0z = c.p1[1] - c.p0[1];
++      const t1x = c.p3[0] - c.p2[0], t1z = c.p3[1] - c.p2[1];
++      const l0 = Math.hypot(t0x, t0z), l1 = Math.hypot(t1x, t1z);
++      const chord = Math.hypot(c.p3[0] - c.p0[0], c.p3[1] - c.p0[1]);
++      if (l0 < 0.05 || l1 < 0.05 || chord < DOOR_MIN_RADIUS) {
++        unmatchedCurves.push({ curve: c, reason: 'Courbe trop courte ou dégénérée' });
++        continue;
++      }
++      const cosAngle = (t0x * t1x + t0z * t1z) / (l0 * l1);
++      // Pour un quart de cercle, l'angle entre tangente début et tangente fin est ~90° (|cos| < 0.35)
++      if (Math.abs(cosAngle) > 0.35) {
++        unmatchedCurves.push({ curve: c, reason: 'Courbe non orthogonale (pas un arc de porte 90°)' });
++        continue;
++      }
++      const radius = chord / Math.SQRT2;
++      if (radius < DOOR_MIN_RADIUS || radius > DOOR_MAX_RADIUS) {
++        unmatchedCurves.push({ curve: c, reason: `Rayon d'arc hors plage porte (${r2(radius)} m)` });
++        continue;
++      }
++
++      // Les deux centres possibles du quart de cercle sont les intersections des normales aux extrémités.
++      // Pour un quart de cercle, le centre O vérifie O = p0 + R * n0 = p3 + R * n1.
++      const u0x = t0x / l0, u0z = t0z / l0;
++      const u1x = t1x / l1, u1z = t1z / l1;
++      // Le centre est du côté concave : O ≈ p0 + radius * u1 (car la tangente finale est parallèle au rayon initial)
++      const candA = [c.p0[0] - radius * u1x, c.p0[1] - radius * u1z];
++      const candB = [c.p0[0] + radius * u1x, c.p0[1] + radius * u1z];
++      const center = Math.abs(Math.hypot(candA[0] - c.p3[0], candA[1] - c.p3[1]) - radius) <
++        Math.abs(Math.hypot(candB[0] - c.p3[0], candB[1] - c.p3[1]) - radius) ? candA : candB;
++
++      // Chercher quel rayon (center -> p0 ou center -> p3) est dans l'axe d'un mur hôte :
++      // le point sur le mur donne la position de la baie, l'autre donne le vantail ouvert.
++      const midA = [(center[0] + c.p0[0]) / 2, (center[1] + c.p0[1]) / 2];
++      const dirA = [(c.p0[0] - center[0]) / radius, (c.p0[1] - center[1]) / radius];
++      const midB = [(center[0] + c.p3[0]) / 2, (center[1] + c.p3[1]) / 2];
++      const dirB = [(c.p3[0] - center[0]) / radius, (c.p3[1] - center[1]) / radius];
++
++      const hostA = findHostWall(walls, midA[0], midA[1], dirA[0], dirA[1], 0.40);
++      const hostB = findHostWall(walls, midB[0], midB[1], dirB[0], dirB[1], 0.40);
++      let host = null;
++      let leafEnd = null;
++      if (hostA && (!hostB || hostA.dist <= hostB.dist)) {
++        host = hostA; leafEnd = c.p3;
++      } else if (hostB) {
++        host = hostB; leafEnd = c.p0;
++      } else {
++        // Repli : chercher un mur proche du milieu de l'arc sans contrainte de direction
++        const fallbackMid = [(center[0] + (c.p0[0] + c.p3[0]) / 2) / 2, (center[1] + (c.p0[1] + c.p3[1]) / 2) / 2];
++        host = findHostWall(walls, fallbackMid[0], fallbackMid[1], null, null, radius + 0.25);
++        leafEnd = c.p3;
++      }
++
++      if (!host) {
++        unmatchedCurves.push({ curve: c, reason: `Arc de porte (${r2(radius)} m) non rattaché à un mur` });
++        continue;
++      }
++
++      // Côté d'ouverture par rapport à la normale du mur
++      const cross = (leafEnd[0] - center[0]) * host.uz - (leafEnd[1] - center[1]) * host.ux;
++      const side = cross >= 0 ? 1 : -1;
++      const opening = {
++        type: 'door',
++        level: 0,
++        at: r3(host.at),
++        w: r3(radius),
++        h: 2.1,
++        sill: 0,
++        hinge: 'start',
++        side,
++        provenance: 'vector'
++      };
++      host.wall.openings.push(opening);
++      doors.push({ wallIndex: host.wallIndex, ...opening, hingePos: [r3(center[0]), r3(center[1])] });
++
++      // Marquer le segment du vantail (center -> leafEnd) comme consommé pour ne pas le signaler en orphelin
++      for (let si = 0; si < remainingSegs.length; si++) {
++        const s = remainingSegs[si];
++        const d1 = Math.hypot(s.x1 - center[0], s.z1 - center[1]) + Math.hypot(s.x2 - leafEnd[0], s.z2 - leafEnd[1]);
++        const d2 = Math.hypot(s.x2 - center[0], s.z2 - center[1]) + Math.hypot(s.x1 - leafEnd[0], s.z1 - leafEnd[1]);
++        if (Math.min(d1, d2) < 0.25) consumedSegIndices.add(si);
++      }
++    }
++
++    const leftovers = remainingSegs.filter((_s, idx) => !consumedSegIndices.has(idx));
++    return { doors, unmatchedCurves, remaining: leftovers };
++  }
++
++  const ROOM_HINT_RE = /\b(sejour|séjour|salon|chambre|cuisine|sdb|salle\s*(?:de\s*bain|d['’]eau|a\s*manger|à\s*manger)|wc|toilette|bureau|dressing|veranda|véranda|terrasse|entree|entrée|hall|degagement|dégagement|couloir|garage|buanderie|cellier|palier|repas)\b/i;
++  const AREA_RE = /(\d+[,.]\d+|\d+)\s*m\s*(?:2|²)/i;
++  const CARTOUCHE_RE = /\b(titre|echelle|échelle|projet|maitre|maître|indice|date|format|plan\s+de)\b/i;
++
++  function guessFloorType(name) {
++    const n = String(name || '').toLowerCase();
++    if (/terrasse|veranda|véranda|balcon/.test(n)) return 'stone';
++    if (/cuisine|sdb|bain|eau|wc|toilette|buanderie|garage/.test(n)) return 'tile';
++    if (/chambre|bureau|dressing/.test(n)) return 'parquet';
++    return 'tiles';
++  }
++
++  function slugRoomId(name, idx) {
++    const base = String(name || `piece-${idx + 1}`)
++      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
++      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
++    return base || `piece-${idx + 1}`;
++  }
++
++  /**
++   * Calcule les cellules rectangulaires formées par les murs (grille H/V) afin d'associer chaque
++   * texte de pièce à une emprise cohérente.
++   */
++  function estimateRoomBounds(cx, cz, walls) {
++    let xMin = -Infinity, xMax = Infinity, zMin = -Infinity, zMax = Infinity;
++    for (const w of walls) {
++      const dx = Math.abs(w.to[0] - w.from[0]);
++      const dz = Math.abs(w.to[1] - w.from[1]);
++      if (dx < 0.08 && dz >= 0.3) {
++        // Mur vertical à x = wx
++        const wx = (w.from[0] + w.to[0]) / 2;
++        const wz0 = Math.min(w.from[1], w.to[1]) - 0.2;
++        const wz1 = Math.max(w.from[1], w.to[1]) + 0.2;
++        if (cz >= wz0 && cz <= wz1) {
++          if (wx < cx && wx > xMin) xMin = wx;
++          if (wx > cx && wx < xMax) xMax = wx;
++        }
++      } else if (dz < 0.08 && dx >= 0.3) {
++        // Mur horizontal à z = wz
++        const wz = (w.from[1] + w.to[1]) / 2;
++        const wx0 = Math.min(w.from[0], w.to[0]) - 0.2;
++        const wx1 = Math.max(w.from[0], w.to[0]) + 0.2;
++        if (cx >= wx0 && cx <= wx1) {
++          if (wz < cz && wz > zMin) zMin = wz;
++          if (wz > cz && wz < zMax) zMax = wz;
++        }
++      }
++    }
++    if (isFinite(xMin) && isFinite(xMax) && isFinite(zMin) && isFinite(zMax) && xMax > xMin + 0.4 && zMax > zMin + 0.4) {
++      return { xMin: r3(xMin), xMax: r3(xMax), zMin: r3(zMin), zMax: r3(zMax) };
++    }
++    return null;
++  }
++
++  function extractRoomsFromText(textItems, walls, toPlanCoords) {
++    const positioned = [];
++    for (const item of (textItems || [])) {
++      const str = String(item?.str || '').trim();
++      if (!str) continue;
++      const tr = Array.isArray(item.transform) && item.transform.length >= 6 ? item.transform : [1, 0, 0, 1, 0, 0];
++      const [x, z] = toPlanCoords(tr[4], tr[5]);
++      positioned.push({ str, x: r3(x), z: r3(z) });
++    }
++
++    const rooms = [];
++    const unmatchedTexts = [];
++    const areaTokens = [];
++
++    for (const tok of positioned) {
++      if (AREA_RE.test(tok.str) && !ROOM_HINT_RE.test(tok.str)) {
++        areaTokens.push(tok);
++        continue;
++      }
++      if (CARTOUCHE_RE.test(tok.str) || /^1\s*[:/]\s*\d{2,4}$/.test(tok.str)) continue;
++      const bounds = estimateRoomBounds(tok.x, tok.z, walls);
++      if (ROOM_HINT_RE.test(tok.str) || bounds) {
++        const areaMatch = tok.str.match(AREA_RE);
++        const cleanName = tok.str.replace(AREA_RE, '').trim() || tok.str;
++        const declaredArea = areaMatch ? Number(areaMatch[1].replace(',', '.')) : null;
++        const areaFromBounds = bounds ? r2((bounds.xMax - bounds.xMin) * (bounds.zMax - bounds.zMin)) : null;
++        rooms.push({
++          id: slugRoomId(cleanName, rooms.length),
++          name: cleanName,
++          level: 0,
++          center: [tok.x, tok.z],
++          bounds,
++          area: declaredArea ?? areaFromBounds,
++          declaredArea,
++          floorType: guessFloorType(cleanName),
++          habitable: !/terrasse|veranda|véranda|garage|balcon/i.test(cleanName),
++          provenance: 'vector'
++        });
++      } else {
++        unmatchedTexts.push(tok);
++      }
++    }
++
++    // Associer les étiquettes de surface séparées (« 24,5 m² ») à la pièce la plus proche (< 2,5 m)
++    for (const areaTok of areaTokens) {
++      let nearest = null;
++      let bestDist = Infinity;
++      for (const room of rooms) {
++        const d = Math.hypot(areaTok.x - room.center[0], areaTok.z - room.center[1]);
++        if (d < bestDist && d <= 2.5) { bestDist = d; nearest = room; }
++      }
++      const val = Number((areaTok.str.match(AREA_RE) || [])[1]?.replace(',', '.'));
++      if (nearest && Number.isFinite(val)) {
++        nearest.declaredArea = val;
++        if (!nearest.area) nearest.area = val;
++      } else {
++        unmatchedTexts.push(areaTok);
++      }
++    }
++
++    return { rooms, unmatchedTexts };
++  }
++
++  /**
++   * Extraction vectorielle complète d'une page PDF à partir de `operatorList` + `textContent`.
++   * @param {{ operatorList, textContent, pageHeightPt?, ops?, confirmedScale?, ptsPerMeter? }} input
++   */
++  function extract({ operatorList, textContent = { items: [] }, pageHeightPt = null, ops = DEFAULT_OPS, confirmedScale = null, ptsPerMeter = null } = {}) {
++    const textItems = Array.isArray(textContent) ? textContent : (textContent?.items || []);
++    const scaleProposal = detectScaleProposal(textItems);
++    const toVerify = [];
++
++    let activePtsPerMeter = null;
++    let scaleConfirmed = false;
++
++    if (confirmedScale && confirmedScale.confirmed && Number.isFinite(confirmedScale.ptsPerMeter) && confirmedScale.ptsPerMeter > 0) {
++      activePtsPerMeter = confirmedScale.ptsPerMeter;
++      scaleConfirmed = true;
++      if (confirmedScale.consistent === false && confirmedScale.warning) {
++        toVerify.push({ kind: 'scale', reason: confirmedScale.warning, coords: null });
++      }
++    } else if (Number.isFinite(Number(ptsPerMeter)) && Number(ptsPerMeter) > 0) {
++      activePtsPerMeter = Number(ptsPerMeter);
++      scaleConfirmed = true;
++    } else if (scaleProposal) {
++      activePtsPerMeter = scaleProposal.ptsPerMeter;
++      scaleConfirmed = false;
++      toVerify.push({
++        kind: 'scale',
++        reason: `Échelle ${scaleProposal.label} lue dans le document : à confirmer sur une cote témoin avant validation.`,
++        coords: null
++      });
++    } else {
++      // Aucune échelle ni confirmation : on refuse d'inventer une échelle arbitraire
++      return {
++        ok: false,
++        needsScaleConfirmation: true,
++        scaleConfirmed: false,
++        scaleProposal: null,
++        ptsPerMeter: null,
++        walls: [],
++        doors: [],
++        windows: [],
++        rooms: [],
++        toVerify: [{
++          kind: 'scale',
++          reason: 'Aucune échelle détectée ni confirmée : mesurez une cote témoin pour extraire la géométrie vectorielle.',
++          coords: null
++        }],
++        stats: { rawSegments: 0, rawCurves: 0, walls: 0, doors: 0, windows: 0, rooms: 0, toVerify: 1 }
++      };
++    }
++
++    const parsed = parseOperatorList(operatorList, ops);
++    const hPt = Number.isFinite(Number(pageHeightPt)) ? Number(pageHeightPt) : 0;
++    const toPlanCoords = (xPt, yPt) => [
++      xPt / activePtsPerMeter,
++      (hPt ? (hPt - yPt) : -yPt) / activePtsPerMeter
++    ];
++
++    const planSegments = parsed.segments.map(s => {
++      const [x1, z1] = toPlanCoords(s.x1, s.y1);
++      const [x2, z2] = toPlanCoords(s.x2, s.y2);
++      return { x1, z1, x2, z2 };
++    });
++    const planCurves = parsed.curves.map(c => ({
++      p0: toPlanCoords(c.p0[0], c.p0[1]),
++      p1: toPlanCoords(c.p1[0], c.p1[1]),
++      p2: toPlanCoords(c.p2[0], c.p2[1]),
++      p3: toPlanCoords(c.p3[0], c.p3[1])
++    }));
++
++    const wallRes = detectWalls(planSegments);
++    const winRes = detectWindows(wallRes.remaining, wallRes.walls);
++    const doorRes = detectDoors(planCurves, wallRes.walls, winRes.remaining);
++    const roomRes = extractRoomsFromText(textItems, wallRes.walls, toPlanCoords);
++
++    // Trier les ouvertures par position `at` sur chaque mur
++    for (const w of wallRes.walls) {
++      w.openings.sort((a, b) => a.at - b.at);
++    }
++
++    // Tout élément non interprété est signalé dans « À vérifier » (jamais supprimé en silence)
++    for (const seg of doorRes.remaining) {
++      if (seg.len < 0.20) continue; // micro-traits de hachure ou jonction
++      toVerify.push({
++        kind: 'segment',
++        reason: `Trait vectoriel non interprété (${r2(seg.len)} m)`,
++        coords: { from: [r3(seg.x1), r3(seg.z1)], to: [r3(seg.x2), r3(seg.z2)] }
++      });
++    }
++    for (const uc of doorRes.unmatchedCurves) {
++      toVerify.push({
++        kind: 'curve',
++        reason: uc.reason,
++        coords: { from: [r3(uc.curve.p0[0]), r3(uc.curve.p0[1])], to: [r3(uc.curve.p3[0]), r3(uc.curve.p3[1])] }
++      });
++    }
++    for (const ut of roomRes.unmatchedTexts) {
++      toVerify.push({
++        kind: 'text',
++        reason: `Texte non rattaché à une pièce : « ${ut.str} »`,
++        coords: { at: [ut.x, ut.z] }
++      });
++    }
++
++    return {
++      ok: true,
++      needsScaleConfirmation: !scaleConfirmed,
++      scaleConfirmed,
++      scaleProposal,
++      ptsPerMeter: activePtsPerMeter,
++      walls: wallRes.walls,
++      doors: doorRes.doors,
++      windows: winRes.windows,
++      rooms: roomRes.rooms,
++      toVerify,
++      stats: {
++        rawSegments: parsed.segments.length,
++        rawCurves: parsed.curves.length,
++        walls: wallRes.walls.length,
++        doors: doorRes.doors.length,
++        windows: winRes.windows.length,
++        rooms: roomRes.rooms.length,
++        toVerify: toVerify.length
++      }
++    };
++  }
++
++  /**
++   * Fusionne d'éventuelles annotations IA sur une extraction vectorielle :
++   * l'IA peut uniquement nommer/compléter les pièces ou annoter `toVerify`, JAMAIS déplacer,
++   * redimensionner ou supprimer un mur vectoriel.
++   */
++  function mergeAiAnnotations(vectorResult, aiAnnotations = {}) {
++    if (!vectorResult) return vectorResult;
++    const immutableWalls = JSON.parse(JSON.stringify(vectorResult.walls || []));
++    const rooms = JSON.parse(JSON.stringify(vectorResult.rooms || []));
++    const aiRooms = Array.isArray(aiAnnotations?.rooms) ? aiAnnotations.rooms : [];
++
++    for (const aiRoom of aiRooms) {
++      if (!aiRoom || !aiRoom.name) continue;
++      const match = rooms.find(r => r.id === aiRoom.id)
++        || (Array.isArray(aiRoom.center) && rooms.find(r => r.center && Math.hypot(r.center[0] - aiRoom.center[0], r.center[1] - aiRoom.center[1]) < 1.5));
++      if (match) {
++        match.name = String(aiRoom.name).trim();
++        if (aiRoom.floorType) match.floorType = aiRoom.floorType;
++        match.aiNamed = true;
++      }
++    }
++
++    return {
++      ...vectorResult,
++      walls: immutableWalls,
++      rooms
++    };
++  }
++
++  /**
++   * Extrait directement depuis un objet PDFPageProxy PDF.js (`page.getOperatorList()` + `page.getTextContent()`).
++   */
++  async function extractFromPdfPage(pdfPage, options = {}) {
++    const [operatorList, textContent] = await Promise.all([
++      pdfPage.getOperatorList(),
++      pdfPage.getTextContent().catch(() => ({ items: [] }))
++    ]);
++    const vp = typeof pdfPage.getViewport === 'function' ? pdfPage.getViewport({ scale: 1 }) : null;
++    const ops = options.ops || (typeof window !== 'undefined' && window.pdfjsLib?.OPS) || DEFAULT_OPS;
++    return extract({
++      operatorList,
++      textContent,
++      pageHeightPt: vp ? vp.height : options.pageHeightPt,
++      ops,
++      confirmedScale: options.confirmedScale,
++      ptsPerMeter: options.ptsPerMeter
++    });
++  }
++
++  return {
++    DEFAULT_OPS,
++    PT_PER_METER_1_1,
++    ptsPerMeterForDenominator,
++    detectScaleProposal,
++    confirmScale,
++    parseOperatorList,
++    extract,
++    extractFromPdfPage,
++    mergeAiAnnotations
++  };
++})();
++
++if (typeof module !== 'undefined') module.exports = PdfVectorExtract;
+diff --git a/tests/pdf-vector-extract.test.cjs b/tests/pdf-vector-extract.test.cjs
+new file mode 100644
+index 0000000..81631c6
+--- /dev/null
++++ b/tests/pdf-vector-extract.test.cjs
+@@ -0,0 +1,227 @@
++const test = require('node:test');
++const assert = require('node:assert/strict');
++const PdfVectorExtract = require('../js/pdfVectorExtract');
++
++const OPS = PdfVectorExtract.DEFAULT_OPS;
++
++function buildSynthetic3RoomHousePdf() {
++  // Échelle 1/100 : 1 m réel = 28.3464567 pt PDF
++  const scaleDenom = 100;
++  const ppm = PdfVectorExtract.ptsPerMeterForDenominator(scaleDenom);
++  const pageH = 842; // A4/A3 portrait/paysage arbitraire
++  const toPdf = (xM, zM) => [50 + xM * ppm, pageH - (50 + zM * ppm)];
++
++  const fnArray = [];
++  const argsArray = [];
++
++  const addLine = (x1, z1, x2, z2) => {
++    const [px1, py1] = toPdf(x1, z1);
++    const [px2, py2] = toPdf(x2, z2);
++    fnArray.push(OPS.moveTo, OPS.lineTo, OPS.stroke);
++    argsArray.push([px1, py1], [px2, py2], []);
++  };
++
++  // Helper mur : paire de traits parallèles séparés de `thick`
++  const addWall = (x1, z1, x2, z2, thick) => {
++    const dx = x2 - x1, dz = z2 - z1;
++    const len = Math.hypot(dx, dz);
++    const nx = (-dz / len) * (thick / 2);
++    const nz = (dx / len) * (thick / 2);
++    addLine(x1 + nx, z1 + nz, x2 + nx, z2 + nz);
++    addLine(x1 - nx, z1 - nz, x2 - nx, z2 - nz);
++  };
++
++  // Helper arc de porte 90° (approximation cubique Bézier kappa = 0.55228475)
++  const addDoorArc = (hx, hz, r, startAngle, endAngle) => {
++    const k = 0.55228475;
++    const x0 = hx + r * Math.cos(startAngle), z0 = hz + r * Math.sin(startAngle);
++    const x3 = hx + r * Math.cos(endAngle), z3 = hz + r * Math.sin(endAngle);
++    const sign = endAngle > startAngle ? 1 : -1;
++    const x1 = x0 - sign * k * r * Math.sin(startAngle);
++    const z1 = z0 + sign * k * r * Math.cos(startAngle);
++    const x2 = x3 + sign * k * r * Math.sin(endAngle);
++    const z2 = z3 - sign * k * r * Math.cos(endAngle);
++    const [px0, py0] = toPdf(x0, z0);
++    const [px1, py1] = toPdf(x1, z1);
++    const [px2, py2] = toPdf(x2, z2);
++    const [px3, py3] = toPdf(x3, z3);
++    fnArray.push(OPS.moveTo, OPS.curveTo, OPS.stroke);
++    argsArray.push([px0, py0], [px1, py1, px2, py2, px3, py3], []);
++    // Vantail (segment de la charnière vers la fin de l'arc)
++    addLine(hx, hz, x3, z3);
++  };
++
++  // Helper fenêtre : 3 traits parallèles espacés de 0.03 m
++  const addWindow = (x1, z1, x2, z2) => {
++    const dx = x2 - x1, dz = z2 - z1;
++    const len = Math.hypot(dx, dz);
++    const nx = -dz / len, nz = dx / len;
++    for (const off of [-0.03, 0, 0.03]) {
++      addLine(x1 + nx * off, z1 + nz * off, x2 + nx * off, z2 + nz * off);
++    }
++  };
++
++  // Maison 3 pièces : 10 m x 6 m
++  // 4 murs extérieurs (épaisseur 0.20 m)
++  addWall(0, 0, 10, 0, 0.20);   // Nord
++  addWall(10, 0, 10, 6, 0.20);  // Est
++  addWall(0, 6, 10, 6, 0.20);   // Sud
++  addWall(0, 0, 0, 6, 0.20);    // Ouest
++  // 2 cloisons intérieures (épaisseur 0.12 m)
++  addWall(6, 0, 6, 6, 0.12);    // Sépare Séjour (x=0..6) de Chambre 1 / Cuisine (x=6..10)
++  addWall(6, 3.5, 10, 3.5, 0.12); // Sépare Chambre 1 (z=0..3.5) de Cuisine (z=3.5..6)
++
++  // 2 portes :
++  // - Porte d'entrée sur mur Sud (z=6), largeur 0.90 m, charnière à (2.0, 6.0)
++  addDoorArc(2.0, 6.0, 0.90, 0, -Math.PI / 2);
++  // - Porte intérieure sur cloison x=6, largeur 0.80 m, charnière à (6.0, 1.5)
++  addDoorArc(6.0, 1.5, 0.80, Math.PI / 2, 0);
++
++  // 2 fenêtres :
++  // - Fenêtre Séjour sur mur Nord (z=0), x = 2.0 à 3.6 (largeur 1.60 m)
++  addWindow(2.0, 0, 3.6, 0);
++  // - Fenêtre Chambre 1 sur mur Est (x=10), z = 1.0 à 2.2 (largeur 1.20 m)
++  addWindow(10, 1.0, 10, 2.2);
++
++  // 1 trait vectoriel orphelin (ex. mobilier ou cote non interprétée) de 1.5 m -> doit aller dans toVerify
++  addLine(1.0, 2.0, 2.5, 2.0);
++
++  const textItem = (str, xM, zM) => {
++    const [px, py] = toPdf(xM, zM);
++    return { str, transform: [10, 0, 0, 10, px, py] };
++  };
++
++  const textContent = {
++    items: [
++      textItem('TITRE DU PLAN : PLAN DE DISTRIBUTION RDC', 0.5, 7.2),
++      textItem('Échelle : 1/100', 7.0, 7.2),
++      textItem('Séjour', 3.0, 3.0),
++      textItem('36,0 m²', 3.0, 3.4),
++      textItem('Chambre 1', 8.0, 1.8),
++      textItem('14,0 m²', 8.0, 2.2),
++      textItem('Cuisine', 8.0, 4.7),
++      textItem('10,0 m²', 8.0, 5.1)
++    ]
++  };
++
++  return {
++    operatorList: { fnArray, argsArray },
++    textContent,
++    pageHeightPt: pageH,
++    ppm,
++    originOffsetM: 50 / ppm
++  };
++}
++
++test('Lot 5 — Extraction vectorielle d’une maison 3 pièces (murs, portes, fenêtres, pièces, tolérance ≤ 2 cm)', () => {
++  const synth = buildSynthetic3RoomHousePdf();
++
++  // 1. Sans confirmation d'échelle : proposition 1/100 signalée dans « À vérifier »
++  const unconfirmed = PdfVectorExtract.extract({
++    operatorList: synth.operatorList,
++    textContent: synth.textContent,
++    pageHeightPt: synth.pageHeightPt
++  });
++  assert.equal(unconfirmed.ok, true);
++  assert.equal(unconfirmed.scaleConfirmed, false);
++  assert.equal(unconfirmed.needsScaleConfirmation, true);
++  assert.equal(unconfirmed.scaleProposal.denominator, 100);
++  assert.ok(unconfirmed.toVerify.some(item => item.kind === 'scale'));
++
++  // 2. Confirmation explicite sur la cote témoin de 10,00 m
++  const confirmedScale = PdfVectorExtract.confirmScale({
++    detectedDenominator: unconfirmed.scaleProposal.denominator,
++    witnessPdfPoints: 10 * synth.ppm,
++    witnessRealMeters: 10
++  });
++  assert.equal(confirmedScale.confirmed, true);
++  assert.equal(confirmedScale.consistent, true);
++  assert.ok(confirmedScale.relativeError < 0.001);
++
++  const res = PdfVectorExtract.extract({
++    operatorList: synth.operatorList,
++    textContent: synth.textContent,
++    pageHeightPt: synth.pageHeightPt,
++    confirmedScale
++  });
++
++  assert.equal(res.ok, true);
++  assert.equal(res.scaleConfirmed, true);
++  assert.equal(res.walls.length, 6, 'Doit extraire exactement 6 murs (4 extérieurs + 2 cloisons)');
++
++  const ox = synth.originOffsetM;
++  const oz = synth.originOffsetM;
++  const findWall = (x1, z1, x2, z2) => res.walls.find(w => {
++    const a = Math.hypot(w.from[0] - (x1 + ox), w.from[1] - (z1 + oz)) + Math.hypot(w.to[0] - (x2 + ox), w.to[1] - (z2 + oz));
++    const b = Math.hypot(w.from[0] - (x2 + ox), w.from[1] - (z2 + oz)) + Math.hypot(w.to[0] - (x1 + ox), w.to[1] - (z1 + oz));
++    return Math.min(a, b) <= 0.04; // ≤ 2 cm par extrémité
++  });
++
++  const north = findWall(0, 0, 10, 0);
++  const east = findWall(10, 0, 10, 6);
++  const south = findWall(0, 6, 10, 6);
++  const west = findWall(0, 0, 0, 6);
++  const partV = findWall(6, 0, 6, 6);
++  const partH = findWall(6, 3.5, 10, 3.5);
++  assert.ok(north && east && south && west && partV && partH, 'Tous les murs doivent correspondre aux coordonnées exactes (±2 cm)');
++  assert.ok(Math.abs(north.thick - 0.20) <= 0.01);
++  assert.equal(north.type, 'ext');
++  assert.ok(Math.abs(partV.thick - 0.12) <= 0.01);
++  assert.equal(partV.type, 'int');
++
++  // Portes (2 arcs détectés)
++  assert.equal(res.doors.length, 2, 'Doit détecter les 2 portes');
++  const doorWidths = res.doors.map(d => d.w).sort((a, b) => a - b);
++  assert.ok(Math.abs(doorWidths[0] - 0.80) <= 0.03);
++  assert.ok(Math.abs(doorWidths[1] - 0.90) <= 0.03);
++
++  // Fenêtres (2 faisceaux détectés)
++  assert.equal(res.windows.length, 2, 'Doit détecter les 2 fenêtres');
++  const winWidths = res.windows.map(w => w.w).sort((a, b) => a - b);
++  assert.ok(Math.abs(winWidths[0] - 1.20) <= 0.03);
++  assert.ok(Math.abs(winWidths[1] - 1.60) <= 0.03);
++
++  // Pièces (3 pièces nommées)
++  assert.equal(res.rooms.length, 3, 'Doit extraire les 3 pièces');
++  const names = res.rooms.map(r => r.name).sort();
++  assert.deepEqual(names, ['Chambre 1', 'Cuisine', 'Séjour']);
++  const sejour = res.rooms.find(r => r.name === 'Séjour');
++  assert.ok(sejour.bounds, 'Séjour doit avoir des limites déduites des murs');
++  assert.ok(Math.abs((sejour.bounds.xMax - sejour.bounds.xMin) - 6.0) <= 0.03);
++  assert.ok(Math.abs((sejour.bounds.zMax - sejour.bounds.zMin) - 6.0) <= 0.03);
++  assert.equal(sejour.declaredArea, 36);
++
++  // Trait orphelin jamais supprimé silencieusement -> présent dans toVerify
++  assert.ok(res.toVerify.some(item => item.kind === 'segment'), 'Le trait orphelin de 1,5 m doit apparaître dans « À vérifier »');
++});
++
++test('Lot 5 — Sans échelle ni confirmation, refus d’inventer une échelle ; l’IA ne déplace jamais un mur vectoriel', () => {
++  const noScale = PdfVectorExtract.extract({
++    operatorList: { fnArray: [OPS.moveTo, OPS.lineTo, OPS.stroke], argsArray: [[0, 0], [100, 0], []] },
++    textContent: { items: [{ str: 'Séjour', transform: [10, 0, 0, 10, 50, 50] }] }
++  });
++  assert.equal(noScale.ok, false);
++  assert.equal(noScale.needsScaleConfirmation, true);
++  assert.equal(noScale.walls.length, 0);
++
++  // Vérifier que mergeAiAnnotations renomme les pièces sans toucher aux murs vectoriels
++  const synth = buildSynthetic3RoomHousePdf();
++  const confirmedScale = PdfVectorExtract.confirmScale({
++    detectedDenominator: 100,
++    witnessPdfPoints: 10 * synth.ppm,
++    witnessRealMeters: 10
++  });
++  const base = PdfVectorExtract.extract({
++    operatorList: synth.operatorList,
++    textContent: synth.textContent,
++    pageHeightPt: synth.pageHeightPt,
++    confirmedScale
++  });
++  const beforeWalls = JSON.stringify(base.walls);
++  const merged = PdfVectorExtract.mergeAiAnnotations(base, {
++    walls: [{ from: [99, 99], to: [100, 100], thick: 0.5 }], // tentative illégale de déplacer les murs
++    rooms: [{ id: 'sejour', name: 'Grand Séjour / Salle à manger' }]
++  });
++  assert.equal(JSON.stringify(merged.walls), beforeWalls, 'Les murs vectoriels doivent rester strictement immuables');
++  assert.equal(merged.rooms.find(r => r.id === 'sejour').name, 'Grand Séjour / Salle à manger');
++});
+-- 
+2.34.1
+

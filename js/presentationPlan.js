@@ -24,8 +24,10 @@
     return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
   }
 
-  P.buildPresentationPlan = function () {
+  P.buildPresentationPlan = function (level = 0) {
     computeExtent();
+    const targetLevel = Number(level) || 0;
+    const onLevel = item => (Number(item?.level) || 0) === targetLevel;
     const N = S * PPM;
     const c = document.createElement('canvas');
     c.width = c.height = N;
@@ -33,6 +35,13 @@
     const X = x => (x - X0) * PPM, Z = z => (z - Z0) * PPM, L = m => m * PPM;
     const R = rng(42);
     const H = HOUSE_DATA;
+    const levelRooms = (H.rooms || []).filter(onLevel);
+    const levelWalls = (H.walls || []).filter(onLevel);
+    const levelFurniture = (H.furniture || []).filter(onLevel);
+    const levelColumns = (H.columns || []).filter(onLevel);
+    const levelCanopies = (H.canopies || []).filter(onLevel);
+    const levelDimensions = (H.dimensions || []).filter(onLevel);
+    const levelDecor = (H.decor || []).filter(onLevel);
 
     const shadowOn = (blur = 0.12, off = 0.06, a = 0.35) => {
       g.shadowColor = `rgba(20,18,15,${a})`;
@@ -84,8 +93,8 @@
       shadowOff();
     }
 
-    // ---- 3. Sols des pièces ----
-    H.rooms.forEach(r => {
+    // ---- 3. Sols des pièces (filtrées strictement sur le niveau demandé) ----
+    levelRooms.forEach(r => {
       const b = r.bounds;
       const shapePath = () => {
         g.beginPath();
@@ -130,9 +139,9 @@
       });
     }
 
-    // ---- 5. Mobilier vu de dessus ----
+    // ---- 5. Mobilier vu de dessus (uniquement le niveau demandé) ----
     const skip = /Écran TV|Meuble haut/;
-    const items = H.furniture.filter(it => !skip.test(it.name));
+    const items = levelFurniture.filter(it => !skip.test(it.name || ''));
     const rug = items.find(it => /Tapis/.test(it.name));
     if (rug) {
       g.fillStyle = '#e9e1d3';
@@ -216,11 +225,17 @@
     };
     items.filter(it => it !== rug).forEach(drawItem);
 
-    // Plaque de cuisson sur le plan de travail
-    g.strokeStyle = '#2c2e30'; g.lineWidth = L(0.015);
-    [[-5.45, -1.45], [-5.2, -1.45], [-5.45, -1.15], [-5.2, -1.15]].forEach(([x, z]) => { g.beginPath(); g.arc(X(x), Z(z), L(0.09), 0, Math.PI * 2); g.stroke(); });
+    // Plaque de cuisson : uniquement si un plan de travail / plaque existe réellement sur ce niveau
+    const cooktop = levelFurniture.find(it => /plaque|cuisson|cuisini[eè]re/i.test(it.name || ''));
+    if (cooktop) {
+      g.strokeStyle = '#2c2e30'; g.lineWidth = L(0.015);
+      const bx = cooktop.x, bz = cooktop.z;
+      [[-0.13, -0.14], [0.13, -0.14], [-0.13, 0.14], [0.13, 0.14]].forEach(([dx, dz]) => {
+        g.beginPath(); g.arc(X(bx + dx), Z(bz + dz), L(0.08), 0, Math.PI * 2); g.stroke();
+      });
+    }
 
-    // Plantes en pot (décor)
+    // Plantes en pot (décor du niveau uniquement)
     const plant = (x, z, rad) => {
       shadowOn(0.12, 0.08, 0.4);
       g.fillStyle = '#3f5f2c'; g.beginPath(); g.arc(X(x), Z(z), L(rad), 0, Math.PI * 2); g.fill(); shadowOff();
@@ -232,12 +247,12 @@
         g.fill();
       }
     };
-    (H.decor || []).filter(d => /plant/i.test(d.model)).forEach(d => plant(d.x, d.z, d.w * 0.55));
+    levelDecor.filter(d => /plant/i.test(d.model || '')).forEach(d => plant(d.x, d.z, (d.w || 0.5) * 0.55));
 
-    // ---- 6. Murs pochés avec ombre portée ----
+    // ---- 6. Murs pochés avec ombre portée (strictement sur le niveau demandé) ----
     const wallPath = new Path2D();
     const winRects = [];
-    H.walls.forEach(w => {
+    levelWalls.forEach(w => {
       const dx = (w.to[0] - w.from[0]) / w.length, dz = (w.to[1] - w.from[1]) / w.length;
       const nx = -dz * w.thick / 2, nz = dx * w.thick / 2;
       const quad = (s, e, list) => {
@@ -271,8 +286,8 @@
       g.beginPath(); g.moveTo(X(m1[0]), Z(m1[1])); g.lineTo(X(m2[0]), Z(m2[1])); g.stroke();
     });
 
-    // Portes : arc de débattement + vantail
-    H.walls.forEach(w => {
+    // Portes : arc de débattement + vantail (niveau demandé uniquement)
+    levelWalls.forEach(w => {
       const dx = (w.to[0] - w.from[0]) / w.length, dz = (w.to[1] - w.from[1]) / w.length;
       const nx = -dz, nz = dx;
       w.openings.filter(op => op.type === 'door').forEach(op => {
@@ -294,7 +309,7 @@
     });
 
     // Colonnes
-    (H.columns || []).forEach(col => {
+    levelColumns.forEach(col => {
       shadowOn(0.15, 0.1, 0.5);
       g.fillStyle = '#e8e4dc'; g.fillRect(X(col.x - col.base / 2), Z(col.z - col.base / 2), L(col.base), L(col.base));
       shadowOff();
@@ -302,7 +317,7 @@
     });
 
     // Pergola (lames) et projection de l'auvent (tirets)
-    (H.canopies || []).forEach(cn => {
+    levelCanopies.forEach(cn => {
       if (cn.type === 'pergola') {
         g.fillStyle = 'rgba(70,52,36,0.55)';
         for (let x = cn.xMin + 0.15; x < cn.xMax - 0.1; x += cn.gap) g.fillRect(X(x - cn.slat / 2), Z(cn.zMin), L(cn.slat), L(cn.zMax - cn.zMin));
@@ -338,18 +353,18 @@
       g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = size * 0.28; g.strokeText(str, x, y);
       g.fillStyle = color; g.fillText(str, x, y);
     };
-    H.rooms.forEach(r => {
+    levelRooms.forEach(r => {
       const w = r.bounds.xMax - r.bounds.xMin;
-      const size = L(Math.min(0.3, (w * 0.85) / (r.name.length * 0.62)));
+      const size = L(Math.min(0.3, (w * 0.85) / (Math.max(1, (r.name || '').length) * 0.62)));
       let cz = r.center.z;
-      if (r.id === 'living') cz = 1.25; // dégager la table basse
-      if (r.id === 'dining') cz = 3.05;
+      if (r.id === 'living' && 1.25 > r.bounds.zMin + 0.4 && 1.25 < r.bounds.zMax - 0.4) cz = 1.25;
+      if (r.id === 'dining' && 3.05 > r.bounds.zMin + 0.4 && 3.05 < r.bounds.zMax - 0.4) cz = 3.05;
       text(r.name, X(r.center.x), Z(cz) - size * 0.35, size);
-      text(r.surface, X(r.center.x), Z(cz) + size * 0.75, size * 0.62, 500, '#46525c');
+      if (r.surface) text(r.surface, X(r.center.x), Z(cz) + size * 0.75, size * 0.62, 500, '#46525c');
     });
 
     g.strokeStyle = '#1d252c'; g.lineWidth = 1.5;
-    H.dimensions.forEach(dm => {
+    levelDimensions.forEach(dm => {
       const ax = X(dm.from[0]), az = Z(dm.from[2]), bx = X(dm.to[0]), bz = Z(dm.to[2]);
       g.beginPath(); g.moveTo(ax, az); g.lineTo(bx, bz); g.stroke();
       [[ax, az], [bx, bz]].forEach(([px, pz]) => { g.beginPath(); g.moveTo(px - 8, pz + 8); g.lineTo(px + 8, pz - 8); g.stroke(); });
@@ -372,15 +387,18 @@
     [0, 1, 2, 3, 4].forEach(i => { g.fillStyle = i % 2 ? '#ffffff' : '#1d252c'; g.fillRect(sx + L(i), sz, L(1), L(0.1)); });
     g.strokeStyle = '#1d252c'; g.lineWidth = 1.5; g.strokeRect(sx, sz, L(5), L(0.1));
     [0, 1, 2, 3, 5].forEach(m => text(m + (m === 5 ? ' m' : ''), sx + L(m), sz - L(0.16), L(0.15), 600));
-    text('PLAN DU REZ-DE-CHAUSSÉE', X(X0 + S - 0.25), Z(Z0 + S - 0.45), L(0.2), 800, '#1d252c', 'right');
+    const levelLabel = targetLevel === 0 ? 'PLAN DU REZ-DE-CHAUSSÉE' : `PLAN DE L’ÉTAGE R+${targetLevel}`;
+    text(levelLabel, X(X0 + S - 0.25), Z(Z0 + S - 0.45), L(0.2), 800, '#1d252c', 'right');
     text(`Surface habitable ≈ ${Math.round(H.totals.habitable)} m²`, X(X0 + S - 0.25), Z(Z0 + S - 0.2), L(0.14), 500, '#46525c', 'right');
 
     return c;
   };
 
   P.createPresentationPlan = function () {
-    this.presentationCanvas = this.buildPresentationPlan();
+    this.presentationCanvas = this.buildPresentationPlan(0);
     const tex = new THREE.CanvasTexture(this.presentationCanvas);
+    if ('colorSpace' in tex && THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+    else if ('encoding' in tex && THREE.sRGBEncoding) tex.encoding = THREE.sRGBEncoding;
     tex.anisotropy = this.maxAnisotropy;
     const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, fog: false });
     const plane = new THREE.Mesh(new THREE.PlaneGeometry(S, S), mat);

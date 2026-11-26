@@ -33,18 +33,19 @@ class ClientTools {
     this.measuring = false;
     this.hotspots = HOUSE_DATA.rooms.map(room => this.makeHotspot(room));
     this.photoAnchors = [];
-    if (HOUSE_DATA.meta.slug === 'residence-verandas' && HOUSE_DATA.edition?.photos?.length) {
+    if (HOUSE_DATA.edition?.photos?.length) {
       const dialog = document.createElement('dialog'); dialog.className = 'perspective-dialog';
-      dialog.setAttribute('aria-label','Perspective architecturale');
+      dialog.setAttribute('aria-label', 'Perspective architecturale');
       const close = document.createElement('button'), image = document.createElement('img');
       close.textContent = 'Fermer la perspective'; close.onclick = () => dialog.close();
       dialog.append(close, image); document.body.append(dialog);
-      HOUSE_DATA.edition.photos.forEach((photo,i) => {
+      HOUSE_DATA.edition.photos.forEach((photo, i) => {
+        if (!Array.isArray(photo?.anchor) || photo.anchor.length !== 3) return;
         const el = this.makeAnchor(), button = document.createElement('button');
-        button.className = 'client-hotspot'; button.textContent = String(i + 1).padStart(2,'0');
+        button.className = 'client-hotspot'; button.textContent = String(i + 1).padStart(2, '0');
         button.setAttribute('aria-label', `Voir la perspective : ${photo.title}`);
         button.onclick = () => { image.src = photo.image; image.alt = photo.title; dialog.showModal(); };
-        el.append(button); this.photoAnchors.push({el,point:new THREE.Vector3(...photo.anchor)});
+        el.append(button); this.photoAnchors.push({ el, point: new THREE.Vector3(...photo.anchor) });
       });
     }
     this.nextOcclusion = 0;
