@@ -1417,10 +1417,10 @@ test('Conception générative IA : Brief -> Plan 2D/3D, Patch naturel, Auto-fix 
   assert.ok(aiJs.includes('ctx.liveProject'), 'js/aiAssistant.js doit envoyer liveProject pour le Live Sync');
   assert.ok(aiJs.includes('applyProjectToEditorWithUndo'), 'js/aiAssistant.js doit préserver Ctrl+Z lors du chargement de plan');
   assert.ok(aiJs.includes('openStudioPipelineCard'), 'js/aiAssistant.js doit exposer l’orchestrateur de chaîne complète');
-  assert.ok(aiJs.includes('EditorPremiumAPI.generateAPS'), 'La chaîne complète doit piloter l’APS Auto PDF');
-  assert.ok(aiJs.includes('XlsxExport.downloadXlsx'), 'La chaîne complète doit piloter le Devis & Métré FCFA (.xlsx)');
-  assert.ok(aiJs.includes('PlanBook.exportBook'), 'La chaîne complète doit piloter le Cahier de plans A3 PDF');
-  assert.ok(aiJs.includes('EditorPremiumAPI.exportCatalog'), 'La chaîne complète doit piloter le Catalogue Premium PDF');
+  assert.ok(aiJs.includes('.generateAPS('), 'La chaîne complète doit piloter l’APS Auto PDF');
+  assert.ok(aiJs.includes('XlsxExportLib.downloadXlsx'), 'La chaîne complète doit piloter le Devis & Métré FCFA (.xlsx)');
+  assert.ok(aiJs.includes('PlanBookLib.exportBook'), 'La chaîne complète doit piloter le Cahier de plans A3 PDF');
+  assert.ok(aiJs.includes('.exportCatalog('), 'La chaîne complète doit piloter le Catalogue Premium PDF');
   assert.ok(premJs.includes('window.EditorPremiumAPI'), 'js/editorPremium.js doit exposer window.EditorPremiumAPI');
   for (const act of [
     'run_studio_pipeline', 'generate_plan_brief', 'confirm_load_generated_plan', 'apply_plan_patch', 'confirm_apply_plan_patch',

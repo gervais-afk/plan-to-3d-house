@@ -224,13 +224,13 @@
   async function handleGenerateAPS() {
     if (typeof APSGenerator === 'undefined') {
       showToast('Module APSGenerator non chargé', 'error');
-      return;
+      return false;
     }
 
     const data = getProjectData();
     if (!data || !data.rooms?.length) {
       showToast('Dessinez au moins une pièce avant de générer l\'APS', 'error');
-      return;
+      return false;
     }
 
     try {
@@ -241,9 +241,12 @@
       showToast(missing.message
         ? `✅ APS généré — ${missing.message} (masqués du cartouche).`
         : '✅ APS généré avec succès !', 'success');
+      // `true` = PDF réellement composé : la chaîne complète s'appuie sur ce retour pour son rapport d'étape.
+      return true;
     } catch (error) {
       console.error('Erreur génération APS:', error);
       showToast('Erreur lors de la génération de l\'APS : ' + error.message, 'error');
+      return false;
     }
   }
 
@@ -257,13 +260,13 @@
   async function exportPremiumPDF() {
     if (typeof ClientBrochurePremium === 'undefined') {
       showToast('Module ClientBrochurePremium non chargé', 'error');
-      return;
+      return false;
     }
 
     const data = getProjectData();
     if (!data || !data.rooms?.length) {
       showToast('Dessinez au moins une pièce avant de générer le catalogue', 'error');
-      return;
+      return false;
     }
 
     // Studio 3D facultatif : sans lui, le plan du rez-de-chaussée remplace les vues 3D.
@@ -290,10 +293,12 @@
       showToast(missing.message
         ? `🎨 Catalogue premium généré — ${missing.message} (masqués du cartouche).`
         : '🎨 Catalogue premium généré avec succès !', 'success');
-
+      // `true` = PDF réellement composé : la chaîne complète s'appuie sur ce retour pour son rapport d'étape.
+      return true;
     } catch (error) {
       console.error('Erreur export premium:', error);
       showToast('Erreur lors de l\'export : ' + error.message, 'error');
+      return false;
     }
   }
 

@@ -729,6 +729,30 @@
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  // Les modules d'export (costEstimate.js, xlsxExport.js, planBook.js) déclarent leur API en `const`
+  // de portée globale : la liaison est lexicale et ne crée aucune propriété sur `window`.
+  // On résout donc d'abord l'identifiant global, puis, à défaut, la propriété de `window`.
+  const GLOBAL_LIB_RESOLVERS = {
+    CostEstimate: () => (typeof CostEstimate !== 'undefined' ? CostEstimate : null),
+    XlsxExport: () => (typeof XlsxExport !== 'undefined' ? XlsxExport : null),
+    PlanBook: () => (typeof PlanBook !== 'undefined' ? PlanBook : null)
+  };
+
+  function resolveGlobalLib(name) {
+    const resolver = GLOBAL_LIB_RESOLVERS[name];
+    if (resolver) {
+      try {
+        const lexical = resolver();
+        if (lexical) return lexical;
+      } catch { /* liaison globale non déclarée sur cette page */ }
+    }
+    try {
+      return (typeof window !== 'undefined' && window[name]) || null;
+    } catch {
+      return null;
+    }
+  }
+
   function makePipelineSlug(project, fallbackSlug) {
     const raw = String(fallbackSlug || project?.meta?.slug || project?.meta?.name || 'projet-atelier')
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -987,12 +1011,17 @@
       if (selected.aps && !cancelled) {
         setStep('deliverables', 'running', 'Génération de l’APS Auto PDF…');
         try {
-          if (window.EditorPremiumAPI && typeof window.EditorPremiumAPI.generateAPS === 'function') {
-            await window.EditorPremiumAPI.generateAPS();
+          const premium = window.EditorPremiumAPI;
+          if (premium && typeof premium.generateAPS === 'function') {
+            // generateAPS renvoie false si le PDF n'a pas pu être composé (plan vide, module absent).
+            const ok = await premium.generateAPS();
+            if (ok === false) throw new Error('composition impossible (plan vide ou module APS absent)');
+            produced.push('APS Auto PDF');
+          } else if (document.getElementById('btn-aps')) {
+            document.getElementById('btn-aps').click();
             produced.push('APS Auto PDF');
           } else {
-            document.getElementById('btn-aps')?.click();
-            produced.push('APS Auto PDF');
+            throw new Error('module APS indisponible dans l’éditeur');
           }
         } catch (err) {
           errors.push(`APS PDF : ${err.message || 'échec'}`);
@@ -1005,14 +1034,16 @@
       if (selected.estimate && !cancelled) {
         setStep('deliverables', 'running', 'Calcul du devis FCFA et export Excel (.xlsx)…');
         try {
-          if (snap && typeof window.CostEstimate !== 'undefined' && typeof window.XlsxExport !== 'undefined') {
-            const est = window.CostEstimate.estimate(snap, snap.estimate);
+          const CostEstimateLib = resolveGlobalLib('CostEstimate');
+          const XlsxExportLib = resolveGlobalLib('XlsxExport');
+          if (snap && CostEstimateLib && XlsxExportLib) {
+            const est = CostEstimateLib.estimate(snap, snap.estimate);
             if (est?.total) {
               const low = Math.round(est.total.low || 0).toLocaleString('fr-FR');
               const high = Math.round(est.total.high || 0).toLocaleString('fr-FR');
               estimateSummaryText = `Enveloppe travaux : ${low} – ${high} FCFA`;
             }
-            await window.XlsxExport.downloadXlsx(snap, est, { slug: pipelineSlug });
+            await XlsxExportLib.downloadXlsx(snap, est, { slug: pipelineSlug });
             produced.push('Devis & Métré (.xlsx)');
           } else {
             document.getElementById('btn-estimate')?.click();
@@ -1028,8 +1059,9 @@
       if (selected.planbook && !cancelled) {
         setStep('deliverables', 'running', 'Composition du Cahier de plans A3 PDF…');
         try {
-          if (snap && typeof window.PlanBook !== 'undefined' && typeof window.PlanBook.exportBook === 'function') {
-            await window.PlanBook.exportBook({
+          const PlanBookLib = resolveGlobalLib('PlanBook');
+          if (snap && PlanBookLib && typeof PlanBookLib.exportBook === 'function') {
+            await PlanBookLib.exportBook({
               data: snap,
               studio: window.studio || window.RENDER_STUDIO || null,
               includeEstimate: true
@@ -1048,12 +1080,16 @@
       if (selected.catalog && !cancelled) {
         setStep('deliverables', 'running', 'Export du Catalogue Premium PDF…');
         try {
-          if (window.EditorPremiumAPI && typeof window.EditorPremiumAPI.exportCatalog === 'function') {
-            await window.EditorPremiumAPI.exportCatalog();
+          const premium = window.EditorPremiumAPI;
+          if (premium && typeof premium.exportCatalog === 'function') {
+            const ok = await premium.exportCatalog();
+            if (ok === false) throw new Error('composition impossible (plan vide ou module catalogue absent)');
+            produced.push('Catalogue Premium PDF');
+          } else if (document.getElementById('btn-export-premium')) {
+            document.getElementById('btn-export-premium').click();
             produced.push('Catalogue Premium PDF');
           } else {
-            document.getElementById('btn-export-premium')?.click();
-            produced.push('Catalogue Premium PDF');
+            throw new Error('module catalogue indisponible dans l’éditeur');
           }
         } catch (err) {
           errors.push(`Catalogue PDF : ${err.message || 'échec'}`);
