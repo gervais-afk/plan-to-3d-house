@@ -133,10 +133,13 @@ const AiSequence = (() => {
 
   /**
    * Rend une image du parcours dans les passes demandées.
+   * Si frameDt > 0, fait progresser l'animation vivante de la scène (arbres, nuages, eau, personnages).
    * @returns {Promise<{ color?: string, depth?: string, edges?: string }>} images en data URL
    */
-  function captureFrame({ hs, studio, tour }, p, { width = 1280, height = 720, passes = ['color', 'depth', 'edges'], far = 20 } = {}) {
-    const shot = shotAt(tour, p);
+  function captureFrame({ hs, studio, tour }, p, { width = 1280, height = 720, passes = ['color', 'depth', 'edges'], far = 20, frameDt = 0, dwell = false } = {}) {
+    if (frameDt > 0 && hs && typeof hs.updateRealism === 'function') hs.updateRealism(frameDt);
+    const curveP = dwell && tour && typeof tour.remapProgress === 'function' ? tour.remapProgress(p) : p;
+    const shot = shotAt(tour, curveP);
     const out = {};
     if (passes.includes('color')) out.color = studio.capture({ ...shot, night: false }, width, height, 1.25, { clean: true });
     if (passes.includes('depth') || passes.includes('edges')) {

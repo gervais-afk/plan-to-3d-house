@@ -78,4 +78,46 @@ class ClientFinishes {
   setFacade(id) {
     this.apply(this.facade, id ? this.getPreset(id) : this.facadeDefault);
   }
+
+  applyPalette(paletteId) {
+    const palette = ClientFinishes.PALETTES[paletteId] || ClientFinishes.PALETTES.origin;
+    this.setFloor(palette.floor);
+    this.setFacade(palette.facade);
+    return palette;
+  }
 }
+
+ClientFinishes.PALETTES = {
+  origin: {
+    id: 'origin',
+    label: 'Origine du projet',
+    floor: '',
+    facade: '',
+    standing: 'Référence du dossier',
+    note: 'Finitions d’origine de la maquette.'
+  },
+  'pierre-chaux': {
+    id: 'pierre-chaux',
+    label: 'Pierre & Chaux',
+    floor: 'oak',
+    facade: 'stone',
+    standing: 'Standing (+8 à +12 % sur le poste façades/sols)',
+    note: 'Parement pierre naturelle · Parquet chêne clair · Standing (+8 à +12 %).'
+  },
+  'beton-bois': {
+    id: 'beton-bois',
+    label: 'Béton & Bois contemporain',
+    floor: 'concrete',
+    facade: 'timber',
+    standing: 'Haut de gamme (+12 à +18 % sur finitions)',
+    note: 'Bardage bois contemporain · Béton ciré · Haut de gamme (+12 à +18 %).'
+  },
+  'villa-tropicale': {
+    id: 'villa-tropicale',
+    label: 'Villa tropicale claire',
+    floor: 'tile',
+    facade: 'plaster',
+    standing: 'Confort maîtrisé (enveloppe de référence)',
+    note: 'Crépi clair réflectif · Carrelage frais anthracite · Enveloppe maîtrisée.'
+  }
+};

@@ -13,6 +13,8 @@ const TechnicalDrawings = require('../js/technicalDrawings.js');
 const VariantComparator = require('../js/variantComparator.js');
 const variantsStore = require('../variantsStore.js');
 const feedbackStore = require('../feedbackStore.js');
+const revisionsStore = require('../revisionsStore.js');
+const ApdDossier = require('../js/apdDossier.js');
 
 const SAMPLE_PROJECT = {
   meta: {
@@ -86,11 +88,11 @@ function makeSandbox(t) {
     for (const s of servers.reverse()) await s.close();
     fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
-  for (const f of ['serve.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'presentationStore.js', 'cabinetStore.js', 'variantsStore.js', 'portal.html', 'accueil.html', 'studio.html', 'index.html', 'editor.html']) {
+  for (const f of ['serve.js', 'geminiClient.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'presentationStore.js', 'cabinetStore.js', 'variantsStore.js', 'revisionsStore.js', 'planchesStore.js', 'portal.html', 'accueil.html', 'studio.html', 'index.html', 'editor.html']) {
     fs.copyFileSync(path.join(ROOT, f), path.join(root, f));
   }
   fs.mkdirSync(path.join(root, 'js'));
-  for (const f of ['variantState.js', 'data.js', 'coverImage.js', 'workspace.js', 'xlsxExport.js', 'technicalDrawings.js', 'variantComparator.js']) {
+  for (const f of ['variantState.js', 'data.js', 'coverImage.js', 'workspace.js', 'xlsxExport.js', 'technicalDrawings.js', 'variantComparator.js', 'apdDossier.js', 'meetingMode.js', 'bioclimaticAudit.js']) {
     fs.copyFileSync(path.join(ROOT, 'js', f), path.join(root, 'js', f));
   }
   for (const slug of ['projet-a', 'projet-b']) {
@@ -447,4 +449,488 @@ test('Cahier de plans A3 (jsPDF réel) : couverture sans hero, marque cabinet, c
   assert.ok(rawPdf.includes('FA\\316TAGE') || rawPdf.includes('FAÎTAGE') || rawPdf.includes('Toiture 4 pentes'), 'Les annotations techniques de toiture figurent dans le PDF');
   assert.equal(doc.getNumberOfPages(), 3);
 });
+
+// ============================================================================
+// 6. JOURNAL DES RÉVISIONS (V1, V2, V3…) + ÉCARTS + RBAC PORTAIL
+// ============================================================================
+test('revisionsStore & API /api/projects/:slug/revisions gèrent V1/V2, deltas automatiques et permissions portail', async t => {
+  const sb = makeSandbox(t);
+  const projectsDir = path.join(sb.root, 'projects');
+
+  // Sécurité : chemin traversant et snapshot invalide
+  assert.throws(() => revisionsStore.list(projectsDir, '../etc'), /invalide/i);
+  assert.throws(() => revisionsStore.create(projectsDir, 'projet-a', { snapshot: {} }), /Instantané de projet requis/i);
+
+  const snapV1 = {
+    ...SAMPLE_PROJECT,
+    rooms: [
+      { id: 'sejour', name: 'Séjour', level: 0, habitable: true, area: 48 },
+      { id: 'chambre1', name: 'Chambre 1', level: 0, habitable: true, area: 30 },
+      { id: 'terrasse', name: 'Terrasse', level: 0, habitable: false, area: 18 }
+    ],
+    estimate: { low: 45000000, high: 55000000 }
+  };
+  const v1 = revisionsStore.create(projectsDir, 'projet-a', {
+    label: 'Remise APS initiale',
+    phase: 'APS',
+    note: 'Première proposition complète.',
+    snapshot: snapV1,
+    feedbackSummary: { open: 3, resolved: 0 }
+  });
+  assert.equal(v1.tag, 'V1');
+  assert.equal(v1.version, 'V1');
+  assert.equal(v1.diff, null);
+  assert.equal(v1.metrics.habitable, 78);
+
+  const snapV2 = {
+    ...snapV1,
+    rooms: [
+      ...snapV1.rooms,
+      { id: 'bureau', name: 'Bureau', level: 0, habitable: true, area: 14 }
+    ],
+    estimate: { low: 52000000, high: 64000000 }
+  };
+  const v2 = revisionsStore.create(projectsDir, 'projet-a', {
+    label: 'Suite réunion client #1',
+    phase: 'APD',
+    note: 'Ajout d’un bureau indépendant.',
+    snapshot: snapV2,
+    feedbackSummary: { open: 1, resolved: 2 }
+  });
+  assert.equal(v2.tag, 'V2');
+  assert.equal(v2.diff.habitableDelta, 14);
+  assert.equal(v2.diff.roomsDelta, 1);
+  assert.equal(v2.diff.budgetLowDelta, 7000000);
+  assert.equal(v2.diff.feedbackDelta, -2);
+  assert.equal(v2.diff.feedbackResolvedDelta, 2);
+
+  // API HTTP en mode portail privé : architecte R/W, invité lecture seule sur son projet uniquement
+  const portalSrv = await sb.start({ PRIVATE_PORTAL: '1', PORTAL_PASSWORD: 'secret-test-password', PORTAL_INSECURE_LOCAL: '1' });
+  const login = await fetch(`${portalSrv.origin}/api/portal/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin },
+    body: JSON.stringify({ password: 'secret-test-password' })
+  });
+  assert.equal(login.status, 200);
+  const archCookie = login.headers.get('set-cookie').split(';')[0];
+
+  const invRes = await fetch(`${portalSrv.origin}/api/portal/invitations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin, Cookie: archCookie },
+    body: JSON.stringify({ project: 'projet-a', role: 'read', label: 'Client Révisions', validHours: 24 })
+  });
+  assert.equal(invRes.status, 201);
+  const { token: invToken } = await invRes.json();
+  const redeem = await fetch(`${portalSrv.origin}/api/portal/accept`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin },
+    body: JSON.stringify({ token: invToken })
+  });
+  assert.equal(redeem.status, 200);
+  const guestCookie = redeem.headers.get('set-cookie').split(';')[0];
+
+  const guestListOwn = await fetch(`${portalSrv.origin}/api/projects/projet-a/revisions`, { headers: { Cookie: guestCookie } });
+  assert.equal(guestListOwn.status, 200);
+  const ownData = await guestListOwn.json();
+  assert.equal(ownData.items.length, 2);
+  assert.equal(ownData.items[1].tag, 'V2');
+
+  const guestListOther = await fetch(`${portalSrv.origin}/api/projects/projet-b/revisions`, { headers: { Cookie: guestCookie } });
+  assert.equal(guestListOther.status, 403, 'Invité bloqué sur le journal d’un autre projet');
+
+  const guestCreate = await fetch(`${portalSrv.origin}/api/projects/projet-a/revisions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin, Cookie: guestCookie },
+    body: JSON.stringify({ label: 'Tentative client', snapshot: snapV2 })
+  });
+  assert.equal(guestCreate.status, 403, 'Invité bloqué en écriture sur le journal des révisions');
+
+  const archDel = await fetch(`${portalSrv.origin}/api/projects/projet-a/revisions/${encodeURIComponent(v2.id)}`, {
+    method: 'DELETE',
+    headers: { Origin: portalSrv.origin, Cookie: archCookie }
+  });
+  assert.equal(archDel.status, 200);
+  assert.equal(revisionsStore.list(projectsDir, 'projet-a').length, 1);
+});
+
+// ============================================================================
+// 7. DOSSIER APD / PERMIS DE CONSTRUIRE GUIDÉ (PC-01 → PC-08 + PDF A4 RÉEL)
+// ============================================================================
+test('ApdDossier évalue les 8 pièces réglementaires et assemble un PDF A4 relié valide', async () => {
+  const { jsPDF } = require('../assets/vendor/jspdf-4.2.1.umd.min.js');
+  const projectWithAreas = {
+    ...SAMPLE_PROJECT,
+    rooms: SAMPLE_PROJECT.rooms.map(r => ({
+      ...r,
+      area: (r.bounds.xMax - r.bounds.xMin) * (r.bounds.zMax - r.bounds.zMin)
+    }))
+  };
+  const cabinet = { name: 'Atelier Lumière', architect: 'Claire Mbarga' };
+  const ev = ApdDossier.evaluate({
+    project: projectWithAreas,
+    cabinet,
+    media: { images: [{ id: 'facade-sud' }, { id: 'plan-masse' }], renders: [] },
+    planches: [{ title: 'Plan de masse cadastral', category: 'masse' }],
+    deps: { TechnicalDrawings, CostEstimate }
+  });
+
+  assert.equal(ev.pieces.length, 8);
+  assert.deepEqual(ev.pieces.map(p => p.code), ['PC-01', 'PC-02', 'PC-03', 'PC-04', 'PC-05', 'PC-06', 'PC-07', 'PC-08']);
+  assert.equal(ev.canExport, true);
+  assert.ok(ev.completeness >= 90, `Complétude attendue >= 90%, obtenu ${ev.completeness}%`);
+
+  const exported = await ApdDossier.exportPDF({
+    project: projectWithAreas,
+    cabinet,
+    media: { images: [{ id: 'facade-sud' }], renders: [] },
+    planches: [{ title: 'Plan de masse', category: 'masse' }],
+    deps: { TechnicalDrawings, CostEstimate },
+    jsPDFCtor: jsPDF
+  });
+  assert.equal(exported.filename, 'villa-test-dossier-APD-PC.pdf');
+  assert.ok(exported.pages >= 3);
+  const rawPdf = exported.doc.output();
+  assert.match(rawPdf, /^%PDF-/);
+  assert.ok(rawPdf.includes('ATELIER LUMI'));
+  assert.ok(rawPdf.includes('PC-01') && rawPdf.includes('PC-08'));
+});
+
+// ============================================================================
+// 8. BRANCHEMENT DES 6 NOUVELLES FONCTIONS SUR TOUTES LES PAGES
+// ============================================================================
+test('studio.html, accueil.html, index.html, editor.html et workspace.js exposent les 6 nouvelles fonctionnalités', () => {
+  const studioHtml = fs.readFileSync(path.join(ROOT, 'studio.html'), 'utf8');
+  for (const token of ['id="btn-studio-cabinet"', 'id="studio-cabinet-dlg"', 'id="studio-resume"', 'id="print-project-link"', 'portal.html']) {
+    assert.ok(studioHtml.includes(token), `studio.html doit contenir ${token}`);
+  }
+
+  const accueilHtml = fs.readFileSync(path.join(ROOT, 'accueil.html'), 'utf8');
+  for (const token of ['id="btn-meeting-mode"', 'id="sheet-export-apd"', 'id="sheet-revisions"', 'id="sheet-revisions-list"']) {
+    assert.ok(accueilHtml.includes(token), `accueil.html doit contenir ${token}`);
+  }
+
+  const indexHtml = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  for (const token of ['id="client-north"', 'id="solar-play"', 'id="solar-city"', 'id="solar-season"', 'data-ambiance="pierre-chaux"', 'data-ambiance="villa-tropicale"']) {
+    assert.ok(indexHtml.includes(token), `index.html doit contenir ${token}`);
+  }
+
+  const editorHtml = fs.readFileSync(path.join(ROOT, 'editor.html'), 'utf8');
+  for (const token of ['id="btn-apd-dossier"', 'id="btn-revisions"', 'id="dlg-apd-dossier"', 'id="dlg-revisions"', 'js/apdDossier.js']) {
+    assert.ok(editorHtml.includes(token), `editor.html doit contenir ${token}`);
+  }
+
+  const workspaceJs = fs.readFileSync(path.join(ROOT, 'js', 'workspace.js'), 'utf8');
+  assert.ok(workspaceJs.includes("'apdDossier'") && workspaceJs.includes("'meetingMode'"));
+});
+
+// ============================================================================
+// 9. CINÉMATOGRAPHIE LENTE, PERSONNAGES ANIMÉS & PROMPTS VIDÉO IA VIVANTS
+// ============================================================================
+test('Cinématographie lente, vie extérieure et prompts vidéo IA sont correctement configurés', () => {
+  const AiPrompt = require('../js/aiPrompt.js');
+  const videoExt = AiPrompt.buildVideoPrompt({
+    kind: 'exterior',
+    movement: 'slow dolly-in along the garden path toward the veranda',
+    city: 'Douala, Cameroun',
+    livingPeople: true,
+    livingEnvironment: true,
+    pace: 'contemplatif'
+  });
+  assert.match(videoExt, /ultra-slow|meditative/i);
+  assert.match(videoExt, /strictly preserve/i);
+  assert.match(videoExt, /strolling|residents|human presence/i);
+  assert.match(videoExt, /palm fronds|clouds|breeze/i);
+
+  const videoStill = AiPrompt.buildVideoPrompt({
+    kind: 'interior',
+    room: 'Grand Séjour',
+    livingPeople: false,
+    livingEnvironment: false,
+    pace: 'cinema'
+  });
+  assert.match(videoStill, /Grand Séjour/);
+  assert.doesNotMatch(videoStill, /Natural human presence/i);
+  assert.doesNotMatch(videoStill, /Living environment/i);
+
+  // Vérification de la fonction monotone de ralentissement dans les pièces (ScrollTour)
+  const vm = require('node:vm');
+  const scrollTourSrc = fs.readFileSync(path.join(ROOT, 'js', 'scrollTour.js'), 'utf8');
+  class FakeVec3 {
+    constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
+    copy(v) { this.x = v.x; this.y = v.y; this.z = v.z; return this; }
+    lerp(v, a) { this.x += (v.x - this.x) * a; this.y += (v.y - this.y) * a; this.z += (v.z - this.z) * a; return this; }
+  }
+  const sandbox = {
+    window: {},
+    THREE: {
+      Vector3: FakeVec3,
+      CatmullRomCurve3: class { constructor(pts) { this.pts = pts; } getPoint(t, out) { return out.copy(this.pts[Math.min(this.pts.length - 1, Math.floor(t * (this.pts.length - 1)))]); } }
+    },
+    HOUSE_DATA: {
+      config: { elevationEnd: 0.25 },
+      rooms: [],
+      tourWaypoints: [
+        { pos: [0, 20, 0], look: [0, 0, 0], fov: 26 },
+        { pos: [5, 10, 15], look: [5, 2, 5], fov: 38 },
+        { pos: [5, 1.65, 10], look: [5, 1.5, 4], fov: 56 },
+        { pos: [5, 1.65, 4], look: [8, 1.5, 4], fov: 62 },
+        { pos: [8, 1.65, 4], look: [8, 1.5, 1], fov: 60 },
+        { pos: [12, 14, 16], look: [5, 2, 5], fov: 44 }
+      ]
+    }
+  };
+  vm.runInNewContext(scrollTourSrc + '; globalThis.__ScrollTour = ScrollTour;', sandbox);
+  const tour = new sandbox.__ScrollTour({ camera: { position: new FakeVec3(), fov: 50, lookAt() {}, updateProjectionMatrix() {} }, setElevation() {} });
+  assert.equal(tour.getPaceConfig().seconds, 52);
+  tour.setPace('contemplatif');
+  assert.equal(tour.getPaceConfig().seconds, 72);
+  let prev = -1;
+  for (let i = 0; i <= 40; i++) {
+    const r = tour.remapProgress(i / 40);
+    assert.ok(r >= prev - 1e-9, `remapProgress doit rester monotone croissant (${prev} -> ${r})`);
+    prev = r;
+  }
+  assert.equal(tour.remapProgress(0), 0);
+  assert.equal(tour.remapProgress(1), 1);
+
+  const indexHtml = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  for (const token of ['id="guided-autoplay"', 'id="tour-pace"', 'id="toggle-living-scene"']) {
+    assert.ok(indexHtml.includes(token), `index.html doit contenir ${token}`);
+  }
+  const styleCss = fs.readFileSync(path.join(ROOT, 'css', 'style.css'), 'utf8');
+  assert.match(styleCss, /#scroll-container\s*\{[^}]*height:\s*1800vh/);
+});
+
+// ============================================================================
+// 10. SUITE IA AVANCÉE (6 OUTILS : TERRAIN, RETOUCHE/STYLES, DÉBUT→FIN, VOIX OFF, 360°, BIOCLIMATIQUE & CCTP)
+// ============================================================================
+test('Suite IA Avancée : BioclimaticAudit, Panoramas 360°, endpoints serveur, RBAC et interface complète', async t => {
+  const BioclimaticAudit = require('../js/bioclimaticAudit.js');
+  const geminiClient = require('../geminiClient.js');
+
+  assert.equal(geminiClient.TEXT_MODEL, 'gemini-4-hydrogen');
+  assert.equal(geminiClient.TTS_MODEL, 'gemini-3.8-flash-lite-tts');
+
+  const audit = BioclimaticAudit.analyze(SAMPLE_PROJECT, { city: 'douala', northAngle: 15 });
+  assert.ok(audit.score >= 25 && audit.score <= 98);
+  assert.equal(audit.facades.length, 4);
+  assert.ok(audit.metrics.habitableAreaM2 > 100);
+  assert.ok(audit.recommendations.length >= 1);
+
+  const cctp = BioclimaticAudit.buildLocalCctpMarkdown(SAMPLE_PROJECT, audit);
+  assert.match(cctp, /Lot 01/);
+  assert.match(cctp, /Lot 08/);
+  assert.match(cctp, /Score : \d+\/100/);
+
+  const script = BioclimaticAudit.buildLocalVoiceoverScript(SAMPLE_PROJECT, audit);
+  assert.match(script, /Villa Test/);
+  assert.match(script, /Douala/);
+
+  // Vérification sur le projet réel residence-verandas
+  const verandas = JSON.parse(fs.readFileSync(path.join(ROOT, 'projects', 'residence-verandas', 'project.json'), 'utf8'));
+  const vAudit = BioclimaticAudit.analyze(verandas);
+  assert.ok(vAudit.score >= 40 && vAudit.facades.length === 4);
+
+  // Tests HTTP sandbox : /api/ai/status, /api/ai/bioclimatic-cctp, /api/save-panorama, /api/panoramas & RBAC
+  const sb = makeSandbox(t);
+  const localSrv = await sb.start({ GEMINI_API_KEY: '', OPENROUTER_API_KEY: '' });
+
+  const stRes = await fetch(`${localSrv.origin}/api/ai/status`);
+  assert.equal(stRes.status, 200);
+  const stBody = await stRes.json();
+  assert.equal(typeof stBody.gemini, 'boolean');
+  assert.equal(typeof stBody.openRouter, 'boolean');
+
+  const bioRes = await fetch(`${localSrv.origin}/api/ai/bioclimatic-cctp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project: 'projet-a', city: 'yaounde', localOnly: true })
+  });
+  assert.equal(bioRes.status, 200);
+  const bioData = await bioRes.json();
+  assert.equal(bioData.ok, true);
+  assert.match(bioData.markdown, /Lot 01/);
+
+  // 1x1 PNG valide pour test panorama 360°
+  const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  const panoSave = await fetch(`${localSrv.origin}/api/save-panorama?project=projet-a`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: 'pano-sejour', label: 'Séjour (360°)', roomId: 'sejour', source: '3d', dataUrl: tinyPng })
+  });
+  assert.equal(panoSave.status, 200);
+  const panoSaved = await panoSave.json();
+  assert.equal(panoSaved.ok, true);
+  assert.match(panoSaved.item.file, /^projects\/projet-a\/generated\/panoramas\/pano-sejour\.png$/);
+
+  const panoList = await fetch(`${localSrv.origin}/api/panoramas?project=projet-a`);
+  assert.equal(panoList.status, 200);
+  const panoListData = await panoList.json();
+  assert.equal(panoListData.items.length, 1);
+  assert.equal(panoListData.items[0].id, 'pano-sejour');
+
+  // Sécurité portail : un invité lecture seule est bloqué sur les routes Studio IA
+  const portalSrv = await sb.start({ PRIVATE_PORTAL: '1', PORTAL_PASSWORD: 'secret-test-password', PORTAL_INSECURE_LOCAL: '1' });
+  const login = await fetch(`${portalSrv.origin}/api/portal/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin },
+    body: JSON.stringify({ password: 'secret-test-password' })
+  });
+  const archCookie = login.headers.get('set-cookie').split(';')[0];
+  const invRes = await fetch(`${portalSrv.origin}/api/portal/invitations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin, Cookie: archCookie },
+    body: JSON.stringify({ project: 'projet-a', role: 'read', label: 'Invité Studio IA', validHours: 24 })
+  });
+  const { token } = await invRes.json();
+  const redeem = await fetch(`${portalSrv.origin}/api/portal/accept`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin },
+    body: JSON.stringify({ token })
+  });
+  const guestCookie = redeem.headers.get('set-cookie').split(';')[0];
+
+  for (const [ep, payload] of [
+    ['/api/ai/bioclimatic-cctp', { project: 'projet-a', localOnly: true }],
+    ['/api/ai/voiceover', { project: 'projet-a', action: 'script' }],
+    ['/api/save-panorama?project=projet-a', { id: 'hack', dataUrl: tinyPng }]
+  ]) {
+    const blocked = await fetch(`${portalSrv.origin}${ep}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin, Cookie: guestCookie },
+      body: JSON.stringify(payload)
+    });
+    assert.equal(blocked.status, 403, `Invité bloqué sur ${ep}`);
+  }
+
+  // Vérification interface & branchements
+  const indexHtml = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  for (const token of ['css/aiStudioSuite.css', 'id="btn-ai-studio"', 'id="rg-open-ai-studio"', 'id="dlg-ai-studio"']) {
+    assert.ok(indexHtml.includes(token), `index.html doit contenir ${token}`);
+  }
+  const workspaceJs = fs.readFileSync(path.join(ROOT, 'js', 'workspace.js'), 'utf8');
+  assert.ok(workspaceJs.includes("'bioclimaticAudit'") && workspaceJs.includes("'aiStudioSuite'"));
+});
+
+// ============================================================================
+// 11. ÉDITEUR CAO 2D/3D TEMPS RÉEL, MOBILIER VISUEL, BROUILLONS & MEUBLAGE AUTO
+// ============================================================================
+test('Éditeur 2D/3D : Furniture2D, aimantation murs, modèles de départ, API brouillons & meublage auto + RBAC', async t => {
+  const Furniture2D = require('../js/furniture2d.js');
+
+  assert.ok(Array.isArray(Furniture2D.CATALOG) && Furniture2D.CATALOG.length >= 30, 'Catalogue étendu >= 30 meubles');
+  assert.equal(Furniture2D.inferSymbol({ name: 'Canapé d’angle', w: 2.5, d: 1.7 }), 'sofaCorner');
+  assert.equal(Furniture2D.inferSymbol({ name: 'Douche italienne', w: 1.1, d: 0.9 }), 'shower');
+  assert.equal(Furniture2D.inferSymbol({ name: 'Lit simple 90', model: 'bed', w: 0.95, d: 2.0 }), 'bedSingle');
+  assert.equal(Furniture2D.inferSymbol({ name: 'Évier inox', w: 0.8, d: 0.5 }), 'sink');
+
+  // Aimantation magnétique sur un mur nord horizontal (z = 0, épaisseur 0.25)
+  const wall = { from: [0, 0], to: [6, 0], thick: 0.25, type: 'ext' };
+  const sofa = { name: 'Canapé 3 places', symbol: 'sofa', w: 2.1, d: 0.92 };
+  const snap = Furniture2D.snapFurnitureToWall({ x: 3.0, z: 0.7 }, sofa, [wall], 0.55);
+  assert.ok(snap, 'Le canapé proche du mur doit s’aimanter');
+  assert.ok(Math.abs(snap.z - (0.25 / 2 + 0.92 / 2 + 0.02)) < 0.03, `Position collée attendue (~0.61), obtenue ${snap.z}`);
+  assert.ok(Math.abs(snap.rotY) < 0.01, 'Le canapé doit faire face vers +Z (intérieur de la pièce)');
+
+  // Modèles de départ complets et meublés
+  const villaTpl = Furniture2D.getStarterTemplate('villa-f4');
+  assert.ok(villaTpl.walls.length >= 6 && villaTpl.rooms.length >= 4 && villaTpl.furniture.length >= 10);
+  const studioTpl = Furniture2D.getStarterTemplate('studio');
+  assert.ok(studioTpl.walls.length >= 5 && studioTpl.rooms.length >= 2 && studioTpl.furniture.length >= 5);
+
+  // Tests HTTP sandbox : /api/projects/:slug/draft, /api/ai/auto-furnish et nettoyage au save
+  const sb = makeSandbox(t);
+  const localSrv = await sb.start({ GEMINI_API_KEY: '' });
+
+  const draftSave = await fetch(`${localSrv.origin}/api/projects/projet-a/draft`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project: SAMPLE_PROJECT })
+  });
+  assert.equal(draftSave.status, 200);
+  const draftSaveData = await draftSave.json();
+  assert.equal(draftSaveData.ok, true);
+  assert.ok(draftSaveData.savedAt);
+
+  const draftGet = await fetch(`${localSrv.origin}/api/projects/projet-a/draft`);
+  assert.equal(draftGet.status, 200);
+  const draftBody = await draftGet.json();
+  assert.equal(draftBody.draft.slug, 'projet-a');
+  assert.equal(draftBody.draft.wallCount, SAMPLE_PROJECT.walls.length);
+
+  // Le fichier .draft.json ne doit jamais être servi statiquement (fichier caché)
+  const staticDraft = await fetch(`${localSrv.origin}/projects/projet-a/.draft.json`);
+  assert.notEqual(staticDraft.status, 200, 'Les brouillons dot-préfixés ne doivent pas être servis statiquement');
+
+  // Enregistrer officiellement le projet supprime automatiquement .draft.json
+  const formalSave = await fetch(`${localSrv.origin}/api/save-project`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ slug: 'projet-a', project: SAMPLE_PROJECT })
+  });
+  assert.equal(formalSave.status, 200);
+  const draftAfterSave = await (await fetch(`${localSrv.origin}/api/projects/projet-a/draft`)).json();
+  assert.equal(draftAfterSave.draft, null, 'Le brouillon est purgé après enregistrement officiel');
+
+  // Meublage automatique intelligent
+  const furnishRes = await fetch(`${localSrv.origin}/api/ai/auto-furnish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project: SAMPLE_PROJECT, level: 0, useAi: false })
+  });
+  assert.equal(furnishRes.status, 200);
+  const furnishData = await furnishRes.json();
+  assert.equal(furnishData.ok, true);
+  assert.ok(furnishData.furniture.length >= 6, `Au moins 6 meubles attendus pour Séjour+Chambre+Terrasse, reçu ${furnishData.furniture.length}`);
+  assert.ok(furnishData.furniture.every(f => Number.isFinite(f.x) && Number.isFinite(f.z) && f.symbol));
+
+  // RBAC Portail privé : un invité est bloqué (403) sur /draft et /api/ai/auto-furnish
+  const portalSrv = await sb.start({ PRIVATE_PORTAL: '1', PORTAL_PASSWORD: 'secret-test-password', PORTAL_INSECURE_LOCAL: '1' });
+  const login = await fetch(`${portalSrv.origin}/api/portal/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin },
+    body: JSON.stringify({ password: 'secret-test-password' })
+  });
+  const archCookie = login.headers.get('set-cookie').split(';')[0];
+  const invRes = await fetch(`${portalSrv.origin}/api/portal/invitations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin, Cookie: archCookie },
+    body: JSON.stringify({ project: 'projet-a', role: 'comment', label: 'Invité Éditeur', validHours: 24 })
+  });
+  const { token } = await invRes.json();
+  const redeem = await fetch(`${portalSrv.origin}/api/portal/accept`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin },
+    body: JSON.stringify({ token })
+  });
+  const guestCookie = redeem.headers.get('set-cookie').split(';')[0];
+
+  const blockedDraft = await fetch(`${portalSrv.origin}/api/projects/projet-a/draft`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin, Cookie: guestCookie },
+    body: JSON.stringify({ project: SAMPLE_PROJECT })
+  });
+  assert.equal(blockedDraft.status, 403, 'Invité bloqué sur /draft');
+
+  const blockedFurnish = await fetch(`${portalSrv.origin}/api/ai/auto-furnish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin, Cookie: guestCookie },
+    body: JSON.stringify({ project: SAMPLE_PROJECT })
+  });
+  assert.equal(blockedFurnish.status, 403, 'Invité bloqué sur /api/ai/auto-furnish');
+
+  // Vérification du branchement dans editor.html et js/editor.js
+  const editorHtml = fs.readFileSync(path.join(ROOT, 'editor.html'), 'utf8');
+  for (const token of [
+    'id="ed-live3d-wrap"', 'id="ed-cad-bar"', 'id="ed-panel-tabs"',
+    'id="ed-empty-start"', 'id="ed-quick-bar"', 'id="ed-draft-banner"',
+    'data-tool="measure"', 'js/furniture2d.js', 'js/editorLive3d.js'
+  ]) {
+    assert.ok(editorHtml.includes(token), `editor.html doit contenir ${token}`);
+  }
+});
+
+
+
+
 

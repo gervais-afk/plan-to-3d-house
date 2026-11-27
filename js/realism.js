@@ -14,8 +14,42 @@
   // Repère local : l'objet « regarde » +Z, dossier / tête en −Z.
   // ---------------------------------------------------------------------------
   P.buildComposite = function (item) {
-    const kind = item.model;
-    const builders = { sofa: 1, chair: 1, diningTable: 1, coffeeTable: 1, bed: 1 };
+    if (window.Furniture3DBuilder && typeof window.Furniture3DBuilder.build === 'function') {
+      const k = window.Furniture3DBuilder.inferKind(item);
+      if (k && k !== 'box') return window.Furniture3DBuilder.build(THREE, item);
+    }
+    const n = String(item.name || '').toLowerCase();
+    let kind = item.model || item.symbol || '';
+    if (!kind) {
+      if (/canap.*angle/.test(n)) kind = 'sofaCorner';
+      else if (/fauteuil/.test(n)) kind = 'armchair';
+      else if (/canap/.test(n)) kind = 'sofa';
+      else if (/\blit\b/.test(n)) kind = 'bed';
+      else if (/table basse/.test(n)) kind = 'coffeeTable';
+      else if (/table.*ronde/.test(n)) kind = 'diningRound';
+      else if (/table/.test(n)) kind = 'diningTable';
+      else if (/chaise/.test(n)) kind = 'chair';
+      else if (/\btv\b|télé/.test(n)) kind = 'tvUnit';
+      else if (/îlot|ilot/.test(n)) kind = 'kitchenIsland';
+      else if (/plan de travail/.test(n)) kind = 'kitchenCounter';
+      else if (/plaque|cuisson/.test(n)) kind = 'cooktop';
+      else if (/évier|evier/.test(n)) kind = 'sink';
+      else if (/frigo|réfrig|refrig/.test(n)) kind = 'fridge';
+      else if (/\bwc\b|cuvette/.test(n)) kind = 'toilet';
+      else if (/vasque|lave-mains|lavabo/.test(n)) kind = 'vanity';
+      else if (/douche/.test(n)) kind = 'shower';
+      else if (/baignoire/.test(n)) kind = 'bathtub';
+      else if (/armoire|dressing/.test(n)) kind = 'wardrobe';
+      else if (/bureau/.test(n)) kind = 'desk';
+      else if (/chevet/.test(n)) kind = 'nightstand';
+      else if (/plante/.test(n)) kind = 'plantTall';
+    }
+    const builders = {
+      sofa: 1, sofaCorner: 1, armchair: 1, chair: 1, diningTable: 1, diningRound: 1,
+      coffeeTable: 1, bed: 1, tvUnit: 1, kitchenCounter: 1, kitchenIsland: 1,
+      cooktop: 1, sink: 1, fridge: 1, toilet: 1, vanity: 1, shower: 1, bathtub: 1,
+      wardrobe: 1, desk: 1, nightstand: 1, plantTall: 1, plantBush: 1
+    };
     if (!builders[kind]) return null;
 
     const swap = item.dims !== 'local' && Math.abs(Math.sin(item.rotY || 0)) > 0.5;
@@ -23,9 +57,17 @@
     const D = swap ? item.w : item.d;
     const H = item.h;
     const g = new THREE.Group();
-    const mat = (color, rough = 0.7) => new THREE.MeshStandardMaterial({ color, roughness: rough });
+    const mat = (color, rough = 0.7, metal = 0.04, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, ...extra });
     const box = (w, h, d, x, y, z, m) => {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(Math.max(0.01, w), Math.max(0.01, h), Math.max(0.01, d)), m);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      g.add(mesh);
+      return mesh;
+    };
+    const cyl = (rt, rb, h, x, y, z, m, seg = 14) => {
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), m);
       mesh.position.set(x, y, z);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -35,22 +77,35 @@
     const legs = (w, d, h, r, m) => {
       [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => box(r, h, r, sx * (w / 2 - r), h / 2, sz * (d / 2 - r), m));
     };
+    const chrome = mat('#cfd6db', 0.22, 0.78);
+    const ceramic = mat('#f5f6f4', 0.22, 0.04);
 
-    if (kind === 'sofa') {
+    if (kind === 'sofa' || kind === 'armchair') {
       const fabric = mat(item.color, 0.95);
       const cushion = mat(new THREE.Color(item.color).offsetHSL(0, 0, 0.06), 0.95);
       const wood = mat('#3b2c20', 0.5);
+      const armW = Math.min(0.18, W * 0.16);
       legs(W - 0.1, D - 0.1, 0.08, 0.05, wood);
-      box(W, 0.3, D, 0, 0.23, 0, fabric);                                  // socle
-      box(W, H - 0.08, 0.2, 0, 0.08 + (H - 0.08) / 2, -D / 2 + 0.1, fabric); // dossier
-      box(0.18, 0.62, D, -W / 2 + 0.09, 0.39, 0, fabric);                  // accoudoirs
-      box(0.18, 0.62, D, W / 2 - 0.09, 0.39, 0, fabric);
-      const n = W > 1.5 ? 3 : 2, cw = (W - 0.36) / n;
-      for (let i = 0; i < n; i++) {
-        const x = -W / 2 + 0.18 + cw / 2 + i * cw;
-        box(cw - 0.02, 0.12, D - 0.25, x, 0.44, 0.06, cushion);            // assises
-        box(cw - 0.04, 0.38, 0.12, x, 0.66, -D / 2 + 0.26, cushion);       // coussins de dos
+      box(W, 0.3, D, 0, 0.23, 0, fabric);
+      box(W, H - 0.08, 0.2, 0, 0.08 + (H - 0.08) / 2, -D / 2 + 0.1, fabric);
+      box(armW, 0.62, D, -W / 2 + armW / 2, 0.39, 0, fabric);
+      box(armW, 0.62, D, W / 2 - armW / 2, 0.39, 0, fabric);
+      const seats = kind === 'armchair' ? 1 : (W > 1.5 ? 3 : 2), cw = (W - armW * 2) / seats;
+      for (let i = 0; i < seats; i++) {
+        const x = -W / 2 + armW + cw / 2 + i * cw;
+        box(cw - 0.02, 0.12, D - 0.25, x, 0.44, 0.06, cushion);
+        box(cw - 0.04, 0.38, 0.12, x, 0.66, -D / 2 + 0.26, cushion);
       }
+    } else if (kind === 'sofaCorner') {
+      const fabric = mat(item.color, 0.95);
+      const cushion = mat(new THREE.Color(item.color).offsetHSL(0, 0, 0.06), 0.95);
+      const mainD = D * 0.48, chaiseW = W * 0.38;
+      box(W, 0.32, mainD, 0, 0.22, -D / 2 + mainD / 2, fabric);
+      box(W, H - 0.08, 0.18, 0, 0.08 + (H - 0.08) / 2, -D / 2 + 0.09, fabric);
+      box(chaiseW, 0.32, D, W / 2 - chaiseW / 2, 0.22, 0, fabric);
+      box(0.18, H * 0.75, D * 0.65, W / 2 - 0.09, 0.08 + H * 0.375, -D / 2 + D * 0.325, fabric);
+      box(W - chaiseW - 0.18, 0.12, mainD - 0.22, -chaiseW / 2 + 0.08, 0.43, -D / 2 + mainD / 2 + 0.06, cushion);
+      box(chaiseW - 0.2, 0.12, D - 0.22, W / 2 - chaiseW / 2 - 0.06, 0.43, 0.06, cushion);
     } else if (kind === 'chair') {
       const wood = mat('#6e5038', 0.55);
       const seat = mat(item.color, 0.9);
@@ -62,21 +117,98 @@
       const top = kind === 'diningTable' ? 0.045 : 0.06;
       box(W, top, D, 0, H - top / 2, 0, wood);
       legs(W - 0.06, D - 0.06, H - top, kind === 'diningTable' ? 0.06 : 0.05, mat('#3b2c20', 0.5));
+    } else if (kind === 'diningRound') {
+      const wood = mat(item.color, 0.45);
+      const r = Math.min(W, D) / 2;
+      cyl(r, r, 0.045, 0, H - 0.0225, 0, wood, 24);
+      cyl(0.07, 0.09, H - 0.06, 0, (H - 0.06) / 2, 0, mat('#3b2c20', 0.5), 12);
     } else if (kind === 'bed') {
       const frame = mat('#6b5440', 0.6);
       const sheet = mat('#f3f0ea', 0.95);
       const duvet = mat('#c9c2b4', 0.95);
       box(W, 0.28, D, 0, 0.14, 0, frame);
+      box(W + 0.04, 0.96, 0.08, 0, 0.48, -D / 2 + 0.04, frame);
       box(W - 0.06, 0.2, D - 0.06, 0, 0.38, 0, sheet);
       box(W - 0.02, 0.06, D * 0.62, 0, 0.5, D * 0.19, duvet);
-      const pw = (W - 0.2) / 2;
-      box(pw, 0.12, 0.38, -pw / 2 - 0.03, 0.53, -D / 2 + 0.26, sheet);
-      box(pw, 0.12, 0.38, pw / 2 + 0.03, 0.53, -D / 2 + 0.26, sheet);
+      const count = W <= 1.1 ? 1 : 2;
+      const pw = (W - 0.22) / count;
+      for (let i = 0; i < count; i++) {
+        const px = count === 1 ? 0 : (i === 0 ? -pw / 2 - 0.03 : pw / 2 + 0.03);
+        box(pw, 0.12, 0.38, px, 0.53, -D / 2 + 0.26, sheet);
+      }
+    } else if (kind === 'tvUnit') {
+      box(W, H - 0.1, D, 0, 0.1 + (H - 0.1) / 2, 0, mat(item.color, 0.5));
+      legs(W - 0.1, D - 0.08, 0.1, 0.035, mat('#3b2c20', 0.5));
+      const tvW = W * 0.72, tvH = Math.min(0.75, tvW * 0.56);
+      const screen = mat('#11161a', 0.15, 0.3);
+      box(tvW, tvH, 0.035, 0, H + 0.1 + tvH / 2, -D * 0.1, screen);
+      box(0.05, 0.1, 0.04, 0, H + 0.05, -D * 0.1, screen);
+    } else if (kind === 'kitchenCounter' || kind === 'kitchenIsland') {
+      box(W - 0.04, 0.1, D - 0.08, 0, 0.05, -0.02, mat('#2a2d30', 0.7));
+      box(W, H - 0.14, D - 0.02, 0, 0.1 + (H - 0.14) / 2, 0, mat('#edeae3', 0.55));
+      box(W + 0.02, 0.045, D + 0.02, 0, H - 0.0225, 0, mat(item.color, 0.35, 0.08));
+    } else if (kind === 'cooktop') {
+      box(W, Math.max(0.03, H), D, 0, Math.max(0.03, H) / 2, 0, mat('#181b1f', 0.12, 0.35));
+      [[-0.24, -0.22, 0.1], [0.24, -0.22, 0.08], [-0.24, 0.22, 0.08], [0.24, 0.22, 0.11]].forEach(([px, pz, r]) => {
+        cyl(r, r, 0.008, px * W, Math.max(0.03, H) + 0.004, pz * D, mat('#525860', 0.3, 0.6), 14);
+      });
+    } else if (kind === 'sink') {
+      box(W, 0.03, D, 0, 0.015, 0, mat('#b9c0c6', 0.28, 0.72));
+      box(W * 0.46, 0.02, D * 0.72, -W * 0.18, 0.025, 0, mat('#7b838a', 0.35, 0.6));
+      cyl(0.018, 0.022, 0.26, -W * 0.18, 0.14, -D * 0.38, chrome, 10);
+      box(0.022, 0.022, 0.14, -W * 0.18, 0.26, -D * 0.31, chrome);
+    } else if (kind === 'fridge') {
+      box(W, H, D, 0, H / 2, 0, mat(item.color, 0.3, 0.48));
+      box(0.02, H * 0.28, 0.035, -W / 2 + 0.08, H * 0.64, D / 2 + 0.02, chrome);
+      box(0.02, H * 0.18, 0.035, -W / 2 + 0.08, H * 0.22, D / 2 + 0.02, chrome);
+    } else if (kind === 'toilet') {
+      box(W * 0.92, H * 0.55, D * 0.3, 0, H * 0.42 + H * 0.275, -D / 2 + D * 0.15, ceramic);
+      cyl(W * 0.32, W * 0.26, 0.38, 0, 0.19, D * 0.08, ceramic, 14);
+      const bowl = new THREE.Mesh(new THREE.CylinderGeometry(W * 0.46, W * 0.34, 0.14, 16), ceramic);
+      bowl.scale.set(1, 1, 1.32); bowl.position.set(0, 0.39, D * 0.14); bowl.castShadow = true; g.add(bowl);
+    } else if (kind === 'vanity') {
+      box(W, H * 0.68, D, 0, H * 0.16 + H * 0.34, 0, mat('#e8e3da', 0.55));
+      box(W + 0.02, 0.04, D + 0.02, 0, H * 0.85, 0, ceramic);
+      cyl(Math.min(W * 0.26, D * 0.34), Math.min(W * 0.2, D * 0.28), 0.11, 0, H * 0.92, 0.02, ceramic, 16);
+      cyl(0.015, 0.018, 0.14, 0, H * 0.94, -D * 0.34, chrome, 10);
+    } else if (kind === 'shower') {
+      box(W, 0.05, D, 0, 0.025, 0, ceramic);
+      const glass = mat('#cbe3ef', 0.08, 0.1, { transparent: true, opacity: 0.28 });
+      const gh = Math.max(H, 2.0);
+      box(W * 0.7, gh, 0.02, -W * 0.15, gh / 2, D / 2 - 0.01, glass);
+      box(0.02, gh, D, W / 2 - 0.01, gh / 2, 0, glass);
+      cyl(0.015, 0.015, 1.35, 0, 1.35, -D / 2 + 0.06, chrome, 10);
+    } else if (kind === 'bathtub') {
+      box(W, H, D, 0, H / 2, 0, ceramic);
+      box(W - 0.16, 0.04, D - 0.16, 0, H - 0.08, 0, mat('#cde2ec', 0.15, 0.1));
+      cyl(0.02, 0.02, 0.16, -W / 2 + 0.12, H + 0.08, 0, chrome, 10);
+    } else if (kind === 'wardrobe') {
+      box(W, H, D, 0, H / 2, 0, mat(item.color, 0.58));
+      const doors = Math.max(2, Math.round(W / 0.55)), dw = W / doors;
+      for (let i = 0; i < doors; i++) box(0.016, 0.22, 0.025, -W / 2 + dw * (i + 0.5) + dw * 0.3, H * 0.52, D / 2 + 0.012, chrome);
+    } else if (kind === 'desk') {
+      box(W, 0.04, D, 0, H - 0.02, 0, mat(item.color, 0.48));
+      legs(W - 0.06, D - 0.06, H - 0.04, 0.04, mat('#3b2c20', 0.5));
+      box(0.54, 0.34, 0.03, 0, H + 0.25, -D * 0.25, mat('#191e24', 0.2, 0.3));
+    } else if (kind === 'nightstand') {
+      box(W, H, D, 0, H / 2, 0, mat(item.color, 0.55));
+      cyl(0.06, 0.07, 0.16, 0, H + 0.08, -D * 0.08, ceramic, 10);
+      cyl(0.09, 0.12, 0.16, 0, H + 0.22, -D * 0.08, mat('#f7ecd6', 0.85), 12);
+    } else if (kind === 'plantTall' || kind === 'plantBush') {
+      const r = Math.min(W, D) * 0.45, potH = kind === 'plantTall' ? 0.38 : 0.26;
+      cyl(r * 0.65, r * 0.48, potH, 0, potH / 2, 0, mat('#c2855a', 0.78), 12);
+      const leaf = mat('#4c6e38', 0.88);
+      const crownY = kind === 'plantTall' ? potH + H * 0.42 : potH + H * 0.28;
+      [[0, 0.12, 0, r * 0.95], [r * 0.42, 0, r * 0.2, r * 0.68], [-r * 0.4, 0.02, -r * 0.2, r * 0.7]].forEach(([px, py, pz, pr]) => {
+        const m = new THREE.Mesh(new THREE.IcosahedronGeometry(Math.max(0.08, pr), 1), leaf);
+        m.position.set(px, crownY + py, pz); m.castShadow = true; g.add(m);
+      });
     }
 
-    g.position.set(item.x, 0, item.z);
+    const baseY = item.y !== undefined && item.h !== undefined ? Math.max(0, item.y - item.h / 2) : 0;
+    g.position.set(item.x, baseY, item.z);
     g.rotation.y = item.rotY || 0;
-    g.userData = { nominalY: 0, item };
+    g.userData = { nominalY: baseY, item };
     return g;
   };
 
@@ -101,10 +233,15 @@
     this.roomLights = [];
     this.windGroups = [];
     this.waterMeshes = [];
+    this.animatedPeople = [];
+    this.cloudGroups = [];
+    this.birdGroups = [];
+    this.livingSceneEnabled = true;
     this.fixtureMaterial = new THREE.MeshStandardMaterial({ color: 0xfff3dc, emissive: 0xffd9a0, emissiveIntensity: 0.2, roughness: 0.4 });
 
     this.createJoinery();
     this.createExterior();
+    this.createAmbientSkyLife(bb);
     this.createRoomLights();
     this.createPeople();
     this.createDecor();
@@ -186,20 +323,66 @@
       trunk.castShadow = true;
       g.add(trunk);
       const leafMat = new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(0.27 + i * 0.012, 0.38, 0.32 + (i % 3) * 0.03), roughness: 1, flatShading: true });
+      const crown = new THREE.Group();
       [[0, 2.5, 0, 1.15], [0.55, 2.2, 0.2, 0.8], [-0.5, 2.3, -0.25, 0.85], [0.1, 3.05, -0.1, 0.75]].forEach(([fx, fy, fz, r]) => {
         const f = new THREE.Mesh(new THREE.IcosahedronGeometry(r * s, 1), leafMat);
         f.position.set(fx * s, fy * s, fz * s);
         f.castShadow = f.receiveShadow = true;
-        g.add(f);
+        crown.add(f);
       });
+      g.add(crown);
       g.position.set(x, 0, z);
-      g.userData = { nominalY: 0, windSeed: i * 1.73 };
+      g.userData = { nominalY: 0, windSeed: i * 1.73, crown };
       this.scene.add(g);
       this.furnitureMeshes.push(g);
       this.windGroups.push(g);
     });
     this.createOptionalVehicle(ex);
     this.createWaterSurface(HOUSE_DATA.water || ex.water || ex.pool || null);
+  };
+
+  // Vie atmosphérique extérieure discrète : nuages hauts dérivants et 2 oiseaux planant au loin
+  P.createAmbientSkyLife = function (bb) {
+    const cx = bb?.cx || 0, cz = bb?.cz || 0;
+    const span = Math.max(28, (bb?.max || 18) * 2.2);
+    const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0, transparent: true, opacity: 0.42, depthWrite: false });
+    const cloudDefs = [
+      { x: cx - span * 0.45, y: 17.5, z: cz - span * 0.55, s: 1.4, speed: 0.24 },
+      { x: cx + span * 0.25, y: 19.5, z: cz - span * 0.35, s: 1.15, speed: 0.19 },
+      { x: cx - span * 0.1,  y: 18.2, z: cz + span * 0.48, s: 1.3, speed: 0.22 }
+    ];
+    cloudDefs.forEach((cd, idx) => {
+      const g = new THREE.Group();
+      [[0, 0, 0, 2.6], [2.1, -0.25, 0.5, 1.9], [-2.0, -0.2, -0.4, 2.0], [0.8, 0.45, -0.6, 1.7]].forEach(([px, py, pz, r]) => {
+        const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(r * cd.s, 1), cloudMat);
+        puff.scale.set(1.4, 0.45, 0.95);
+        puff.position.set(px * cd.s, py * cd.s, pz * cd.s);
+        g.add(puff);
+      });
+      g.position.set(cd.x, cd.y, cd.z);
+      g.userData = { baseX: cd.x, span, speed: cd.speed, seed: idx * 2.1, livingProp: true };
+      this.scene.add(g);
+      this.cloudGroups.push(g);
+    });
+
+    const birdMat = new THREE.MeshStandardMaterial({ color: 0x3b4248, roughness: 0.85, side: THREE.DoubleSide });
+    for (let i = 0; i < 2; i++) {
+      const bird = new THREE.Group();
+      const leftWing = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.015, 0.09), birdMat);
+      leftWing.position.set(-0.14, 0, 0);
+      const rightWing = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.015, 0.09), birdMat);
+      rightWing.position.set(0.14, 0, 0);
+      const body = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.22, 6), birdMat);
+      body.rotation.x = Math.PI / 2;
+      bird.add(body, leftWing, rightWing);
+      bird.userData = {
+        cx, cz, radius: Math.max(14, (bb?.max || 14) * (0.95 + i * 0.25)),
+        altitude: 11.5 + i * 2.2, speed: 0.14 + i * 0.035, phase: i * 2.7,
+        leftWing, rightWing, livingProp: true
+      };
+      this.scene.add(bird);
+      this.birdGroups.push(bird);
+    }
   };
 
   // Véhicule construit à l'échelle seulement lorsqu'une zone de stationnement est fournie par le projet.
@@ -301,51 +484,146 @@
     });
   };
 
-  // Silhouettes humaines « maquette » (mannequins mats)
-  P.makePerson = function (pose, seatY = 0.45) {
+  // Silhouettes humaines articulées (maquette vivante : marche douce, respiration, regard naturel)
+  P.makePerson = function (pose, seatY = 0.45, paletteIndex = 0) {
     const g = new THREE.Group();
-    const m = new THREE.MeshStandardMaterial({ color: 0xe6e1d8, roughness: 0.9 });
-    const add = (geo, x, y, z, rx = 0, rz = 0, sx = 1, sz = 1) => {
-      const mesh = new THREE.Mesh(geo, m);
+    const outfits = [
+      { top: 0xe8e2d5, bottom: 0x3b4852, skin: 0x9b6b4d },
+      { top: 0xc5a882, bottom: 0x2f3b34, skin: 0x8a5c42 },
+      { top: 0xd9d2c5, bottom: 0x4b443d, skin: 0x7a4f38 }
+    ];
+    const pal = outfits[paletteIndex % outfits.length];
+    const matTop = new THREE.MeshStandardMaterial({ color: pal.top, roughness: 0.88, metalness: 0.02 });
+    const matBottom = new THREE.MeshStandardMaterial({ color: pal.bottom, roughness: 0.92, metalness: 0.02 });
+    const matSkin = new THREE.MeshStandardMaterial({ color: pal.skin, roughness: 0.62, metalness: 0.02 });
+    const limb = (r1, r2, h) => new THREE.CylinderGeometry(r1, r2, h, 10);
+    const makeMesh = (geo, mat, x = 0, y = 0, z = 0, rx = 0, rz = 0, sx = 1, sz = 1) => {
+      const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(x, y, z);
       mesh.rotation.set(rx, 0, rz);
       mesh.scale.set(sx, 1, sz);
       mesh.castShadow = mesh.receiveShadow = true;
-      g.add(mesh);
+      return mesh;
     };
-    const limb = (r1, r2, h) => new THREE.CylinderGeometry(r1, r2, h, 10);
 
+    const rig = { pose };
     if (pose === 'sit') {
       const s = seatY;
       [-0.1, 0.1].forEach(x => {
-        add(limb(0.07, 0.06, 0.44), x, s + 0.07, 0.2, Math.PI / 2);           // cuisses
-        add(limb(0.055, 0.045, s + 0.05), x, (s + 0.05) / 2, 0.42);           // jambes
+        g.add(makeMesh(limb(0.07, 0.06, 0.44), matBottom, x, s + 0.07, 0.2, Math.PI / 2));
+        g.add(makeMesh(limb(0.055, 0.045, s + 0.05), matBottom, x, (s + 0.05) / 2, 0.42));
       });
-      add(limb(0.15, 0.17, 0.6), 0, s + 0.38, -0.02, -0.08, 0, 1, 0.62);      // buste
-      add(new THREE.SphereGeometry(0.105, 16, 12), 0, s + 0.82, 0.0);          // tête
-      [-1, 1].forEach(k => {
-        add(limb(0.045, 0.04, 0.32), k * 0.21, s + 0.5, 0.02);                 // bras
-        add(limb(0.04, 0.035, 0.3), k * 0.19, s + 0.33, 0.17, Math.PI / 2);    // avant-bras
-      });
+      const torso = new THREE.Group();
+      torso.position.set(0, s + 0.08, -0.02);
+      torso.add(makeMesh(limb(0.15, 0.17, 0.6), matTop, 0, 0.30, 0, -0.08, 0, 1, 0.62));
+      const head = new THREE.Group();
+      head.position.set(0, 0.74, 0.02);
+      head.add(makeMesh(new THREE.SphereGeometry(0.105, 16, 12), matSkin));
+      torso.add(head);
+      const leftArm = new THREE.Group();
+      leftArm.position.set(-0.21, 0.56, 0.02);
+      leftArm.add(makeMesh(limb(0.045, 0.04, 0.32), matTop, 0, -0.14, 0));
+      leftArm.add(makeMesh(limb(0.04, 0.035, 0.3), matSkin, 0.02, -0.31, 0.15, Math.PI / 2));
+      const rightArm = new THREE.Group();
+      rightArm.position.set(0.21, 0.56, 0.02);
+      rightArm.add(makeMesh(limb(0.045, 0.04, 0.32), matTop, 0, -0.14, 0));
+      rightArm.add(makeMesh(limb(0.04, 0.035, 0.3), matSkin, -0.02, -0.31, 0.15, Math.PI / 2));
+      torso.add(leftArm, rightArm);
+      g.add(torso);
+      Object.assign(rig, { torso, head, leftArm, rightArm });
     } else {
-      [-0.09, 0.09].forEach(x => add(limb(0.065, 0.05, 0.86), x, 0.43, 0));  // jambes
-      add(limb(0.16, 0.13, 0.62), 0, 1.17, 0, 0, 0, 1, 0.62);                 // buste
-      add(limb(0.04, 0.045, 0.1), 0, 1.5, 0);                                  // cou
-      add(new THREE.SphereGeometry(0.105, 16, 12), 0, 1.62, 0.01);             // tête
-      [-1, 1].forEach(k => add(limb(0.045, 0.038, 0.64), k * 0.21, 1.14, 0.02, 0.06, k * 0.07));
+      const leftLeg = new THREE.Group();
+      leftLeg.position.set(-0.09, 0.86, 0);
+      leftLeg.add(makeMesh(limb(0.068, 0.048, 0.86), matBottom, 0, -0.43, 0));
+      const rightLeg = new THREE.Group();
+      rightLeg.position.set(0.09, 0.86, 0);
+      rightLeg.add(makeMesh(limb(0.068, 0.048, 0.86), matBottom, 0, -0.43, 0));
+
+      const torso = new THREE.Group();
+      torso.position.set(0, 0.86, 0);
+      torso.add(makeMesh(limb(0.16, 0.13, 0.62), matTop, 0, 0.31, 0, 0, 0, 1, 0.62));
+      torso.add(makeMesh(limb(0.04, 0.045, 0.1), matSkin, 0, 0.64, 0));
+      const head = new THREE.Group();
+      head.position.set(0, 0.76, 0.01);
+      head.add(makeMesh(new THREE.SphereGeometry(0.105, 16, 12), matSkin));
+      torso.add(head);
+
+      const leftArm = new THREE.Group();
+      leftArm.position.set(-0.21, 0.56, 0.01);
+      leftArm.add(makeMesh(limb(0.045, 0.038, 0.62), matTop, 0, -0.30, 0, 0.05, -0.06));
+      const rightArm = new THREE.Group();
+      rightArm.position.set(0.21, 0.56, 0.01);
+      rightArm.add(makeMesh(limb(0.045, 0.038, 0.62), matTop, 0, -0.30, 0, 0.05, 0.06));
+      torso.add(leftArm, rightArm);
+
+      g.add(leftLeg, rightLeg, torso);
+      Object.assign(rig, { torso, head, leftArm, rightArm, leftLeg, rightLeg });
     }
+    g.userData.rig = rig;
     return g;
   };
 
   P.createPeople = function () {
-    (HOUSE_DATA.people || []).forEach(p => {
-      const g = this.makePerson(p.pose, p.seatY);
-      g.position.set(p.x, 0, p.z);
+    const list = Array.isArray(HOUSE_DATA.people) && HOUSE_DATA.people.length
+      ? HOUSE_DATA.people.map(p => ({ ...p }))
+      : [];
+
+    // Si aucun personnage n'est placé dans le plan mais qu'un aménagement extérieur existe,
+    // ajouter 2 silhouettes d'échelle extérieures discrètes (promenade lente + observation façade).
+    if (!list.length && HOUSE_DATA.exterior) {
+      const ex = HOUSE_DATA.exterior;
+      const bb = HouseAuto.bbox(HOUSE_DATA);
+      const pathBox = ex.path && ex.path.xMax > ex.path.xMin && ex.path.zMax > ex.path.zMin ? ex.path : null;
+      if (pathBox) {
+        const px = (pathBox.xMin + pathBox.xMax) / 2;
+        const zA = pathBox.zMin + (pathBox.zMax - pathBox.zMin) * 0.25;
+        const zB = pathBox.zMin + (pathBox.zMax - pathBox.zMin) * 0.85;
+        list.push({
+          pose: 'walk', x: px - 0.35, z: zB, rotY: Math.PI,
+          stroll: { ax: px - 0.35, az: zB, bx: px - 0.35, bz: zA, speed: 0.22 },
+          ambientGenerated: true
+        });
+        list.push({
+          pose: 'stand', x: px + 0.9, z: zA + 0.6, rotY: -Math.PI * 0.72,
+          ambientGenerated: true
+        });
+      } else if (bb) {
+        list.push({
+          pose: 'walk', x: bb.cx - 1.5, z: bb.zMax + 3.2, rotY: Math.PI / 2,
+          stroll: { ax: bb.cx - 2.6, az: bb.zMax + 3.2, bx: bb.cx + 2.4, bz: bb.zMax + 3.2, speed: 0.2 },
+          ambientGenerated: true
+        });
+      }
+    }
+
+    list.forEach((p, idx) => {
+      const g = this.makePerson(p.pose, p.seatY, idx);
+      const levelY = this.levelOffset(p.level);
+      g.position.set(p.x, levelY, p.z);
       g.rotation.y = p.rotY || 0;
-      g.userData = { nominalY: 0, item: Object.assign({ w: 0.5, h: p.pose === 'sit' ? 1.3 : 1.72, d: 0.5 }, p) };
+      g.userData = Object.assign(g.userData || {}, {
+        nominalY: levelY,
+        baseX: p.x,
+        baseZ: p.z,
+        baseRotY: p.rotY || 0,
+        phase: idx * 2.17,
+        stroll: p.stroll || null,
+        ambientGenerated: Boolean(p.ambientGenerated),
+        item: Object.assign({ w: 0.5, h: p.pose === 'sit' ? 1.3 : 1.72, d: 0.5 }, p)
+      });
       this.scene.add(g);
-      this.furnitureMeshes.push(g);
+      this.animatedPeople.push(g);
     });
+  };
+
+  P.setLivingScene = function (enabled) {
+    this.livingSceneEnabled = Boolean(enabled);
+    (this.animatedPeople || []).forEach(p => {
+      if (p.userData.ambientGenerated) p.visible = this.livingSceneEnabled;
+    });
+    (this.cloudGroups || []).forEach(c => { c.visible = this.livingSceneEnabled; });
+    (this.birdGroups || []).forEach(b => { b.visible = this.livingSceneEnabled; });
+    return this.livingSceneEnabled;
   };
 
   // Emplacements de décoration : vides tant que le modèle glTF n'est pas chargé
@@ -591,8 +869,8 @@
   };
 
   P.mergeFurniture = function () {
-    const windSet = new Set(this.windGroups || []);
-    const mergeable = this.furnitureMeshes.filter(o => !windSet.has(o));
+    const keepDynamic = new Set([...(this.windGroups || []), ...(this.animatedPeople || [])]);
+    const mergeable = this.furnitureMeshes.filter(o => !keepDynamic.has(o));
     mergeable.forEach(o => {
       o.scale.set(1, 1, 1);
       o.position.y = o.userData.nominalY || 0;
@@ -605,30 +883,115 @@
     this.setElevation(this.elevationProgress);
   };
 
-  // Hooks : élévation → groupes fusionnés + ambiance
+  // Hooks : élévation → groupes fusionnés + ambiance + personnages animés
   const origSetElevation = P.setElevation;
   P.setElevation = function (p) {
     const before = this.elevationProgress;
     origSetElevation.call(this, p);
     const e = this.elevationProgress;
     if (this.elevatedGroup) this.elevatedGroup.scale.y = Math.max(0.015, this.buildingProgress === undefined ? e : this.buildingProgress);
+    const f = this.furnitureProgress === undefined ? Math.max(0.01, Math.min(1, (e - 0.78) / 0.16)) : this.furnitureProgress;
     if (this.furnGroup) {
-      const f = this.furnitureProgress === undefined ? Math.max(0.01, Math.min(1, (e - 0.78) / 0.16)) : this.furnitureProgress;
       this.furnGroup.scale.y = f;
       this.furnGroup.visible = f > 0.01;
     }
+    (this.animatedPeople || []).forEach(person => {
+      const visible = f > 0.05 && (!person.userData.ambientGenerated || this.livingSceneEnabled);
+      person.visible = visible;
+      if (visible) person.scale.set(1, f, 1);
+    });
     if (before !== e) this._atmoDirty = true;
   };
 
   P.updateRealism = function (dt) {
     this._windTime = (this._windTime || 0) + dt;
-    this.windGroups.forEach(g => {
-      const phase = this._windTime * 0.65 + g.userData.windSeed;
-      g.rotation.z = Math.sin(phase) * 0.012;
-      g.rotation.x = Math.cos(phase * 0.83) * 0.009;
-    });
+    const t = this._windTime;
+    const living = this.livingSceneEnabled !== false;
+
+    // 1. Brise tropicale sur les arbres et feuillages (balancement multi-fréquence)
+    if (living) {
+      this.windGroups.forEach(g => {
+        const phase = t * 0.78 + g.userData.windSeed;
+        g.rotation.z = Math.sin(phase) * 0.022 + Math.sin(phase * 2.1) * 0.008;
+        g.rotation.x = Math.cos(phase * 0.83) * 0.015;
+        if (g.userData.crown) {
+          g.userData.crown.rotation.y = Math.sin(phase * 1.15) * 0.04;
+          g.userData.crown.rotation.z = Math.cos(phase * 1.4) * 0.025;
+        }
+      });
+
+      // 2. Dérive douce des nuages hauts et vol plané lointain des oiseaux
+      (this.cloudGroups || []).forEach(c => {
+        const u = c.userData;
+        const offset = ((t * u.speed + u.seed * 3) % (u.span * 1.4)) - u.span * 0.7;
+        c.position.x = u.baseX + offset;
+        c.position.y += Math.sin(t * 0.25 + u.seed) * 0.0015;
+      });
+      (this.birdGroups || []).forEach(b => {
+        const u = b.userData;
+        const ang = t * u.speed + u.phase;
+        const nx = u.cx + Math.cos(ang) * u.radius;
+        const nz = u.cz + Math.sin(ang) * u.radius * 0.72;
+        const tx = -Math.sin(ang) * u.radius;
+        const tz = Math.cos(ang) * u.radius * 0.72;
+        b.position.set(nx, u.altitude + Math.sin(t * 0.6 + u.phase) * 0.45, nz);
+        b.rotation.y = Math.atan2(tx, tz);
+        const flap = Math.sin(t * 4.8 + u.phase) * 0.28;
+        u.leftWing.rotation.z = flap;
+        u.rightWing.rotation.z = -flap;
+      });
+
+      // 3. Animation naturelle des personnages (promenade calme, respiration, regard, gestuelle)
+      (this.animatedPeople || []).forEach(person => {
+        if (!person.visible) return;
+        const u = person.userData;
+        const rig = u.rig;
+        if (!rig) return;
+        const ph = t + u.phase;
+        if (u.stroll) {
+          const s = u.stroll;
+          const dist = Math.max(0.5, Math.hypot(s.bx - s.ax, s.bz - s.az));
+          const cycle = (t * s.speed) / dist;
+          const legPhase = cycle % 2;
+          const going = legPhase < 1;
+          const rawU = going ? legPhase : 2 - legPhase;
+          // Lissage doux aux demi-tours (pause naturelle aux extrémités)
+          const eased = rawU * rawU * (3 - 2 * rawU);
+          person.position.x = s.ax + (s.bx - s.ax) * eased;
+          person.position.z = s.az + (s.bz - s.az) * eased;
+          const vx = (going ? 1 : -1) * (s.bx - s.ax);
+          const vz = (going ? 1 : -1) * (s.bz - s.az);
+          person.rotation.y = Math.atan2(vx, vz);
+          const speedFactor = Math.sin(rawU * Math.PI); // 0 aux extrémités, 1 au milieu
+          const stride = Math.sin(t * 3.1 + u.phase) * 0.32 * speedFactor;
+          if (rig.leftLeg) rig.leftLeg.rotation.x = stride;
+          if (rig.rightLeg) rig.rightLeg.rotation.x = -stride;
+          if (rig.leftArm) rig.leftArm.rotation.x = -stride * 0.65;
+          if (rig.rightArm) rig.rightArm.rotation.x = stride * 0.65;
+          if (rig.torso) rig.torso.position.y = 0.86 + Math.abs(Math.sin(t * 3.1 + u.phase)) * 0.022 * speedFactor;
+          if (rig.head) rig.head.rotation.y = Math.sin(ph * 0.45) * 0.18;
+        } else if (rig.pose === 'sit') {
+          if (rig.torso) rig.torso.rotation.x = Math.sin(ph * 0.9) * 0.025;
+          if (rig.head) {
+            rig.head.rotation.y = Math.sin(ph * 0.55) * 0.24;
+            rig.head.rotation.x = Math.cos(ph * 0.4) * 0.06;
+          }
+          if (rig.rightArm) rig.rightArm.rotation.x = Math.sin(ph * 0.85) * 0.1;
+        } else {
+          // Personnage debout : respiration légère, regard qui explore l'architecture, léger balancement
+          if (rig.torso) rig.torso.rotation.z = Math.sin(ph * 0.7) * 0.02;
+          if (rig.head) {
+            rig.head.rotation.y = Math.sin(ph * 0.48) * 0.28;
+            rig.head.rotation.x = Math.sin(ph * 0.35) * 0.06;
+          }
+          if (rig.leftArm) rig.leftArm.rotation.x = 0.04 + Math.sin(ph * 0.65) * 0.06;
+          if (rig.rightArm) rig.rightArm.rotation.x = 0.04 - Math.sin(ph * 0.75) * 0.08;
+        }
+      });
+    }
+
     this.waterMeshes.forEach(mesh => {
-      const attr = mesh.geometry.attributes.position, base = mesh.userData.waveBase, t = this._windTime;
+      const attr = mesh.geometry.attributes.position, base = mesh.userData.waveBase;
       for (let i = 0; i < attr.count; i++) {
         const x = base[i * 3], y = base[i * 3 + 1];
         attr.array[i * 3 + 2] = Math.sin(x * 1.8 + t * 1.2) * 0.012 + Math.cos(y * 2.1 - t) * 0.009;

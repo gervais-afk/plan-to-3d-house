@@ -8,33 +8,16 @@
   // ---------------------------------------------------------------------------
   // BIBLIOTHÈQUES
   // ---------------------------------------------------------------------------
-  const FURNITURE = [
-    { group: 'Séjour', name: 'Canapé 3 places', model: 'sofa', w: 1.8, d: 0.9, h: 0.8, color: '#6b6560' },
-    { group: 'Séjour', name: 'Canapé 2 places', model: 'sofa', w: 1.5, d: 0.9, h: 0.8, color: '#6b6560' },
-    { group: 'Séjour', name: 'Fauteuil', model: 'sofa', w: 0.9, d: 0.85, h: 0.8, color: '#6b6560' },
-    { group: 'Séjour', name: 'Table basse', model: 'coffeeTable', w: 1.2, d: 0.6, h: 0.4, color: '#967856' },
-    { group: 'Séjour', name: 'Meuble TV', w: 1.8, d: 0.45, h: 0.5, color: '#2b2c2e' },
-    { group: 'Séjour', name: 'Tapis', w: 2.4, d: 1.7, h: 0.02, color: '#e8e0d2' },
-    { group: 'Repas', name: 'Table à manger', model: 'diningTable', w: 0.9, d: 1.8, h: 0.76, color: '#8a6a4a' },
-    { group: 'Repas', name: 'Chaise', model: 'chair', w: 0.45, d: 0.45, h: 0.9, color: '#2e2f31' },
-    { group: 'Repas', name: 'Buffet', w: 1.6, d: 0.45, h: 0.8, color: '#5b4632' },
-    { group: 'Cuisine', name: 'Plan de travail', w: 2.4, d: 0.6, h: 0.9, color: '#3b3f44' },
-    { group: 'Cuisine', name: 'Évier inox', w: 0.7, d: 0.45, h: 0.03, elev: 0.9, color: '#a9adb1' },
-    { group: 'Cuisine', name: 'Meuble haut', w: 1.0, d: 0.35, h: 0.7, elev: 1.55, color: '#c9b59a' },
-    { group: 'Cuisine', name: 'Réfrigérateur', model: 'fridge', w: 0.65, d: 0.65, h: 1.85, color: '#d7d9db' },
-    { group: 'Chambre', name: 'Lit double 160', model: 'bed', w: 1.6, d: 2.0, h: 0.5, color: '#d9d4cc' },
-    { group: 'Chambre', name: 'Lit king 180', model: 'bed', w: 1.8, d: 2.0, h: 0.52, color: '#d9d4cc' },
-    { group: 'Chambre', name: 'Lit simple 90', model: 'bed', w: 0.9, d: 2.0, h: 0.5, color: '#d9d4cc' },
-    { group: 'Chambre', name: 'Chevet', model: 'nightstand', w: 0.45, d: 0.4, h: 0.5, color: '#8a6a4a' },
-    { group: 'Chambre', name: 'Armoire', w: 1.2, d: 0.6, h: 2.2, color: '#efebe4' },
-    { group: 'Chambre', name: 'Bureau', model: 'diningTable', w: 1.2, d: 0.6, h: 0.75, color: '#8a6a4a' },
-    { group: 'Eau', name: 'Cuvette WC', model: 'toilet', w: 0.4, d: 0.62, h: 0.42, color: '#f7f7f5' },
-    { group: 'Eau', name: 'Lave-mains', w: 0.5, d: 0.35, h: 0.15, elev: 0.78, color: '#f7f7f5' },
-    { group: 'Eau', name: 'Douche', w: 0.9, d: 0.9, h: 0.05, color: '#e8ecee' },
-    { group: 'Eau', name: 'Baignoire', w: 1.7, d: 0.75, h: 0.55, color: '#f5f6f6' },
-    { group: 'Déco', name: 'Plante', model: 'plantTall', w: 0.5, d: 0.5, h: 1.2, color: '#4f6b3a' },
-    { group: 'Déco', name: 'Étagères', w: 1.1, d: 0.4, h: 1.8, color: '#8d8f91' }
+  const FALLBACK_FURNITURE = [
+    { group: 'Séjour', name: 'Canapé 3 places', symbol: 'sofa', model: 'sofa', w: 2.1, d: 0.92, h: 0.82, color: '#78716a' },
+    { group: 'Séjour', name: 'Table basse', symbol: 'coffeeTable', model: 'coffeeTable', w: 1.2, d: 0.65, h: 0.4, color: '#9c7d5a' },
+    { group: 'Repas', name: 'Table à manger 6p', symbol: 'diningTable', model: 'diningTable', w: 1.8, d: 0.95, h: 0.76, color: '#8c6b4a' },
+    { group: 'Chambre', name: 'Lit double 160', symbol: 'bed', model: 'bed', w: 1.65, d: 2.05, h: 0.52, color: '#dcd6cd' },
+    { group: 'Eau', name: 'Cuvette WC', symbol: 'toilet', model: 'toilet', w: 0.4, d: 0.66, h: 0.78, color: '#f6f6f4' }
   ];
+  const FURNITURE = (typeof Furniture2D !== 'undefined' && Array.isArray(Furniture2D.CATALOG) && Furniture2D.CATALOG.length)
+    ? Furniture2D.CATALOG
+    : FALLBACK_FURNITURE;
   const FLOORS = { parquet: 'Parquet', tiles: 'Carrelage', stone: 'Pierre / dallage', concrete: 'Béton' };
   const FLOOR_COLORS = { parquet: 'rgba(201,160,110,0.32)', tiles: 'rgba(170,185,195,0.35)', stone: 'rgba(190,180,160,0.38)', concrete: 'rgba(160,160,160,0.3)' };
   const OPENINGS = {
@@ -43,13 +26,13 @@
     open: { type: 'open', w: 1.4, h: 2.4, sill: 0 }
   };
   const HINTS = {
-    select: 'Cliquez un élément pour le modifier · glissez pour le déplacer · glissez une extrémité de mur pour l\'ajuster',
+    select: 'Cliquez un élément pour le modifier · glissez pour déplacer · poignée circulaire pour pivoter un meuble',
     annotate: 'Cliquez sur une pièce ou un mur pour épingler une remarque (synchronisée avec la 3D et le portail client)',
     calibrate: 'Cliquez les deux extrémités d\'une cote connue du plan (loupe active), puis saisissez sa longueur réelle',
     'verify-scale': 'Contrôle : cliquez les deux extrémités d\'une 2ᵉ cote connue (loupe active) pour vérifier l\'échelle (alerte > 1 %)',
     rectify: 'Redressement 4 points : cliquez les 4 coins du cadre/plan dans l\'ordre (haut-gauche, haut-droite, bas-droite, bas-gauche)',
-    'wall-ext': 'Cliquez point après point · Échap ou double-clic pour terminer · Alt : mur en biais',
-    'wall-int': 'Cliquez point après point · Échap ou double-clic pour terminer · Alt : cloison en biais',
+    'wall-ext': 'Cliquez point après point · tapez une longueur (ex. 4.5) + Entrée · Échap ou double-clic pour terminer · Alt : biais',
+    'wall-int': 'Cliquez point après point · tapez une longueur (ex. 3.2) + Entrée · Échap ou double-clic pour terminer · Alt : biais',
     door: 'Cliquez sur un mur pour poser une porte · ensuite H inverse les gonds, J le sens d\'ouverture',
     window: 'Cliquez sur un mur pour poser une fenêtre',
     open: 'Cliquez sur un mur pour un passage libre (sans porte)',
@@ -60,8 +43,9 @@
     slab: 'Glissez un rectangle pour un auvent en dalle (porche)',
     stairwell: 'Sur Étage 1, glissez un rectangle pour réserver la trémie dans la dalle intermédiaire',
     pergola: 'Glissez un rectangle pour une pergola à lames',
-    furniture: 'Choisissez un meuble à droite puis cliquez pour le poser · R : +15° · Maj+R : −15°',
-    camera: 'Glissez une caméra pour la déplacer, son losange pour l\'orienter · clic dans le vide : nouvelle étape · Suppr : retirer'
+    furniture: 'Choisissez un meuble à droite puis cliquez pour poser · Aimantation murs auto (Maj pour libérer) · R : +15° · Maj+R : −15°',
+    camera: 'Glissez une caméra pour la déplacer, son losange pour l\'orienter · clic dans le vide : nouvelle étape · Suppr : retirer',
+    measure: 'Cliquez deux points pour mesurer une distance exacte · Échap pour effacer'
   };
   const customOverlays = [];
   const customClickHandlers = [];
@@ -96,7 +80,20 @@
     space: false,
     activeLevel: 0,
     levelData: {},
-    ghostLevel: true
+    ghostLevel: true,
+    showDims: true,
+    showGrid: true,
+    snapEnabled: true,
+    wallSnapFurniture: true,
+    placeRotY: 0,
+    measurePts: null,
+    typedLength: '',
+    panelTab: 'inspect',
+    libQuery: '',
+    libGroup: 'Tous',
+    guides: [],
+    pendingDraft: null,
+    lastShiftKey: false
   };
 
   const LEVEL_ARRAYS = ['walls', 'rooms', 'columns', 'canopies', 'furniture', 'stairwells'];
@@ -191,10 +188,14 @@
     return best;
   }
 
-  // Aimantation : extrémités de murs, alignements, grille 5 cm
+  // Aimantation : extrémités de murs, alignements intelligents, grille 5 cm
   function snapPoint(pt, from, opts = {}) {
     let x = pt.x, z = pt.z;
-    if (opts.free) return { x, z };
+    const guides = [];
+    if (opts.free || !S.snapEnabled) {
+      if (opts.recordGuides) S.guides = [];
+      return { x: r2(x), z: r2(z) };
+    }
     const tol = 12 / S.view.scale;
     let snapped = false;
     for (const w of S.p.walls) {
@@ -208,18 +209,74 @@
       z = round(z, 0.05);
       // alignement sur les extrémités existantes (même X ou même Z)
       for (const w of S.p.walls) for (const e of [w.from, w.to]) {
-        if (Math.abs(e[0] - pt.x) < tol) x = e[0];
-        if (Math.abs(e[1] - pt.z) < tol) z = e[1];
+        if (Math.abs(e[0] - pt.x) < tol) { x = e[0]; guides.push({ axis: 'x', v: e[0], from: e[1], to: pt.z }); }
+        if (Math.abs(e[1] - pt.z) < tol) { z = e[1]; guides.push({ axis: 'z', v: e[1], from: e[0], to: pt.x }); }
       }
       // murs orthogonaux par défaut
       if (from && !opts.diagonal) { if (Math.abs(x - from.x) > Math.abs(z - from.z)) z = from.z; else x = from.x; }
     }
+    if (opts.recordGuides) S.guides = guides;
     return { x: r2(x), z: r2(z) };
   }
 
   // ---------------------------------------------------------------------------
-  // HISTORIQUE
+  // HISTORIQUE & BROUILLON AUTOMATIQUE
   // ---------------------------------------------------------------------------
+  let autoDraftTimer = null;
+  function scheduleAutoDraft() {
+    clearTimeout(autoDraftTimer);
+    autoDraftTimer = setTimeout(() => { void persistAutoDraft(); }, 4000);
+  }
+  async function persistAutoDraft() {
+    if (!S.p || !S.dirty || !allLevelItems('walls').length) return;
+    const slug = slugify(S.p.meta?.slug || S.p.meta?.name || 'nouveau-projet');
+    const proj = toProjectJson();
+    try {
+      localStorage.setItem(`archicam_draft_${slug}`, JSON.stringify({ savedAt: new Date().toISOString(), project: proj }));
+    } catch { /* quota local facultatif */ }
+    if (typeof fetch !== 'function') return;
+    try {
+      await fetch(`api/projects/${encodeURIComponent(slug)}/draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project: proj })
+      });
+    } catch { /* brouillon serveur facultatif */ }
+  }
+  async function clearServerDraft(slug) {
+    const clean = slugify(slug || '');
+    if (!clean) return;
+    try { localStorage.removeItem(`archicam_draft_${clean}`); } catch { /* ignore */ }
+    const banner = $('ed-draft-banner');
+    if (banner) banner.hidden = true;
+    S.pendingDraft = null;
+    if (typeof fetch !== 'function') return;
+    try {
+      await fetch(`api/projects/${encodeURIComponent(clean)}/draft`, { method: 'DELETE' });
+    } catch { /* ignore */ }
+  }
+  async function checkServerDraft(slug, savedUpdated) {
+    const banner = $('ed-draft-banner');
+    if (!banner || typeof fetch !== 'function') return;
+    banner.hidden = true;
+    S.pendingDraft = null;
+    try {
+      const res = await fetch(`api/projects/${encodeURIComponent(slug)}/draft`, { cache: 'no-store' });
+      if (!res.ok) return;
+      const body = await res.json().catch(() => null);
+      const draft = body?.draft;
+      if (!draft || !draft.project || !Array.isArray(draft.project.walls) || !draft.project.walls.length) return;
+      const draftTime = Date.parse(draft.savedAt || '');
+      const savedTime = Date.parse(savedUpdated || '');
+      if (Number.isFinite(savedTime) && Number.isFinite(draftTime) && draftTime <= savedTime + 1500) return;
+      S.pendingDraft = draft;
+      const txt = $('ed-draft-text');
+      const when = Number.isFinite(draftTime) ? new Date(draftTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+      if (txt) txt.textContent = `Brouillon auto non enregistré${when ? ` (${when})` : ''} : ${draft.wallCount || draft.project.walls.length} murs, ${draft.furnitureCount || 0} meubles.`;
+      banner.hidden = false;
+    } catch { /* ignore */ }
+  }
+
   function snapshot() { return JSON.stringify(S.p); }
   function commit() {
     setSaveState('Modifications non enregistrées');
@@ -227,6 +284,7 @@
     if (S.undo.length > 120) S.undo.shift();
     S.redo = [];
     S.dirty = true;
+    scheduleAutoDraft();
   }
   function restore(json) {
     S.p = JSON.parse(json);
@@ -800,18 +858,20 @@
     }
 
     // Grille (1 m, 0,5 m si zoom fort)
-    const step = k > 70 ? 0.5 : 1;
-    const a = toWorld(0, 0), b = toWorld(W, H);
-    ctx.lineWidth = 1;
-    for (let x = Math.floor(a.x / step) * step; x <= b.x; x += step) {
-      const sx = Math.round(toScreen(x, 0).x) + 0.5;
-      ctx.strokeStyle = Math.abs(x % 5) < 1e-6 ? 'rgba(17,24,39,0.16)' : 'rgba(17,24,39,0.06)';
-      ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx, H); ctx.stroke();
-    }
-    for (let z = Math.floor(a.z / step) * step; z <= b.z; z += step) {
-      const sy = Math.round(toScreen(0, z).y) + 0.5;
-      ctx.strokeStyle = Math.abs(z % 5) < 1e-6 ? 'rgba(17,24,39,0.16)' : 'rgba(17,24,39,0.06)';
-      ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(W, sy); ctx.stroke();
+    if (S.showGrid) {
+      const step = k > 70 ? 0.5 : 1;
+      const a = toWorld(0, 0), b = toWorld(W, H);
+      ctx.lineWidth = 1;
+      for (let x = Math.floor(a.x / step) * step; x <= b.x; x += step) {
+        const sx = Math.round(toScreen(x, 0).x) + 0.5;
+        ctx.strokeStyle = Math.abs(x % 5) < 1e-6 ? 'rgba(17,24,39,0.16)' : 'rgba(17,24,39,0.06)';
+        ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx, H); ctx.stroke();
+      }
+      for (let z = Math.floor(a.z / step) * step; z <= b.z; z += step) {
+        const sy = Math.round(toScreen(0, z).y) + 0.5;
+        ctx.strokeStyle = Math.abs(z % 5) < 1e-6 ? 'rgba(17,24,39,0.16)' : 'rgba(17,24,39,0.06)';
+        ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(W, sy); ctx.stroke();
+      }
     }
     // Origine
     const o = toScreen(0, 0);
@@ -903,23 +963,24 @@
       }
     });
 
-    // Mobilier
+    // Mobilier : symboles architecturaux CAO 2D réalistes (+ poignée de rotation si sélectionné)
     S.p.furniture.forEach(f => {
       const c = toScreen(f.x, f.z);
-      ctx.save();
-      ctx.translate(c.x, c.y);
-      ctx.rotate(-(f.rotY || 0));
       const sel = isSel('furniture', f);
-      ctx.fillStyle = (f.color || '#999') + 'cc';
-      ctx.strokeStyle = sel ? '#d97706' : 'rgba(17,24,39,0.55)';
-      ctx.lineWidth = sel ? 2 : 1;
-      ctx.fillRect(-f.w * k / 2, -f.d * k / 2, f.w * k, f.d * k);
-      ctx.strokeRect(-f.w * k / 2, -f.d * k / 2, f.w * k, f.d * k);
-      // Avant local (0, +d/2), cohérent avec la rotation Three.js.
-      ctx.fillStyle = 'rgba(17,24,39,0.6)';
-      ctx.beginPath(); ctx.arc(0, f.d * k * 0.38, Math.max(2, k * 0.05), 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
-      if (k > 35 && f.w * k > 34) label(f.name, c.x, c.y, 9, '#1d252c', 600);
+      if (typeof Furniture2D !== 'undefined' && typeof Furniture2D.drawFurniture2D === 'function') {
+        Furniture2D.drawFurniture2D(ctx, f, c, k, { selected: sel });
+      } else {
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate(-(f.rotY || 0));
+        ctx.fillStyle = (f.color || '#999') + 'cc';
+        ctx.strokeStyle = sel ? '#d97706' : 'rgba(17,24,39,0.55)';
+        ctx.lineWidth = sel ? 2 : 1;
+        ctx.fillRect(-f.w * k / 2, -f.d * k / 2, f.w * k, f.d * k);
+        ctx.strokeRect(-f.w * k / 2, -f.d * k / 2, f.w * k, f.d * k);
+        ctx.restore();
+      }
+      if (k > 44 && f.w * k > 44) label(f.name, c.x, c.y + (sel ? -f.d * k * 0.5 - 12 : 0), 9, sel ? '#9a6f2a' : '#26302b', 600);
     });
 
     // Murs (pleins + ouvertures)
@@ -988,9 +1049,97 @@
       ctx.fillRect(q.x, q.y, c.size * k, c.size * k);
     });
 
+    if (S.showDims && k >= 18) drawWallDimensions();
+    if (S.guides && S.guides.length && (S.draft || S.drag)) drawAlignmentGuides();
     if (S.tool === 'camera' || (S.sel && S.sel.kind === 'camera')) drawCameras();
     if (S.reviewOverlay) drawReviewOverlay();
     drawDraft();
+    syncEmptyState();
+    syncQuickBar();
+    if (window.EditorLive3D && typeof window.EditorLive3D.sync === 'function') window.EditorLive3D.sync();
+  }
+
+  function drawWallDimensions() {
+    const k = S.view.scale;
+    const walls = S.p.walls || [];
+    if (!walls.length) return;
+    let cx = 0, cz = 0;
+    walls.forEach(w => { cx += (w.from[0] + w.to[0]) / 2; cz += (w.from[1] + w.to[1]) / 2; });
+    cx /= walls.length; cz /= walls.length;
+
+    ctx.save();
+    walls.forEach(w => {
+      if (isSel('wall', w)) return;
+      const L = wallLen(w);
+      if (L < 0.4 || L * k < 34) return;
+      if (w.type !== 'ext' && k < 36) return;
+      const a = toScreen(w.from[0], w.from[1]);
+      const b = toScreen(w.to[0], w.to[1]);
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const lenPx = Math.hypot(dx, dy) || 1;
+      let nx = -dy / lenPx, ny = dx / lenPx;
+      // Oriente la cote vers l'extérieur du centre moyen pour les murs extérieurs
+      const midW = { x: (w.from[0] + w.to[0]) / 2, z: (w.from[1] + w.to[1]) / 2 };
+      const outDot = (midW.x - cx) * nx + (midW.z - cz) * ny;
+      if (w.type === 'ext' && outDot < 0) { nx = -nx; ny = -ny; }
+      const off = (w.thick * k) / 2 + (w.type === 'ext' ? 16 : 11);
+      const ax = a.x + nx * off, ay = a.y + ny * off;
+      const bx = b.x + nx * off, by = b.y + ny * off;
+
+      ctx.strokeStyle = w.type === 'ext' ? 'rgba(34, 42, 38, 0.36)' : 'rgba(74, 79, 87, 0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+      // Petits traits d'attache aux extrémités
+      ctx.moveTo(ax - nx * 4, ay - ny * 4); ctx.lineTo(ax + nx * 3, ay + ny * 3);
+      ctx.moveTo(bx - nx * 4, by - ny * 4); ctx.lineTo(bx + nx * 3, by + ny * 3);
+      ctx.stroke();
+
+      const mx = (ax + bx) / 2 + nx * 8;
+      const my = (ay + by) / 2 + ny * 8;
+      label(`${L.toFixed(2).replace('.', ',')} m`, mx, my, w.type === 'ext' ? 10 : 9, w.type === 'ext' ? '#2c3530' : '#57605c', 600);
+    });
+    ctx.restore();
+  }
+
+  function drawAlignmentGuides() {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(179, 134, 70, 0.78)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    S.guides.forEach(g => {
+      if (g.axis === 'x') {
+        const p1 = toScreen(g.v, g.from), p2 = toScreen(g.v, g.to);
+        ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+      } else {
+        const p1 = toScreen(g.from, g.v), p2 = toScreen(g.to, g.v);
+        ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+      }
+    });
+    ctx.restore();
+  }
+
+  function syncEmptyState() {
+    const empty = $('ed-empty-start');
+    if (!empty) return;
+    const hasContent = allLevelItems('walls').length > 0 || allLevelItems('rooms').length > 0 || !!S.planImg;
+    empty.hidden = hasContent || S.tool !== 'select';
+  }
+
+  function getFurniturePreviewAt(worldPt, opts = {}) {
+    const it = S.libItem;
+    if (!it || !worldPt) return null;
+    const free = !!opts.free;
+    let x = worldPt.x, z = worldPt.z, rotY = S.placeRotY || 0, snapped = false;
+    if (!free && S.snapEnabled && S.wallSnapFurniture && typeof Furniture2D !== 'undefined' && typeof Furniture2D.snapFurnitureToWall === 'function') {
+      const hit = Furniture2D.snapFurnitureToWall(worldPt, it, S.p.walls, 0.48);
+      if (hit) { x = hit.x; z = hit.z; rotY = hit.rotY; snapped = true; }
+    }
+    if (!snapped) {
+      const sp = snapPoint(worldPt, null, { free });
+      x = sp.x; z = sp.z;
+    }
+    return { ...it, x: r2(x), z: r2(z), rotY, dims: 'local', snapped };
   }
 
   function setReviewOverlay(overlay) {
@@ -1149,12 +1298,43 @@
       }
     }
     if (h && S.tool === 'furniture' && S.libItem) {
-      const it = S.libItem, c = toScreen(h.snap.x, h.snap.z);
-      ctx.strokeStyle = '#9a6f2a'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
-      ctx.strokeRect(c.x - it.w * k / 2, c.y - it.d * k / 2, it.w * k, it.d * k);
-      ctx.setLineDash([]);
+      const prev = getFurniturePreviewAt(h.world, { free: S.lastShiftKey });
+      if (prev) {
+        const c = toScreen(prev.x, prev.z);
+        if (typeof Furniture2D !== 'undefined' && typeof Furniture2D.drawFurniture2D === 'function') {
+          Furniture2D.drawFurniture2D(ctx, prev, c, k, { ghost: true });
+        } else {
+          ctx.strokeStyle = '#9a6f2a'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+          ctx.strokeRect(c.x - prev.w * k / 2, c.y - prev.d * k / 2, prev.w * k, prev.d * k);
+          ctx.setLineDash([]);
+        }
+        const deg = Math.round(((prev.rotY || 0) * 180 / Math.PI + 360) % 360);
+        label(`${prev.name}${prev.snapped ? ' · Aimanté au mur' : ` · ${deg}°`}`, c.x, c.y - Math.max(prev.w, prev.d) * k * 0.5 - 14, 10, '#9a6f2a', 700);
+        if (window.EditorLive3D && typeof window.EditorLive3D.updateGhost === 'function') {
+          window.EditorLive3D.updateGhost(prev);
+        }
+      }
+    } else if (window.EditorLive3D && typeof window.EditorLive3D.updateGhost === 'function') {
+      window.EditorLive3D.updateGhost(null);
     }
-    if (h && S.tool !== 'select') {
+    // Outil Mesurer (X)
+    if (S.tool === 'measure' && S.measurePts && S.measurePts.a) {
+      const a = S.measurePts.a;
+      const b = S.measurePts.b || (h ? h.snap : a);
+      const sa = toScreen(a.x, a.z), sb = toScreen(b.x, b.z);
+      ctx.save();
+      ctx.strokeStyle = '#b45309';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
+      ctx.setLineDash([]);
+      [sa, sb].forEach(p => { ctx.fillStyle = '#b45309'; ctx.beginPath(); ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2); ctx.fill(); });
+      const dist = Math.hypot(b.x - a.x, b.z - a.z);
+      const dx = Math.abs(b.x - a.x), dz = Math.abs(b.z - a.z);
+      label(`${dist.toFixed(2).replace('.', ',')} m  (Δx ${dx.toFixed(2)} · Δz ${dz.toFixed(2)})`, (sa.x + sb.x) / 2, (sa.y + sb.y) / 2 - 15, 11, '#9a3412', 700);
+      ctx.restore();
+    }
+    if (h && S.tool !== 'select' && S.tool !== 'furniture') {
       const s = toScreen(h.snap.x, h.snap.z);
       ctx.strokeStyle = '#9a6f2a'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(s.x, s.y, 4, 0, Math.PI * 2); ctx.stroke();
@@ -1520,10 +1700,25 @@
     return r ? r.id : undefined;
   }
 
-  function addFurniture(pt) {
+  function addFurniture(pt, opts = {}) {
     const it = S.libItem;
+    if (!it) return;
     commit();
-    const f = { name: it.name, level: S.activeLevel, x: r2(pt.x), z: r2(pt.z), w: it.w, d: it.d, h: it.h, elev: it.elev || 0, color: it.color, rotY: 0, dims: 'local' };
+    const rotY = Number.isFinite(opts.rotY) ? opts.rotY : (S.placeRotY || 0);
+    const f = {
+      name: it.name,
+      level: S.activeLevel,
+      x: r2(pt.x),
+      z: r2(pt.z),
+      w: it.w,
+      d: it.d,
+      h: it.h,
+      elev: it.elev || 0,
+      color: it.color,
+      rotY,
+      dims: 'local'
+    };
+    if (it.symbol) f.symbol = it.symbol;
     if (it.model) f.model = it.model;
     const room = roomAt(f.x, f.z);
     if (room) f.room = room;
@@ -1659,13 +1854,25 @@
     const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
     const world = toWorld(sx, sy);
     const from = S.draft && S.draft.kind === 'wall' ? S.draft.from : null;
-    const snap = snapPoint(world, from, { free: e.shiftKey, diagonal: e.altKey });
+    const snap = snapPoint(world, from, { free: e.shiftKey, diagonal: e.altKey, recordGuides: !!(S.draft || S.drag) });
     return { screen: { x: sx, y: sy }, world, snap };
+  }
+
+  function syncLengthHud() {
+    const hud = $('ed-length-hud');
+    if (!hud) return;
+    if (S.draft && S.draft.kind === 'wall' && S.typedLength) {
+      hud.textContent = `Longueur mur : ${S.typedLength} m  (Entrée pour valider · Échap pour effacer)`;
+      hud.hidden = false;
+    } else {
+      hud.hidden = true;
+    }
   }
 
   canvas.addEventListener('contextmenu', e => e.preventDefault());
 
   canvas.addEventListener('mousedown', e => {
+    S.lastShiftKey = !!e.shiftKey;
     const P = evtPoint(e);
     if (e.button === 2 || e.button === 1 || S.space) {
       S.drag = { kind: 'pan', sx: e.clientX, sy: e.clientY, ox: S.view.ox, oy: S.view.oy };
@@ -1677,6 +1884,14 @@
     }
     switch (S.tool) {
       case 'select': {
+        // Poignée de rotation interactive d'un meuble déjà sélectionné
+        if (S.sel && S.sel.kind === 'furniture' && typeof Furniture2D !== 'undefined' && typeof Furniture2D.getRotateHandleWorld === 'function') {
+          const rh = Furniture2D.getRotateHandleWorld(S.sel.obj, S.view.scale);
+          if (Math.hypot(P.world.x - rh.x, P.world.z - rh.z) < 12 / S.view.scale) {
+            S.drag = { kind: 'rotate-furniture', obj: S.sel.obj, moved: false };
+            return;
+          }
+        }
         const ep = endpointAt(P.world);
         if (ep) {
           const ends = [];
@@ -1713,6 +1928,8 @@
         break;
       case 'wall-ext':
       case 'wall-int':
+        S.typedLength = '';
+        syncLengthHud();
         if (!S.draft) S.draft = { kind: 'wall', from: P.snap };
         else { addWall(S.draft.from, P.snap); S.draft.from = P.snap; }
         break;
@@ -1749,9 +1966,21 @@
         select({ kind: 'column', obj: c });
         break;
       }
-      case 'furniture':
-        addFurniture(snapPoint(P.world, null, { free: e.shiftKey }));
+      case 'furniture': {
+        const prev = getFurniturePreviewAt(P.world, { free: e.shiftKey });
+        if (prev) addFurniture({ x: prev.x, z: prev.z }, { rotY: prev.rotY });
         break;
+      }
+      case 'measure': {
+        if (!S.measurePts || S.measurePts.b) {
+          S.measurePts = { a: P.snap, b: null };
+        } else {
+          S.measurePts.b = P.snap;
+          const dist = Math.hypot(P.snap.x - S.measurePts.a.x, P.snap.z - S.measurePts.a.z);
+          toast(`Distance mesurée : ${dist.toFixed(2).replace('.', ',')} m`);
+        }
+        break;
+      }
       case 'camera': {
         ensureCameras();
         const hit = cameraHit(P.world);
@@ -1767,6 +1996,7 @@
 
   window.addEventListener('mousemove', e => {
     if (!S.p) return;
+    S.lastShiftKey = !!e.shiftKey;
     const P = evtPoint(e);
     S.hover = P;
     $('ed-coords').textContent = `x ${P.snap.x.toFixed(2)} · z ${P.snap.z.toFixed(2)} m`;
@@ -1774,8 +2004,15 @@
     if (d && d.kind === 'pan') {
       S.view.ox = d.ox + (e.clientX - d.sx);
       S.view.oy = d.oy + (e.clientY - d.sy);
+    } else if (d && d.kind === 'rotate-furniture') {
+      if (!d.moved) { commit(); d.moved = true; }
+      const raw = Math.atan2(P.world.x - d.obj.x, P.world.z - d.obj.z);
+      const step = e.shiftKey ? (Math.PI / 180) : (Math.PI / 12);
+      const snapped = Math.round(raw / step) * step;
+      d.obj.rotY = ((snapped % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      d.obj.dims = 'local';
     } else if (d && d.kind === 'endpoint') {
-      const pt = snapPoint(P.world, null, { free: e.shiftKey });
+      const pt = snapPoint(P.world, null, { free: e.shiftKey, recordGuides: true });
       const cur = d.ends[0].w[d.ends[0].key];
       if (pt.x !== cur[0] || pt.z !== cur[1]) {
         if (!d.moved) { commit(); d.moved = true; } // historique seulement si ça bouge vraiment
@@ -1795,11 +2032,19 @@
         wp.look[0] = r2(wp.pos[0] + (dx / l) * 3); wp.look[2] = r2(wp.pos[2] + (dz / l) * 3);
       }
     } else if (d && d.kind === 'move') {
-      const dx = round(P.world.x - d.start.x, e.shiftKey ? 0.01 : 0.05), dz = round(P.world.z - d.start.z, e.shiftKey ? 0.01 : 0.05);
+      const step = (e.shiftKey || !S.snapEnabled) ? 0.01 : 0.05;
+      const dx = round(P.world.x - d.start.x, step), dz = round(P.world.z - d.start.z, step);
       const o = d.orig, obj = d.hit.obj;
       if (!d.moved && (dx !== 0 || dz !== 0)) { commit(); d.moved = true; }
       if (!d.moved) { draw(); return; }
-      if (d.hit.kind === 'furniture' || d.hit.kind === 'column') { obj.x = r2(o.x + dx); obj.z = r2(o.z + dz); }
+      if (d.hit.kind === 'furniture') {
+        let nx = r2(o.x + dx), nz = r2(o.z + dz);
+        if (S.snapEnabled && S.wallSnapFurniture && !e.shiftKey && typeof Furniture2D !== 'undefined' && typeof Furniture2D.snapFurnitureToWall === 'function') {
+          const snapW = Furniture2D.snapFurnitureToWall({ x: nx, z: nz }, obj, S.p.walls, 0.3);
+          if (snapW) { nx = snapW.x; nz = snapW.z; obj.rotY = snapW.rotY; obj.dims = 'local'; }
+        }
+        obj.x = nx; obj.z = nz;
+      } else if (d.hit.kind === 'column') { obj.x = r2(o.x + dx); obj.z = r2(o.z + dz); }
       else if (d.hit.kind === 'room') {
         Object.assign(obj.bounds, { xMin: r2(o.bounds.xMin + dx), xMax: r2(o.bounds.xMax + dx), zMin: r2(o.bounds.zMin + dz), zMax: r2(o.bounds.zMax + dz) });
         if (o.poly) obj.poly = o.poly.map(p => [r2(p[0] + dx), r2(p[1] + dz)]);
@@ -1808,7 +2053,7 @@
       else if (d.hit.kind === 'wall') { obj.from = [r2(o.from[0] + dx), r2(o.from[1] + dz)]; obj.to = [r2(o.to[0] + dx), r2(o.to[1] + dz)]; }
       else if (d.hit.kind === 'opening') {
         const w = d.hit.wall, L = wallLen(w);
-        obj.at = r2(Math.max(obj.w / 2, Math.min(L - obj.w / 2, round(projectOnWall(w, P.world).at, e.shiftKey ? 0.01 : 0.05))));
+        obj.at = r2(Math.max(obj.w / 2, Math.min(L - obj.w / 2, round(projectOnWall(w, P.world).at, step))));
       }
     }
     draw();
@@ -1817,7 +2062,8 @@
   window.addEventListener('mouseup', e => {
     const d = S.drag;
     S.drag = null;
-    if (d && d.kind === 'camera' && d.moved) refreshPanel();
+    S.guides = [];
+    if (d && (d.kind === 'camera' || d.kind === 'rotate-furniture') && d.moved) refreshPanel();
     if (d && (d.kind === 'move' || d.kind === 'endpoint') && d.moved) {
       if (d.hit && d.hit.kind === 'furniture') { const room = roomAt(d.hit.obj.x, d.hit.obj.z); if (room) d.hit.obj.room = room; }
       refreshPanel();
@@ -1833,7 +2079,7 @@
     if (S.draft && S.draft.kind === 'poly') { const pts = S.draft.pts; S.draft = null; if (pts.length >= 3) addPolyRoom(pts); draw(); return true; }
     return false;
   }
-  canvas.addEventListener('dblclick', () => { if (S.draft && S.draft.kind === 'wall') { S.draft = null; draw(); } else closePolyDraft(); });
+  canvas.addEventListener('dblclick', () => { if (S.draft && S.draft.kind === 'wall') { S.draft = null; S.typedLength = ''; syncLengthHud(); draw(); } else closePolyDraft(); });
 
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
@@ -1894,7 +2140,7 @@
     }
   });
 
-  const TOOL_KEYS = { KeyV: 'select', KeyN: 'annotate', KeyK: 'calibrate', KeyM: 'wall-ext', KeyC: 'wall-int', KeyD: 'door', KeyF: 'window', KeyB: 'open', KeyA: 'room', KeyW: 'room-auto', KeyP: 'room-poly', KeyO: 'column', KeyU: 'slab', KeyG: 'pergola', KeyE: 'furniture', KeyT: 'camera' };
+  const TOOL_KEYS = { KeyV: 'select', KeyN: 'annotate', KeyK: 'calibrate', KeyM: 'wall-ext', KeyC: 'wall-int', KeyD: 'door', KeyF: 'window', KeyB: 'open', KeyA: 'room', KeyW: 'room-auto', KeyP: 'room-poly', KeyO: 'column', KeyU: 'slab', KeyG: 'pergola', KeyE: 'furniture', KeyT: 'camera', KeyX: 'measure' };
 
   window.addEventListener('keydown', e => {
     if (e.defaultPrevented || document.querySelector('dialog[open]')) return;
@@ -1904,10 +2150,60 @@
     if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if ((e.ctrlKey || e.metaKey) && e.code === 'KeyY') { e.preventDefault(); redo(); return; }
     if (e.code === 'Space' && !e.target.closest?.('button, a, summary, label')) { S.space = true; canvas.style.cursor = 'grab'; e.preventDefault(); return; }
+    // Saisie directe de longueur en mètres pendant le tracé d'un mur (ex: taper "4.5" puis Entrée)
+    if (S.draft && S.draft.kind === 'wall' && !e.ctrlKey && !e.metaKey) {
+      if (/^[0-9.,]$/.test(e.key)) {
+        e.preventDefault();
+        if (S.typedLength.length < 8) {
+          S.typedLength += e.key === ',' ? '.' : e.key;
+          syncLengthHud();
+        }
+        return;
+      }
+      if (e.code === 'Backspace' && S.typedLength) {
+        e.preventDefault();
+        S.typedLength = S.typedLength.slice(0, -1);
+        syncLengthHud();
+        return;
+      }
+      if (e.code === 'Enter' && S.typedLength) {
+        e.preventDefault();
+        const len = parseFloat(S.typedLength);
+        if (Number.isFinite(len) && len >= 0.1 && len <= 100) {
+          const ref = S.hover ? S.hover.snap : { x: S.draft.from.x + 1, z: S.draft.from.z };
+          let dx = ref.x - S.draft.from.x, dz = ref.z - S.draft.from.z;
+          const d = Math.hypot(dx, dz);
+          if (d < 1e-4) { dx = 1; dz = 0; } else { dx /= d; dz /= d; }
+          const end = { x: r2(S.draft.from.x + dx * len), z: r2(S.draft.from.z + dz * len) };
+          addWall(S.draft.from, end);
+          S.draft.from = end;
+          toast(`Mur de ${len.toFixed(2).replace('.', ',')} m tracé`);
+        }
+        S.typedLength = '';
+        syncLengthHud();
+        draw();
+        return;
+      }
+    }
     if (e.code === 'Enter' && closePolyDraft()) return;
-    if (e.code === 'Escape') { if (S.draft) S.draft = null; else select(null); draw(); return; }
+    if (e.code === 'Escape') {
+      S.typedLength = '';
+      syncLengthHud();
+      S.measurePts = null;
+      S.guides = [];
+      if (S.draft) S.draft = null;
+      else select(null);
+      draw();
+      return;
+    }
     if (e.code === 'Delete' || e.code === 'Backspace') { deleteSelection(); return; }
     if (e.code === 'KeyR' && S.sel && S.sel.kind === 'furniture') { rotateFurniture(S.sel.obj, e.shiftKey ? -1 : 1); return; }
+    if (e.code === 'KeyR' && S.tool === 'furniture') {
+      const step = Math.PI / 12;
+      S.placeRotY = ((S.placeRotY || 0) + (e.shiftKey ? -step : step) + Math.PI * 2) % (Math.PI * 2);
+      draw();
+      return;
+    }
     if (S.sel && S.sel.kind === 'opening' && S.sel.obj.type === 'door' && (e.code === 'KeyH' || e.code === 'KeyJ')) {
       commit();
       if (e.code === 'KeyH') S.sel.obj.hinge = S.sel.obj.hinge === 'end' ? 'start' : 'end';
@@ -1919,25 +2215,59 @@
   window.addEventListener('keyup', e => { if (e.code === 'Space') { S.space = false; canvas.style.cursor = 'crosshair'; } });
 
   // ---------------------------------------------------------------------------
-  // OUTILS & PANNEAU
+  // OUTILS, ONGLETS & PANNEAU
   // ---------------------------------------------------------------------------
+  function setPanelTab(tab) {
+    if (!['inspect', 'furniture', 'dossier'].includes(tab)) return;
+    S.panelTab = tab;
+    const propsEl = $('ed-props');
+    const libEl = $('ed-library');
+    const dossierEl = $('ed-dossier-pane');
+    if (dossierEl) {
+      if (propsEl) propsEl.classList.toggle('hidden', tab !== 'inspect');
+      if (libEl) libEl.classList.toggle('hidden', tab !== 'furniture');
+      dossierEl.classList.toggle('hidden', tab !== 'dossier');
+      document.querySelectorAll('#ed-panel-tabs [data-panel-tab]').forEach(btn => {
+        const isCurrent = btn.dataset.panelTab === tab;
+        btn.classList.toggle('active', isCurrent);
+        btn.setAttribute('aria-selected', String(isCurrent));
+      });
+      if (tab === 'dossier' && S.p) projectPanel(dossierEl, { inDialog: false, inDossier: true });
+    } else if (libEl) {
+      libEl.classList.toggle('hidden', tab !== 'furniture' && S.tool !== 'furniture');
+    }
+  }
+
   function setTool(t) {
     S.tool = t;
     S.draft = null;
+    S.typedLength = '';
+    S.measurePts = null;
+    S.guides = [];
+    syncLengthHud();
+    if (window.EditorLive3D && typeof window.EditorLive3D.updateGhost === 'function') {
+      window.EditorLive3D.updateGhost(null);
+    }
     document.querySelectorAll('#ed-tools button').forEach(b => {
       const active = b.dataset.tool === t;
       b.classList.toggle('active', active);
       b.setAttribute('aria-pressed', String(active));
     });
     $('ed-hint').textContent = HINTS[t] || '';
-    $('ed-library').classList.toggle('hidden', t !== 'furniture');
+    if (t === 'furniture') setPanelTab('furniture');
+    else if (S.panelTab === 'furniture') setPanelTab('inspect');
     if (t === 'camera') { ensureCameras(); if (!S.sel || S.sel.kind !== 'camera') { S.sel = null; } refreshPanel(); }
     else if (S.sel && S.sel.kind === 'camera') { S.sel = null; refreshPanel(); }
     draw();
   }
   document.querySelectorAll('#ed-tools button').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
 
-  function select(s) { S.sel = s; refreshPanel(); draw(); }
+  function select(s) {
+    S.sel = s;
+    if (s && $('ed-dossier-pane') && S.panelTab !== 'inspect') setPanelTab('inspect');
+    refreshPanel();
+    draw();
+  }
 
   // Génère un formulaire à partir d'un schéma [{key, label, type, options, step, pdf, rows}]
   function form(title, obj, fields, onChange, extraHtml = '', target = $('ed-props'), prependHtml = '') {
@@ -2015,12 +2345,224 @@
     if (!dlg.open && typeof dlg.showModal === 'function') dlg.showModal();
   }
 
+  function syncDossierPane() {
+    const pane = $('ed-dossier-pane');
+    if (pane && S.panelTab === 'dossier' && S.p) projectPanel(pane, { inDialog: false, inDossier: true });
+  }
+
+  function syncQuickBar() {
+    const bar = $('ed-quick-bar');
+    if (!bar) return;
+    const s = S.sel;
+    if (!s || S.tool === 'measure') {
+      bar.hidden = true;
+      bar.replaceChildren();
+      return;
+    }
+    const items = [];
+    let title = '';
+    if (s.kind === 'furniture') {
+      title = s.obj.name || 'Meuble';
+      items.push(
+        { label: 'Pivoter +90°', onClick: () => { commit(); s.obj.rotY = ((s.obj.rotY || 0) + Math.PI / 2) % (Math.PI * 2); s.obj.dims = 'local'; refreshPanel(); draw(); } },
+        { label: 'Coller au mur', onClick: () => snapSelectedFurnitureToWall(s.obj) },
+        { label: 'Dupliquer', onClick: () => { commit(); const c = JSON.parse(JSON.stringify(s.obj)); c.x = r2(c.x + 0.35); c.z = r2(c.z + 0.35); S.p.furniture.push(c); select({ kind: 'furniture', obj: c }); } },
+        { label: 'Supprimer', onClick: deleteSelection }
+      );
+    } else if (s.kind === 'room') {
+      title = s.obj.name || 'Pièce';
+      items.push(
+        { label: 'Meubler cette pièce', onClick: () => void autoFurnishRooms(s.obj.id) },
+        ...(!s.obj.poly ? [{ label: 'Ajuster aux murs', onClick: () => { commit(); fitRoomToWalls(s.obj); refreshPanel(); draw(); } }] : []),
+        { label: 'Supprimer', onClick: deleteSelection }
+      );
+    } else if (s.kind === 'opening' && s.obj.type === 'door') {
+      title = 'Porte';
+      items.push(
+        { label: 'Gonds (H)', onClick: () => { commit(); s.obj.hinge = s.obj.hinge === 'end' ? 'start' : 'end'; refreshPanel(); draw(); } },
+        { label: 'Sens (J)', onClick: () => { commit(); s.obj.side = (s.obj.side || 1) * -1; refreshPanel(); draw(); } },
+        { label: 'Supprimer', onClick: deleteSelection }
+      );
+    } else if (s.kind === 'wall') {
+      title = `Mur ${wallLen(s.obj).toFixed(2).replace('.', ',')} m`;
+      items.push(
+        { label: s.obj.type === 'ext' ? 'Passer en cloison' : 'Passer en mur ext.', onClick: () => { commit(); s.obj.type = s.obj.type === 'ext' ? 'int' : 'ext'; s.obj.thick = s.obj.type === 'ext' ? 0.25 : 0.15; refreshPanel(); draw(); } },
+        { label: 'Supprimer', onClick: deleteSelection }
+      );
+    } else {
+      bar.hidden = true;
+      bar.replaceChildren();
+      return;
+    }
+
+    const nodes = [];
+    const lbl = document.createElement('span');
+    lbl.className = 'ed-qb-label';
+    lbl.textContent = title;
+    nodes.push(lbl);
+    items.forEach(it => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = it.label;
+      b.onclick = it.onClick;
+      nodes.push(b);
+    });
+    bar.replaceChildren(...nodes);
+    bar.hidden = false;
+  }
+
+  function snapSelectedFurnitureToWall(obj) {
+    if (!obj || typeof Furniture2D === 'undefined' || typeof Furniture2D.snapFurnitureToWall !== 'function') return;
+    const hit = Furniture2D.snapFurnitureToWall({ x: obj.x, z: obj.z }, obj, S.p.walls, 2.5);
+    if (!hit) { toast('Aucun mur proche pour aimanter ce meuble.', true); return; }
+    commit();
+    obj.x = hit.x;
+    obj.z = hit.z;
+    obj.rotY = hit.rotY;
+    obj.dims = 'local';
+    refreshPanel();
+    draw();
+    toast('Meuble aligné contre le mur.');
+  }
+
+  async function autoFurnishRooms(roomId = null) {
+    if (!S.p || !S.p.rooms.length) {
+      toast('Créez d’abord au moins une pièce (W, A ou P) avant de meubler automatiquement.', true);
+      return;
+    }
+    toast('Calcul de l’ameublement architectural…');
+    try {
+      const res = await fetch('api/ai/auto-furnish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project: toProjectJson(),
+          roomId: roomId || undefined,
+          level: roomId ? undefined : S.activeLevel,
+          useAi: false
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) throw new Error(data?.error || 'Meublage automatique indisponible.');
+      const items = Array.isArray(data.furniture) ? data.furniture : [];
+      if (!items.length) {
+        toast('Aucun meuble proposé pour ces noms de pièces (ex. Séjour, Chambre, Cuisine, Salle de bain).', true);
+        return;
+      }
+      commit();
+      if (roomId) {
+        S.p.furniture = S.p.furniture.filter(f => f.room !== roomId);
+      }
+      items.forEach(it => {
+        if ((Number(it.level) || 0) === S.activeLevel) {
+          S.p.furniture.push({ ...it, dims: 'local', elev: it.elev || 0 });
+        }
+      });
+      refreshPanel();
+      draw();
+      if (window.EditorLive3D && window.EditorLive3D.getMode() === '2d') {
+        window.EditorLive3D.setMode('split');
+      }
+      toast(data.note || `${items.length} meubles placés.`);
+    } catch (err) {
+      toast(err.message || 'Impossible de meubler automatiquement.', true);
+    }
+  }
+
+  function projectSummaryPanel() {
+    const container = $('ed-props');
+    if (!container || !S.p) return;
+    const p = S.p;
+    const hab = p.rooms.filter(r => r.habitable).reduce((s, r) => s + roomArea(r), 0);
+    const nOps = p.walls.reduce((s, w) => s + w.openings.length, 0);
+    const pi = p.config.planImage;
+    const missing = pdfMissingInfo().missing;
+    const warn = !p.walls.some(w => w.openings.some(o => o.type === 'door' && w.type === 'ext')) && p.walls.length
+      ? '<p class="ed-note warn">Aucune porte sur un mur extérieur : l\'entrée de la visite sera devinée.</p>' : '';
+
+    container.innerHTML = `<div class="ed-inspector-summary">
+      <div class="ed-inspector-head">
+        <h3>Projet</h3>
+        <button type="button" id="btn-open-dossier-tab" title="Compléter le cartouche PDF et les métadonnées">Cartouche PDF${missing.length ? ` (${missing.length})` : ' ✓'}</button>
+      </div>
+      <div class="ed-field"><label>Nom du projet</label><input type="text" id="sum-proj-name" value="${escapeHtml(p.meta.name || '')}"></div>
+      <div class="ed-stats">
+        <div class="ed-stat"><strong>${p.walls.length}</strong><span>murs</span></div>
+        <div class="ed-stat"><strong>${nOps}</strong><span>ouvertures</span></div>
+        <div class="ed-stat"><strong>${p.rooms.length}</strong><span>pièces</span></div>
+        <div class="ed-stat"><strong>${hab.toFixed(1).replace('.', ',')} m²</strong><span>habitables</span></div>
+      </div>
+      <div class="ed-inspector-actions">
+        <button type="button" id="sum-btn-split" class="ed-primary">Aperçu 2D + 3D</button>
+        <button type="button" id="sum-btn-autofurnish">Meubler auto</button>
+      </div>
+      <div class="ed-field"><label>Hauteur sous plafond (m)</label><input type="number" data-proj="num-height" step="0.05" value="${p.config.wallHeight}"></div>
+      ${S.planImg ? `<div class="ed-field"><label>Opacité du plan</label><input type="range" data-proj="rng-opacity" min="0" max="1" step="0.05" value="${S.planOpacity}"></div>` : ''}
+      <p class="ed-note">${pi && S.planImg ? `Échelle du plan : <strong>${pi.pxPerMeter} px/m</strong>${pi.calibrated ? ' (calibré)' : ' (non calibré)'}${pi.rectified ? ' · redressé' : ''}` : 'Sélectionnez un élément sur le plan ou ouvrez l’onglet Mobilier pour aménager en direct.'}</p>
+      ${pi && S.planImg ? `<div class="ed-row"><button type="button" data-proj="btn-rectify">Redresser (4 pts)</button>${pi.calibrated ? '<button type="button" data-proj="btn-verify-scale">Contrôler 2ᵉ cote</button>' : ''}${pi.originalUrl ? '<button type="button" data-proj="btn-restore-plan">Plan d’origine</button>' : ''}</div>` : ''}
+      ${warn}
+      ${diagnosticHtml('sum-')}
+      <div class="ed-row"><button type="button" data-proj="btn-fit">Cadrer la vue</button><button type="button" data-proj="btn-center">Centrer sur l'origine</button></div>
+      <section class="ed-checks" aria-labelledby="ed-checks-title"><h4 id="ed-checks-title" data-checks-title>Vérifications</h4><ul id="ed-checks-list" data-checks-list></ul>
+        <p class="ed-note">Repères d'habitabilité indicatifs, non réglementaires : ils signalent, ils ne bloquent pas.</p></section>
+    </div>`;
+
+    const nameInp = $('sum-proj-name');
+    if (nameInp) nameInp.onchange = () => {
+      commit();
+      p.meta.name = String(nameInp.value).toUpperCase();
+      if (!p.meta.slugLocked) p.meta.slug = slugify(p.meta.name);
+      refreshPanel();
+    };
+    const btnDossier = $('btn-open-dossier-tab');
+    if (btnDossier) btnDossier.onclick = () => setPanelTab('dossier');
+    const btnSplit = $('sum-btn-split');
+    if (btnSplit) {
+      const curMode = window.EditorLive3D?.getMode?.() || '2d';
+      btnSplit.textContent = curMode === 'split' ? 'Revenir en 2D' : 'Aperçu 2D + 3D';
+      btnSplit.onclick = () => {
+        if (!window.EditorLive3D) return;
+        window.EditorLive3D.setMode(window.EditorLive3D.getMode() === 'split' ? '2d' : 'split');
+        refreshPanel();
+      };
+    }
+    const btnFurn = $('sum-btn-autofurnish');
+    if (btnFurn) btnFurn.onclick = () => void autoFurnishRooms();
+    const rngOpacity = container.querySelector('[data-proj="rng-opacity"]');
+    if (rngOpacity) rngOpacity.oninput = e => {
+      S.planOpacity = parseFloat(e.target.value);
+      const quick = $('ed-quick-opacity');
+      if (quick) quick.value = String(S.planOpacity);
+      draw();
+    };
+    const numHeight = container.querySelector('[data-proj="num-height"]');
+    if (numHeight) numHeight.onchange = e => { const v = parseFloat(e.target.value); if (v > 2) { commit(); p.config.wallHeight = v; refreshPanel(); draw(); } };
+    const btnFit = container.querySelector('[data-proj="btn-fit"]');
+    if (btnFit) btnFit.onclick = () => { fitView(); draw(); };
+    const btnCenter = container.querySelector('[data-proj="btn-center"]');
+    if (btnCenter) btnCenter.onclick = () => { commit(); centerProject(); fitView(); draw(); toast('Projet recentré sur l\'origine'); };
+    const btnRectify = container.querySelector('[data-proj="btn-rectify"]');
+    if (btnRectify) btnRectify.onclick = () => { setTool('rectify'); toast('Cliquez les 4 coins du cadre/plan (haut-gauche → sens horaire).'); };
+    const btnVerifyScale = container.querySelector('[data-proj="btn-verify-scale"]');
+    if (btnVerifyScale) btnVerifyScale.onclick = () => { setTool('verify-scale'); toast('Cliquez les 2 extrémités d’une 2ᵉ cote connue (loupe active).'); };
+    const btnRestorePlan = container.querySelector('[data-proj="btn-restore-plan"]');
+    if (btnRestorePlan) btnRestorePlan.onclick = () => restoreOriginalPlanImage();
+    renderChecks(container);
+    wireDiagnostic(container);
+  }
+
   function refreshPanel() {
     $('ed-project-name').textContent = S.p.meta.name + (S.dirty ? ' •' : '');
     const s = S.sel;
-    if (!s && S.tool === 'camera') { camerasPanel(); syncProjectInfoDialog(); return; }
-    if (!s) { projectPanel(); syncProjectInfoDialog(); return; }
-    if (s.kind === 'camera') { cameraPanel(s.obj); syncProjectInfoDialog(); return; }
+    if (!s && S.tool === 'camera') { camerasPanel(); syncDossierPane(); syncProjectInfoDialog(); return; }
+    if (!s) {
+      if ($('ed-dossier-pane')) projectSummaryPanel();
+      else projectPanel();
+      syncDossierPane();
+      syncProjectInfoDialog();
+      return;
+    }
+    if (s.kind === 'camera') { cameraPanel(s.obj); syncDossierPane(); syncProjectInfoDialog(); return; }
     const del = '<div class="ed-row"><button id="btn-del">Supprimer</button></div>';
     if (s.kind === 'wall') {
       form('Mur', s.obj, [
@@ -2051,7 +2593,9 @@
         { key: 'desc', label: 'Description' },
         { key: 'area', label: 'Surface', type: 'readonly', get: o => roomArea(o).toFixed(2).replace('.', ',') + ' m²' },
         { key: 'nv', label: 'Sommets', type: 'readonly', get: o => o.poly.length }
-      ], null, '<div class="ed-row"><button id="btn-to-rect">Convertir en rectangle</button><button id="btn-del">Supprimer</button></div>');
+      ], null, '<div class="ed-row"><button id="btn-furnish-room" class="ed-primary">Meubler cette pièce</button><button id="btn-to-rect">Rectangle</button><button id="btn-del">Supprimer</button></div>');
+      const bf = $('btn-furnish-room');
+      if (bf) bf.onclick = () => void autoFurnishRooms(s.obj.id);
       $('btn-to-rect').onclick = () => { commit(); s.obj.bounds = polyBounds(s.obj.poly); delete s.obj.poly; refreshPanel(); draw(); };
     } else if (s.kind === 'room') {
       const b = s.obj.bounds;
@@ -2065,7 +2609,9 @@
         { key: 'xMax', label: 'Est (x max)', type: 'number', step: 0.05, get: o => o.bounds.xMax, set: (o, v) => { o.bounds.xMax = v; } },
         { key: 'zMin', label: 'Nord (z min)', type: 'number', step: 0.05, get: o => o.bounds.zMin, set: (o, v) => { o.bounds.zMin = v; } },
         { key: 'zMax', label: 'Sud (z max)', type: 'number', step: 0.05, get: o => o.bounds.zMax, set: (o, v) => { o.bounds.zMax = v; } }
-      ], null, '<div class="ed-row"><button id="btn-fit-room">Ajuster aux murs</button><button id="btn-del">Supprimer</button></div>');
+      ], null, '<div class="ed-row"><button id="btn-furnish-room" class="ed-primary">Meubler cette pièce</button><button id="btn-fit-room">Ajuster aux murs</button><button id="btn-del">Supprimer</button></div>');
+      const bf = $('btn-furnish-room');
+      if (bf) bf.onclick = () => void autoFurnishRooms(s.obj.id);
       const fit = $('btn-fit-room');
       if (fit) fit.onclick = () => { commit(); fitRoomToWalls(s.obj); refreshPanel(); draw(); };
     } else if (s.kind === 'column') {
@@ -2098,19 +2644,62 @@
     } else if (s.kind === 'furniture') {
       form('Meuble', s.obj, [
         { key: 'name', label: 'Nom' },
-        { key: 'model', label: 'Modèle 3D', type: 'select', options: { '': '— volume simple —', sofa: 'Canapé', chair: 'Chaise', diningTable: 'Table', coffeeTable: 'Table basse', bed: 'Lit', nightstand: 'Chevet', fridge: 'Réfrigérateur', toilet: 'WC', plantTall: 'Plante haute', plantBush: 'Plante basse' }, set: (o, v) => { if (v) o.model = v; else delete o.model; } },
+        {
+          key: 'model',
+          label: 'Modèle 2D / 3D',
+          type: 'select',
+          options: {
+            '': '— volume simple —',
+            sofa: 'Canapé',
+            sofaCorner: 'Canapé d’angle',
+            armchair: 'Fauteuil',
+            coffeeTable: 'Table basse',
+            tvUnit: 'Meuble TV',
+            rug: 'Tapis',
+            diningTable: 'Table à manger',
+            diningRound: 'Table ronde',
+            chair: 'Chaise',
+            buffet: 'Buffet / Console',
+            kitchenCounter: 'Plan de travail',
+            kitchenIsland: 'Îlot central',
+            cooktop: 'Plaque cuisson',
+            sink: 'Évier inox',
+            upperCabinet: 'Meuble haut',
+            fridge: 'Réfrigérateur',
+            bed: 'Lit',
+            nightstand: 'Chevet',
+            wardrobe: 'Armoire / Dressing',
+            toilet: 'Cuvette WC',
+            vanity: 'Meuble vasque',
+            shower: 'Douche italienne',
+            bathtub: 'Baignoire',
+            desk: 'Bureau',
+            lounger: 'Transat',
+            car: 'Voiture (garage)',
+            plantTall: 'Plante haute',
+            plantBush: 'Plante basse',
+            shelf: 'Bibliothèque / Étagères'
+          },
+          set: (o, v) => {
+            if (v) { o.model = v; o.symbol = v; }
+            else { delete o.model; delete o.symbol; }
+          }
+        },
         { key: 'w', label: 'Largeur (m)', type: 'number', step: 0.05 },
         { key: 'd', label: 'Profondeur (m)', type: 'number', step: 0.05 },
         { key: 'h', label: 'Hauteur (m)', type: 'number', step: 0.05 },
         { key: 'elev', label: 'Élévation (m)', type: 'number', step: 0.05 },
         { key: 'angle', label: 'Angle (°)', type: 'number', step: 1, get: o => Math.round((o.rotY || 0) * 180 / Math.PI * 100) / 100, set: (o, v) => { o.rotY = v * Math.PI / 180; o.dims = 'local'; } },
         { key: 'color', label: 'Couleur', type: 'color' }
-      ], null, '<div class="ed-row"><button id="btn-rot">Pivoter +15° (R)</button><button id="btn-dup">Dupliquer</button><button id="btn-del">Supprimer</button></div>');
+      ], null, '<div class="ed-row"><button id="btn-rot">Pivoter +15° (R)</button><button id="btn-snap-wall">Coller au mur</button><button id="btn-dup">Dupliquer</button><button id="btn-del">Supprimer</button></div>');
       $('btn-rot').onclick = () => rotateFurniture(s.obj);
+      const bSnap = $('btn-snap-wall');
+      if (bSnap) bSnap.onclick = () => snapSelectedFurnitureToWall(s.obj);
       $('btn-dup').onclick = () => { commit(); const c = JSON.parse(JSON.stringify(s.obj)); c.x = r2(c.x + 0.3); c.z = r2(c.z + 0.3); S.p.furniture.push(c); select({ kind: 'furniture', obj: c }); };
     }
     const d = $('btn-del');
     if (d) d.onclick = deleteSelection;
+    syncDossierPane();
     syncProjectInfoDialog();
   }
 
@@ -2370,15 +2959,114 @@
   }
 
   function buildLibrary() {
-    const groups = {};
-    FURNITURE.forEach(f => { (groups[f.group] = groups[f.group] || []).push(f); });
-    $('ed-library').innerHTML = '<h3>Bibliothèque</h3>' + Object.entries(groups).map(([g, items]) =>
-      `<h4>${g}</h4><div class="ed-lib">${items.map(it => `<button data-lib="${FURNITURE.indexOf(it)}">${it.name}<small>${it.w} × ${it.d} m</small></button>`).join('')}</div>`).join('');
-    $('ed-library').querySelectorAll('[data-lib]').forEach(b => b.addEventListener('click', () => {
-      S.libItem = FURNITURE[+b.dataset.lib];
-      $('ed-library').querySelectorAll('[data-lib]').forEach(x => x.classList.toggle('active', x === b));
-    }));
-    $('ed-library').querySelector('[data-lib]').classList.add('active');
+    const lib = $('ed-library');
+    if (!lib) return;
+    const allGroups = ['Tous', ...new Set(FURNITURE.map(f => f.group))];
+
+    const renderList = () => {
+      const q = (S.libQuery || '').trim().toLowerCase();
+      const filtered = FURNITURE.filter(it => {
+        if (S.libGroup !== 'Tous' && it.group !== S.libGroup) return false;
+        if (q && !it.name.toLowerCase().includes(q) && !it.group.toLowerCase().includes(q)) return false;
+        return true;
+      });
+      const groups = {};
+      filtered.forEach(f => { (groups[f.group] = groups[f.group] || []).push(f); });
+
+      const frag = [];
+      const entries = Object.entries(groups);
+      if (!entries.length) {
+        const emptyNote = document.createElement('p');
+        emptyNote.className = 'ed-note';
+        emptyNote.textContent = 'Aucun meuble ne correspond à cette recherche.';
+        frag.push(emptyNote);
+      } else {
+        entries.forEach(([g, items]) => {
+          const h4 = document.createElement('h4');
+          h4.textContent = g;
+          const grid = document.createElement('div');
+          grid.className = 'ed-lib';
+          items.forEach(it => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.dataset.lib = String(FURNITURE.indexOf(it));
+            if (S.libItem === it) btn.classList.add('active');
+            if (typeof Furniture2D !== 'undefined' && typeof Furniture2D.createThumbnailCanvas === 'function') {
+              const thumb = Furniture2D.createThumbnailCanvas(it);
+              if (thumb) btn.append(thumb);
+            }
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'ed-lib-name';
+            nameSpan.textContent = it.name;
+            const dims = document.createElement('small');
+            dims.textContent = `${it.w} × ${it.d} m`;
+            btn.append(nameSpan, dims);
+            btn.onclick = () => {
+              S.libItem = it;
+              S.placeRotY = 0;
+              if (S.tool !== 'furniture') setTool('furniture');
+              else renderList();
+              toast(`${it.name} sélectionné — cliquez sur le plan pour poser`);
+            };
+            grid.append(btn);
+          });
+          frag.push(h4, grid);
+        });
+      }
+      listHost.replaceChildren(...frag);
+    };
+
+    const head = document.createElement('div');
+    head.className = 'ed-lib-head';
+
+    const title = document.createElement('h3');
+    title.textContent = 'Catalogue mobilier';
+
+    const search = document.createElement('input');
+    search.type = 'search';
+    search.className = 'ed-lib-search';
+    search.placeholder = 'Rechercher (canapé, lit, douche, îlot…)';
+    search.value = S.libQuery || '';
+    search.oninput = () => { S.libQuery = search.value; renderList(); };
+
+    const cats = document.createElement('div');
+    cats.className = 'ed-lib-cats';
+    allGroups.forEach(g => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = g;
+      if (S.libGroup === g) b.classList.add('active');
+      b.onclick = () => {
+        S.libGroup = g;
+        cats.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+        renderList();
+      };
+      cats.append(b);
+    });
+
+    const tools = document.createElement('div');
+    tools.className = 'ed-lib-tools';
+    const snapLbl = document.createElement('label');
+    const snapChk = document.createElement('input');
+    snapChk.type = 'checkbox';
+    snapChk.checked = S.wallSnapFurniture;
+    snapChk.onchange = () => { S.wallSnapFurniture = snapChk.checked; };
+    const snapText = document.createElement('span');
+    snapText.textContent = 'Aimant murs';
+    snapLbl.append(snapChk, snapText);
+
+    const autoBtn = document.createElement('button');
+    autoBtn.type = 'button';
+    autoBtn.className = 'ed-primary';
+    autoBtn.textContent = 'Meubler auto';
+    autoBtn.title = 'Meubler automatiquement toutes les pièces du niveau actif';
+    autoBtn.onclick = () => void autoFurnishRooms();
+    tools.append(snapLbl, autoBtn);
+
+    head.append(title, search, cats, tools);
+    const listHost = document.createElement('div');
+    lib.replaceChildren(head, listHost);
+    renderList();
   }
 
   // Décale toute la géométrie pour centrer l'emprise sur (0,0) — l'image du plan suit
@@ -2536,6 +3224,7 @@
         S.planDataUrl = null;
       }
       try { localStorage.setItem('lastProject', slug); } catch { /* stockage facultatif */ }
+      void clearServerDraft(slug);
       S.dirty = newerEdits;
       setSaveState(newerEdits ? 'Version enregistrée · nouvelles modifications en attente' : 'Projet enregistré');
       return slug;
@@ -2783,6 +3472,7 @@
       data.meta = { ...data.meta, slug, slugLocked: true };
       loadProject(data, { keepExtras: true });
       try { localStorage.setItem('lastProject', slug); } catch { /* stockage facultatif */ }
+      void checkServerDraft(slug, data.meta?.updated);
       toast('Projet ouvert : ' + (data.meta.name || slug));
       return true;
     } catch {
@@ -2796,23 +3486,103 @@
       return false;
     }
   }
+
+  function loadStarterTemplate(kind) {
+    if (typeof Furniture2D === 'undefined' || typeof Furniture2D.getStarterTemplate !== 'function') return;
+    if (!confirmLose()) return;
+    const tpl = Furniture2D.getStarterTemplate(kind);
+    loadProject(tpl, { keepExtras: false });
+    setTool('select');
+    if (window.EditorLive3D && typeof window.EditorLive3D.setMode === 'function') {
+      window.EditorLive3D.setMode('split');
+    }
+    toast(`Modèle « ${tpl.meta.name} » chargé en vue 2D + 3D temps réel`);
+  }
+
+  // Branchement onglets panneau droit, barre CAO, démarrage rapide et bannière brouillon
+  document.querySelectorAll('#ed-panel-tabs [data-panel-tab]').forEach(btn => {
+    btn.addEventListener('click', () => setPanelTab(btn.dataset.panelTab));
+  });
+  document.querySelectorAll('#ed-cad-bar [data-view-mode]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (window.EditorLive3D && typeof window.EditorLive3D.setMode === 'function') {
+        window.EditorLive3D.setMode(btn.dataset.viewMode);
+        refreshPanel();
+      }
+    });
+  });
+  const bindCadToggle = (id, key, labelText) => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('click', () => {
+      S[key] = !S[key];
+      el.classList.toggle('active', S[key]);
+      el.setAttribute('aria-pressed', String(S[key]));
+      draw();
+      toast(`${labelText} : ${S[key] ? 'activé' : 'masqué'}`);
+    });
+  };
+  bindCadToggle('cad-toggle-dims', 'showDims', 'Cotes automatiques');
+  bindCadToggle('cad-toggle-grid', 'showGrid', 'Grille métrique');
+  bindCadToggle('cad-toggle-snap', 'snapEnabled', 'Aimantation CAO');
+
+  const zoomBy = factor => {
+    const rect = canvas.getBoundingClientRect();
+    const cx = rect.width / 2, cy = rect.height / 2;
+    const before = toWorld(cx, cy);
+    S.view.scale = Math.max(6, Math.min(400, S.view.scale * factor));
+    S.view.ox = cx - before.x * S.view.scale;
+    S.view.oy = cy - before.z * S.view.scale;
+    $('ed-scale').textContent = `${Math.round(S.view.scale)} px/m`;
+    draw();
+  };
+  $('cad-zoom-in')?.addEventListener('click', () => zoomBy(1.22));
+  $('cad-zoom-out')?.addEventListener('click', () => zoomBy(1 / 1.22));
+  $('cad-zoom-fit')?.addEventListener('click', () => { fitView(); draw(); });
+
+  $('empty-start-import')?.addEventListener('click', () => $('file-plan')?.click());
+  $('empty-start-wall')?.addEventListener('click', () => setTool('wall-ext'));
+  $('empty-start-villa')?.addEventListener('click', () => $('btn-import-villa')?.click());
+  document.querySelectorAll('[data-starter-template]').forEach(btn => {
+    btn.addEventListener('click', () => loadStarterTemplate(btn.dataset.starterTemplate));
+  });
+
+  $('ed-draft-restore')?.addEventListener('click', () => {
+    if (!S.pendingDraft?.project) return;
+    const proj = S.pendingDraft.project;
+    S.pendingDraft = null;
+    if ($('ed-draft-banner')) $('ed-draft-banner').hidden = true;
+    loadProject(proj, { keepExtras: true });
+    S.dirty = true;
+    setSaveState('Brouillon restauré — pensez à enregistrer');
+    toast('Brouillon automatique restauré');
+  });
+  $('ed-draft-dismiss')?.addEventListener('click', () => {
+    const slug = S.pendingDraft?.slug || S.p?.meta?.slug;
+    if ($('ed-draft-banner')) $('ed-draft-banner').hidden = true;
+    S.pendingDraft = null;
+    if (slug) void clearServerDraft(slug);
+  });
+
   void fetchCabinetProfile();
   buildLibrary();
   window.addEventListener('resize', resize);
   loadProject(emptyProject());
   setTool('select');
   resize();
-  const initialSlug = new URLSearchParams(location.search).get('project') || new URLSearchParams(location.search).get('p');
+  const initialSlug = typeof URLSearchParams === 'function' && typeof location !== 'undefined'
+    ? (new URLSearchParams(location.search).get('project') || new URLSearchParams(location.search).get('p'))
+    : null;
   if (initialSlug) {
     void openProjectBySlug(initialSlug).then(ok => {
       if (!ok) toast('Projet introuvable — ouvrez un dossier ou importez un plan', true);
     });
   } else {
-    toast('Importez l\'image d\'un plan, ou ouvrez l\'exemple Villa Serena');
+    toast('Importez l\'image d\'un plan, ou démarrez depuis un modèle 2D + 3D');
   }
   window.__editor = S; // débogage
-  // API interne pour les modules complémentaires (lecture IA, caméras…)
+  // API interne pour les modules complémentaires (lecture IA, caméras, vue 3D temps réel…)
   const addOverlayRenderer = fn => { if (typeof fn === 'function') customOverlays.push(fn); };
   const addCanvasClickHandler = fn => { if (typeof fn === 'function') customClickHandlers.push(fn); };
-  window.EditorAPI = { S, commit, refreshPanel, draw, toast, fitView, setTool, select, switchLevel, loadProject, openProjectBySlug, projectPanel, openProjectInfoDialog, planPdfImport, applyPdfImportSelection, finishRectification, finishScaleControl, restoreOriginalPlanImage, setReviewOverlay, focusWorldPoint, addOverlayRenderer, addCanvasClickHandler, toScreen, toWorld, nearestWall, FURNITURE, OPENINGS, wallLen, projectOnWall, slugify, r2, round, allLevelItems, toProjectJson };
+  window.EditorAPI = { S, commit, refreshPanel, draw, toast, fitView, setTool, setPanelTab, select, switchLevel, loadProject, openProjectBySlug, loadStarterTemplate, autoFurnishRooms, projectPanel, openProjectInfoDialog, planPdfImport, applyPdfImportSelection, finishRectification, finishScaleControl, restoreOriginalPlanImage, setReviewOverlay, focusWorldPoint, addOverlayRenderer, addCanvasClickHandler, toScreen, toWorld, nearestWall, FURNITURE, OPENINGS, wallLen, projectOnWall, slugify, r2, round, allLevelItems, toProjectJson };
 })();

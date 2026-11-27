@@ -16,7 +16,10 @@ window.startProjectViewer = () => {
   const invited = ['read', 'comment'].includes(portalContext?.role);
   if (portalContext?.role) document.getElementById('portal-account').hidden = false;
   if (invited) {
-    for (const id of ['btn-export-video', 'rg-regen', 'rg-generate-videos']) document.getElementById(id).hidden = true;
+    for (const id of ['btn-export-video', 'btn-ai-studio', 'rg-regen', 'rg-render-film', 'rg-generate-videos', 'rg-open-ai-studio']) {
+      const el = document.getElementById(id);
+      if (el) el.hidden = true;
+    }
     async function checkSession() {
       if (document.hidden) return;
       try {
@@ -890,7 +893,14 @@ window.startProjectViewer = () => {
         try {
           status.textContent = `Soumission OpenRouter de « ${clip.label} »…`;
           const submitResponse = await fetch('api/ai/videos', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clipId: clip.id, project: PROJECT_SLUG })
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              clipId: clip.id,
+              project: PROJECT_SLUG,
+              pace: scrollTour.pace,
+              livingPeople: houseScene.livingSceneEnabled !== false,
+              livingEnvironment: true
+            })
           });
           const submitted = await submitResponse.json();
           if (!submitResponse.ok) throw new Error(submitted.error || `HTTP ${submitResponse.status}`);
@@ -961,6 +971,31 @@ window.startProjectViewer = () => {
   document.getElementById('btn-renders').addEventListener('click', openGallery);
   document.getElementById('rg-close').addEventListener('click', closeGallery);
   document.getElementById('rg-regen').addEventListener('click', generateRenders);
+  const btnRenderFilm = document.getElementById('rg-render-film');
+  if (btnRenderFilm) {
+    btnRenderFilm.addEventListener('click', async () => {
+      if (invited || btnRenderFilm.disabled) return;
+      const status = document.getElementById('rg-status');
+      btnRenderFilm.disabled = true;
+      btnRenderFilm.textContent = '⏳ Assemblage HD…';
+      if (status) status.textContent = 'Assemblage du film réaliste HD (MP4 H.264) en cours…';
+      try {
+        const res = await fetch(projectApi('api/render-video'), { method: 'POST' });
+        const result = await res.json();
+        if (!res.ok || !result.ok) throw new Error(result.error || `HTTP ${res.status}`);
+        galleryMediaCache = null;
+        galleryInitialized = false;
+        await buildGallery();
+        if (status) status.textContent = `${result.item.label} prêt (${(result.item.size / (1024 * 1024)).toFixed(1)} Mo · ${result.item.duration} s · MP4 H.264).`;
+        openLightbox(result.item);
+      } catch (error) {
+        if (status) status.textContent = `Rendu vidéo impossible : ${error.message}`;
+      } finally {
+        btnRenderFilm.disabled = false;
+        Icons.label(btnRenderFilm, 'video', 'Film réaliste (MP4)');
+      }
+    });
+  }
   document.getElementById('rg-generate-videos').addEventListener('click', generateAIVideos);
   document.getElementById('rg-lb-close').addEventListener('click', closeLightbox);
   document.getElementById('rg-goto').addEventListener('click', () => {
@@ -1778,6 +1813,40 @@ window.startProjectViewer = () => {
     });
   }
 
+  // ---------- Studio IA Avancé (6 outils : Insertion terrain, Retouche/Styles, Début→Fin, Voix Off, 360°, Audit Bioclimatique & CCTP) ----------
+  const aiStudioBtn = document.getElementById('btn-ai-studio');
+  const rgAiStudioBtn = document.getElementById('rg-open-ai-studio');
+  const aiStudioSuite = (!invited && typeof AiStudioSuite !== 'undefined')
+    ? AiStudioSuite.create({
+        projectSlug: PROJECT_SLUG,
+        houseScene,
+        getGalleryItems: async () => {
+          const media = await loadGalleryMedia(true);
+          return [...(media?.images || []), ...(media?.renders || [])];
+        },
+        refreshGallery: () => {
+          loadGalleryMedia(true).then(() => { if (gallery?.open) renderGalleryGrid?.(); }).catch(() => {});
+        },
+        getNorthAngle: () => Number(document.getElementById('client-north')?.value || HOUSE_DATA?.config?.northAngle || 0)
+      })
+    : null;
+
+  const openAiStudio = (tab = 'site') => {
+    if (!aiStudioSuite) return;
+    cinemaGlide = null;
+    if (cinemaAutoPlay) setCinemaAutoPlay(false);
+    if (gallery?.open) closeGallery(false);
+    aiStudioSuite.open(tab);
+  };
+  if (aiStudioBtn) {
+    aiStudioBtn.hidden = invited;
+    aiStudioBtn.addEventListener('click', () => openAiStudio('site'));
+  }
+  if (rgAiStudioBtn) {
+    rgAiStudioBtn.hidden = invited;
+    rgAiStudioBtn.addEventListener('click', () => openAiStudio('inpaint'));
+  }
+
   // ---------- Catalogue des intérieurs : ouvert aux clients ----------
   catalogButton.addEventListener('click', async () => {
     if (exportingPDF) return;
@@ -1839,8 +1908,15 @@ window.startProjectViewer = () => {
     roomDescEl.textContent = room?.desc || '';
   }
 
+  let cinemaGlide = null;     // glissement doux entre deux étapes (← / → / Continuer / Minimap)
+  let cinemaAutoPlay = false; // lecture cinématique lente continue sans les mains
+  let targetScrollProgress = 0;
+  let internalScrollSync = false;
+
   function setMode(newMode) {
     climb = null;
+    cinemaGlide = null;
+    if (cinemaAutoPlay) setCinemaAutoPlay(false);
     releaseView(false);
     currentMode = newMode;
     guidedActions.hidden = guidedAction.hidden = guideSelectLabel.hidden = currentMode === 'walk';
@@ -1868,6 +1944,8 @@ window.startProjectViewer = () => {
 
   const resume = document.getElementById('variant-resume');
   function pinView(pose) {
+    cinemaGlide = null;
+    if (cinemaAutoPlay) setCinemaAutoPlay(false);
     if (currentMode === 'walk') setMode('scroll');
     const hs = houseScene;
     pinnedView = pose;
@@ -1928,10 +2006,11 @@ window.startProjectViewer = () => {
   });
 
   // Capture locale du parcours complet via MediaRecorder (aucun appel IA).
+  // Durée pilotée par le rythme cinématographique choisi (52 s par défaut en Cinéma lent, 72 s en Très lent).
   const exportVideoButton = document.getElementById('btn-export-video');
   const exportVideoStatus = document.getElementById('video-export-status');
   let tourRecording = null;
-  const TOUR_RECORD_SECONDS = 24;
+  const currentTourDuration = () => (scrollTour && typeof scrollTour.getPaceConfig === 'function' ? scrollTour.getPaceConfig().seconds : 52);
 
   function supportedRecordingMime() {
     if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
@@ -2052,19 +2131,26 @@ window.startProjectViewer = () => {
       });
 
       recorder.start(1000);
+      const recordSeconds = currentTourDuration();
       const startedAt = performance.now();
+      let prevFrameAt = startedAt;
       const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
       window.scrollTo(0, 0);
       scrollProgress = 0;
-      scrollTour.update(0);
+      scrollTour.resetSmoothing();
+      scrollTour.update(0, { dwell: true });
       houseScene.render();
 
       await new Promise(resolve => {
         const advance = now => {
           if (state.stopRequested || recorder.state !== 'recording') return resolve();
-          const progress = Math.min(1, (now - startedAt) / (TOUR_RECORD_SECONDS * 1000));
+          const frameDt = Math.min(0.1, Math.max(0.001, (now - prevFrameAt) / 1000));
+          prevFrameAt = now;
+          const progress = Math.min(1, (now - startedAt) / (recordSeconds * 1000));
           scrollProgress = progress;
-          scrollTour.update(progress);
+          houseScene.updateRealism(frameDt);
+          scrollTour.update(progress, { dt: frameDt, smooth: true, dwell: true });
+          houseScene.setCeilingsVisible(houseScene.camera.position.y < 2.7 && houseScene.elevationProgress >= 0.99);
           houseScene.render();
           const elevation = Math.min(100, Math.round(Math.min(1, progress / HOUSE_DATA.config.elevationEnd) * 100));
           elevationPercentEl.textContent = `${elevation}%`;
@@ -2124,15 +2210,23 @@ window.startProjectViewer = () => {
         <p class="book-intro">Le parcours est rendu image par image, à cadence exacte, en segments courts. Chaque image est livrée en trois passes : <strong>couleur</strong>, <strong>profondeur</strong> et <strong>contours</strong>. Avec Runway, Luma ou ComfyUI (Wan VACE), la profondeur et les contours verrouillent la géométrie : l’IA ne change que la matière et la lumière.</p></div>
         <button type="submit" value="close" class="btn-toggle btn-small" aria-label="Fermer">×</button></header>
       <section class="book-block ai-seq-settings">
+        <label>Rythme cinématographique <select data-seq="duration">
+          <option value="72">Très lent · 72 s (contemplatif)</option>
+          <option value="52" selected>Cinéma lent · 52 s (recommandé)</option>
+          <option value="34">Fluide · 34 s</option>
+          <option value="24">Compact · 24 s</option>
+        </select></label>
         <label>Images par seconde <select data-seq="fps"><option value="12">12 (aperçu)</option><option value="24" selected>24 (cinéma)</option></select></label>
         <label>Définition <select data-seq="size"><option value="1280x720" selected>1280 × 720 (720p)</option><option value="1920x1080">1920 × 1080 (1080p)</option></select></label>
         <label>Durée de chaque segment <select data-seq="max"><option value="5" selected>5 s (Runway, Luma, Wan)</option><option value="10">10 s</option></select></label>
-        <fieldset><legend>Passes</legend>
+        <fieldset><legend>Passes &amp; Vie animée IA</legend>
           <label><input type="checkbox" data-pass="color" checked> Couleur (JPEG)</label>
           <label><input type="checkbox" data-pass="depth" checked> Profondeur (PNG)</label>
-          <label><input type="checkbox" data-pass="edges" checked> Contours (PNG)</label></fieldset>
+          <label><input type="checkbox" data-pass="edges" checked> Contours (PNG)</label>
+          <label><input type="checkbox" data-seq-opt="livingPeople" checked> Personnages en mouvement</label>
+          <label><input type="checkbox" data-seq-opt="livingEnvironment" checked> Vent, feuillages &amp; ciel vivants</label></fieldset>
       </section>
-      <section class="book-block"><h3>Segments du parcours</h3><p class="book-note">La phase d’élévation des murs est écartée : elle n’a pas d’équivalent réaliste.</p><ul class="ai-seq-list" data-seq="list"></ul></section>
+      <section class="book-block"><h3>Segments du parcours</h3><p class="book-note">La phase d’élévation des murs est écartée : elle n’a pas d’équivalent réaliste. Un prompt cinéma par segment (avec vie humaine et brise extérieure) est généré dans LISEZMOI.txt.</p><ul class="ai-seq-list" data-seq="list"></ul></section>
       <section class="book-block book-approve"><p class="book-summary" data-seq="summary"></p>
         <div class="book-actions"><span role="status" data-seq="status"></span><button type="button" class="btn-toggle book-primary" data-seq="go">Rendre la séquence</button></div></section>
     </form>`;
@@ -2140,11 +2234,20 @@ window.startProjectViewer = () => {
     const q = sel => dialog.querySelector(`[data-seq="${sel}"]`);
     const settings = () => {
       const [width, height] = q('size').value.split('x').map(Number);
-      return { fps: Number(q('fps').value), width, height, max: Number(q('max').value), passes: [...dialog.querySelectorAll('[data-pass]:checked')].map(i => i.dataset.pass) };
+      return {
+        totalSeconds: Number(q('duration').value) || 52,
+        fps: Number(q('fps').value),
+        width,
+        height,
+        max: Number(q('max').value),
+        passes: [...dialog.querySelectorAll('[data-pass]:checked')].map(i => i.dataset.pass),
+        livingPeople: Boolean(dialog.querySelector('[data-seq-opt="livingPeople"]')?.checked),
+        livingEnvironment: Boolean(dialog.querySelector('[data-seq-opt="livingEnvironment"]')?.checked)
+      };
     };
     const refresh = () => {
       const o = settings();
-      const segments = AiSequence.plan(HOUSE_DATA.tourWaypoints, { totalSeconds: TOUR_RECORD_SECONDS, fps: o.fps, maxSegmentSeconds: o.max, skipBefore: HOUSE_DATA.config.elevationEnd || 0 });
+      const segments = AiSequence.plan(HOUSE_DATA.tourWaypoints, { totalSeconds: o.totalSeconds, fps: o.fps, maxSegmentSeconds: o.max, skipBefore: HOUSE_DATA.config.elevationEnd || 0 });
       const previous = new Map([...q('list').querySelectorAll('input')].map(i => [i.dataset.label, i.checked]));
       q('list').replaceChildren(...segments.map(s => {
         const li = document.createElement('li');
@@ -2167,7 +2270,7 @@ window.startProjectViewer = () => {
       q('summary').textContent = `${chosen.length} segment${chosen.length > 1 ? 's' : ''} · ${images} images à rendre (${o.passes.length} passe${o.passes.length > 1 ? 's' : ''}). Le rendu est local et gratuit ; comptez quelques minutes.`;
       dialog._chosen = chosen; dialog._settings = o;
     };
-    dialog.querySelectorAll('select, [data-pass]').forEach(input => input.addEventListener('change', refresh));
+    dialog.querySelectorAll('select, [data-pass], [data-seq-opt]').forEach(input => input.addEventListener('change', refresh));
     q('go').addEventListener('click', () => renderAiSequence(dialog));
     dialog.addEventListener('close', () => { if (aiSequenceRun) aiSequenceRun.stop = true; });
     dialog._refresh = refresh;
@@ -2187,11 +2290,16 @@ window.startProjectViewer = () => {
       await assetsReady;
       if (currentMode === 'walk') setMode('scroll');
       hidePhotoOverlay();
+      const frameDt = 1 / Math.max(1, o.fps || 24);
       for (const segment of segments) {
         const far = segment.aerial ? 60 : 10; // profondeur contrastée : une pièce fait 3 à 6 m
         for (let k = 0; k < segment.frames; k++) {
           if (run.stop) throw new Error('arrêtée à votre demande');
-          const frame = AiSequence.captureFrame({ hs: houseScene, studio, tour: scrollTour }, AiSequence.frameProgress(segment, k), { width: o.width, height: o.height, passes: o.passes, far });
+          const frame = AiSequence.captureFrame(
+            { hs: houseScene, studio, tour: scrollTour },
+            AiSequence.frameProgress(segment, k),
+            { width: o.width, height: o.height, passes: o.passes, far, frameDt, dwell: true }
+          );
           for (const pass of o.passes) {
             const response = await fetch(projectApi('api/save-sequence-frame'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ sequence, segment: segment.index, pass, frame: k + 1, data: frame[pass] }) });
@@ -2203,10 +2311,19 @@ window.startProjectViewer = () => {
         }
       }
       const response = await fetch(projectApi('api/save-sequence-manifest'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sequence, manifest: { fps: o.fps, width: o.width, height: o.height, passes: o.passes, segments } }) });
+        body: JSON.stringify({
+          sequence,
+          manifest: {
+            fps: o.fps, width: o.width, height: o.height, passes: o.passes, segments,
+            pace: o.totalSeconds >= 65 ? 'contemplatif' : 'cinema',
+            livingPeople: o.livingPeople,
+            livingEnvironment: o.livingEnvironment
+          }
+        })
+      });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
-      q('status').textContent = `Séquence prête : ${total} images × ${o.passes.length} passes, dans ${result.folder} (mode d’emploi : LISEZMOI.txt).`;
+      q('status').textContent = `Séquence prête : ${total} images × ${o.passes.length} passes, dans ${result.folder} (prompts & mode d’emploi : LISEZMOI.txt).`;
     } catch (error) {
       q('status').textContent = `Séquence interrompue : ${error.message}.`;
     } finally {
@@ -2268,30 +2385,105 @@ window.startProjectViewer = () => {
     if (dlg && !dlg.open) dlg.showModal();
   });
 
-  // --- GESTION DU SCROLL ---
-  function updateFromScroll() {
-    if (!inVisit() || currentMode !== 'scroll' || tourRecording || pinnedView) return;
-    hidePhotoOverlay();
-    clearTimeout(photoDebounceTimer);
-    photoDebounceTimer = setTimeout(onScrollStop, 350);
+  // --- GESTION DU SCROLL & CINÉMATOGRAPHIE LENTE ---
+  const tourPaceSelect = document.getElementById('tour-pace');
+  const livingSceneToggle = document.getElementById('toggle-living-scene');
+  const guidedAutoplayBtn = document.getElementById('guided-autoplay');
 
-    const scrollTop = window.scrollY || document.documentElement.scrollTop;
-    const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
-    scrollProgress = scrollHeight > 0 ? Math.max(0, Math.min(1, scrollTop / scrollHeight)) : 0;
+  if (tourPaceSelect) {
+    tourPaceSelect.addEventListener('change', () => {
+      scrollTour.setPace(tourPaceSelect.value);
+    });
+  }
+  if (livingSceneToggle) {
+    livingSceneToggle.addEventListener('change', () => {
+      if (typeof houseScene.setLivingScene === 'function') houseScene.setLivingScene(livingSceneToggle.checked);
+    });
+  }
 
-    // Mise à jour de la visite cinématique
-    scrollTour.update(scrollProgress);
+  function setCinemaAutoPlay(active) {
+    cinemaAutoPlay = Boolean(active && currentMode === 'scroll' && !tourRecording && !pinnedView);
+    if (cinemaAutoPlay) {
+      cinemaGlide = null;
+      hidePhotoOverlay();
+      if (scrollProgress >= 0.995) {
+        scrollProgress = targetScrollProgress = 0;
+        internalScrollSync = true;
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        internalScrollSync = false;
+      }
+    }
+    if (guidedAutoplayBtn) {
+      guidedAutoplayBtn.setAttribute('aria-pressed', String(cinemaAutoPlay));
+      guidedAutoplayBtn.classList.toggle('is-active', cinemaAutoPlay);
+      guidedAutoplayBtn.textContent = cinemaAutoPlay ? '❚❚ Pause' : '▶ Cinéma';
+    }
+  }
+  if (guidedAutoplayBtn) {
+    guidedAutoplayBtn.addEventListener('click', () => setCinemaAutoPlay(!cinemaAutoPlay));
+  }
 
-    // Pourcentage d'élévation
+  function applyTourProgress(p, { dt = 0, smooth = false, dwell = false, syncScroll = false } = {}) {
+    scrollProgress = Math.max(0, Math.min(1, p));
+    scrollTour.update(scrollProgress, { dt, smooth, dwell });
     const elev = Math.min(100, Math.round(Math.min(1, scrollProgress / HOUSE_DATA.config.elevationEnd) * 100));
     elevationPercentEl.textContent = `${elev}%`;
     progressFillEl.style.width = `${scrollProgress * 100}%`;
+    if (syncScroll) {
+      const scrollHeight = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      internalScrollSync = true;
+      window.scrollTo({ top: Math.round(scrollProgress * scrollHeight), behavior: 'instant' });
+      internalScrollSync = false;
+    }
     syncGuidedControls();
+  }
+
+  function startCinematicGlide(toProgress, durationSec = null) {
+    setCinemaAutoPlay(false);
+    hidePhotoOverlay();
+    const clampedTarget = Math.max(0, Math.min(1, toProgress));
+    if (motion.matches) {
+      cinemaGlide = null;
+      targetScrollProgress = clampedTarget;
+      applyTourProgress(clampedTarget, { syncScroll: true });
+      return;
+    }
+    const baseDur = durationSec ?? scrollTour.getPaceConfig().stepDuration;
+    const delta = Math.abs(clampedTarget - scrollProgress);
+    const dur = Math.max(1.1, Math.min(4.8, baseDur * Math.max(0.65, delta * 9.5)));
+    cinemaGlide = { from: scrollProgress, to: clampedTarget, elapsed: 0, duration: dur };
+    targetScrollProgress = clampedTarget;
+  }
+
+  function updateFromScroll() {
+    if (!inVisit() || currentMode !== 'scroll' || tourRecording || pinnedView) return;
+    if (internalScrollSync) return;
+    if (cinemaAutoPlay) setCinemaAutoPlay(false);
+    cinemaGlide = null;
+    hidePhotoOverlay();
+    clearTimeout(photoDebounceTimer);
+    photoDebounceTimer = setTimeout(onScrollStop, 450);
+
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
+    targetScrollProgress = scrollHeight > 0 ? Math.max(0, Math.min(1, scrollTop / scrollHeight)) : 0;
+
+    if (motion.matches) {
+      applyTourProgress(targetScrollProgress);
+    } else {
+      scrollProgress = targetScrollProgress;
+      const elev = Math.min(100, Math.round(Math.min(1, scrollProgress / HOUSE_DATA.config.elevationEnd) * 100));
+      elevationPercentEl.textContent = `${elev}%`;
+      progressFillEl.style.width = `${scrollProgress * 100}%`;
+      syncGuidedControls();
+    }
   }
 
   window.addEventListener('scroll', () => {
     updateFromScroll();
   }, { passive: true });
+  window.addEventListener('wheel', () => { if (cinemaAutoPlay) setCinemaAutoPlay(false); cinemaGlide = null; }, { passive: true });
+  window.addEventListener('touchstart', () => { if (cinemaAutoPlay) setCinemaAutoPlay(false); cinemaGlide = null; }, { passive: true });
 
   // Reprend les étapes de la même spline, sans mouvement automatique à l’ouverture.
   const guidedControls = document.getElementById('guided-controls');
@@ -2333,19 +2525,24 @@ window.startProjectViewer = () => {
     guidedNext.disabled = index === stages.length - 1;
     guidedAction.textContent = index === 0 ? 'Démarrer la visite →' : index === stages.length - 1 ? 'Revoir le plan ↺' : 'Continuer →';
   }
-  function navigateStage(index, smooth = false) {
+  function navigateStage(index, smooth = true) {
     if (tourRecording || !stages[index]) return;
     hidePhotoOverlay();
     const { progress, label } = stages[index];
-    const top = Math.ceil((document.documentElement.scrollHeight - window.innerHeight) * progress);
-    window.scrollTo({ top, behavior: smooth && !motion.matches ? 'smooth' : 'instant' });
-    if (!smooth || motion.matches) updateFromScroll();
+    if (smooth && !motion.matches) {
+      startCinematicGlide(progress);
+    } else {
+      cinemaGlide = null;
+      setCinemaAutoPlay(false);
+      targetScrollProgress = progress;
+      applyTourProgress(progress, { syncScroll: true });
+    }
     guidedAnnouncement.textContent = `Étape ${index + 1} sur ${stages.length} : ${label}`;
   }
-  guideSelect.addEventListener('change', () => navigateStage(Number(guideSelect.value)));
-  guidedPrev.addEventListener('click', () => navigateStage(guidedIndex - 1));
-  guidedNext.addEventListener('click', () => navigateStage(guidedIndex + 1));
-  guidedAction.addEventListener('click', () => navigateStage((guidedIndex + 1) % stages.length));
+  guideSelect.addEventListener('change', () => navigateStage(Number(guideSelect.value), true));
+  guidedPrev.addEventListener('click', () => navigateStage(guidedIndex - 1, true));
+  guidedNext.addEventListener('click', () => navigateStage(guidedIndex + 1, true));
+  guidedAction.addEventListener('click', () => navigateStage((guidedIndex + 1) % stages.length, true));
   const radar = document.getElementById('minimap-toggle');
   const radarPanel = document.getElementById('minimap-panel');
   radar.addEventListener('click', () => {
@@ -2372,11 +2569,7 @@ window.startProjectViewer = () => {
     }
 
     const targetRatio = Math.max(0, bestIndex) / (waypoints.length - 1);
-    const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
-    window.scrollTo({
-      top: targetRatio * scrollHeight,
-      behavior: motion.matches ? 'instant' : 'smooth'
-    });
+    startCinematicGlide(targetRatio);
   }
 
   // --- BOUCLE D'ANIMATION PRINCIPALE (60 FPS) ---
@@ -2435,6 +2628,28 @@ window.startProjectViewer = () => {
 
     if (currentMode === 'walk') {
       if(climb) advanceStair(dt); else walkController.update();
+    } else if (!tourRecording && !pinnedView) {
+      if (cinemaAutoPlay) {
+        const paceDur = currentTourDuration();
+        const nextP = Math.min(1, scrollProgress + dt / paceDur);
+        targetScrollProgress = nextP;
+        applyTourProgress(nextP, { dt, smooth: true, dwell: true, syncScroll: true });
+        if (nextP >= 1) setCinemaAutoPlay(false);
+      } else if (cinemaGlide) {
+        cinemaGlide.elapsed += dt;
+        const u = Math.min(1, cinemaGlide.elapsed / cinemaGlide.duration);
+        // Courbe cinématique quintique douce (démarrage et arrêt feutrés)
+        const eased = u < 0.5 ? 16 * u * u * u * u * u : 1 - Math.pow(-2 * u + 2, 5) / 2;
+        const nextP = cinemaGlide.from + (cinemaGlide.to - cinemaGlide.from) * eased;
+        applyTourProgress(nextP, { dt, smooth: true, syncScroll: true });
+        if (u >= 1) {
+          cinemaGlide = null;
+          clearTimeout(photoDebounceTimer);
+          photoDebounceTimer = setTimeout(onScrollStop, 350);
+        }
+      } else if (!motion.matches) {
+        scrollTour.update(targetScrollProgress, { dt, smooth: true });
+      }
     }
 
     // Plafonds seulement à hauteur d'homme : intérieur réaliste, maquette ouverte vue d'en haut
@@ -2464,6 +2679,8 @@ window.startProjectViewer = () => {
     if (guidedIndex === 0 && !pinnedView) navigateStage(1, !motion.matches);
   });
   document.addEventListener('workspace:leave-visit', () => {
+    cinemaGlide = null;
+    if (cinemaAutoPlay) setCinemaAutoPlay(false);
     if (tourRecording) tourRecording.stopRequested = true;
     if (currentMode === 'walk') setMode('scroll');
     if (gallery.open) closeGallery(false);

@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="css/presentation.css">
   <link rel="stylesheet" href="css/workspace.css">
   <link rel="stylesheet" href="css/calmCockpit.css">
+  <link rel="stylesheet" href="css/aiStudioSuite.css">
   <script src="js/portal-context.js" defer></script>
   <script src="js/workspace.js" defer></script>
 </head>
@@ -82,6 +83,7 @@
         <div class="btn-row viewer-primary">
           <span id="mode-badge" class="mode-badge">Visite guidée</span>
           <button id="btn-renders" type="button" class="btn-toggle btn-small" aria-haspopup="dialog"><svg class="i" aria-hidden="true"><use href="#i-gallery"></use></svg> Galerie</button>
+          <button id="btn-ai-studio" type="button" class="btn-toggle btn-small" aria-haspopup="dialog" title="Insertion terrain, retouche ciblée, vidéo Début→Fin, voix off IA, 360° et audit bioclimatique/CCTP">Studio IA</button>
           <button id="btn-plan-compare" type="button" class="btn-toggle btn-small" aria-pressed="false">Comparer plan / 3D</button>
           <button id="btn-clearance-guides" type="button" class="btn-toggle btn-small" aria-pressed="false" aria-describedby="clearance-note" title="Repères indicatifs — gabarits d’encombrement visuels et non normatifs">Gabarits indicatifs</button>
           <span id="clearance-note" class="sr-only">Repères indicatifs : bandes théoriques de 90 centimètres autour de certains meubles et arcs simplifiés de portes. Ils ne valident pas la conformité des circulations.</span>
@@ -94,6 +96,16 @@
             <summary class="btn-toggle btn-small">Finitions</summary>
             <fieldset id="client-tool-fields" class="client-tool-fields">
               <legend class="sr-only">Outils de visite</legend>
+              <div class="ambiance-presets" role="group" aria-label="Ambiances matériaux en un clic">
+                <span class="ambiance-kicker">Ambiances en 1 clic</span>
+                <div class="ambiance-grid">
+                  <button type="button" data-ambiance="origin" aria-pressed="true"><span class="amb-swatch amb-origin"></span>Origine</button>
+                  <button type="button" data-ambiance="pierre-chaux" aria-pressed="false"><span class="amb-swatch amb-stone"></span>Pierre &amp; Chaux</button>
+                  <button type="button" data-ambiance="beton-bois" aria-pressed="false"><span class="amb-swatch amb-timber"></span>Béton &amp; Bois</button>
+                  <button type="button" data-ambiance="villa-tropicale" aria-pressed="false"><span class="amb-swatch amb-tropical"></span>Villa tropicale</button>
+                </div>
+                <p id="ambiance-note" class="ambiance-note" aria-live="polite">Finitions d’origine de la maquette.</p>
+              </div>
               <div class="client-finish-row">
                 <label>Sols intérieurs
                   <select id="client-floor">
@@ -109,9 +121,15 @@
                 </label>
               </div>
               <div class="client-sun">
-                <label for="client-hour"><span>Ensoleillement indicatif</span><output id="client-hour-value" for="client-hour">13h00</output></label>
+                <label for="client-hour"><span>Ensoleillement &amp; course solaire</span><output id="client-hour-value" for="client-hour">13h00</output></label>
                 <div><input id="client-hour" type="range" min="7" max="20" step="0.25" value="13" aria-label="Course du soleil, heure de la journée">
+                  <button type="button" id="solar-play" class="solar-play-btn" aria-pressed="false" title="Animer la course du soleil sur toute la journée">▶ Jour</button>
                   <span class="client-compass" id="client-compass" title="Nord sur le plan, vu du dessus">N <span aria-hidden="true">↑</span></span>
+                </div>
+                <div class="solar-north-row">
+                  <label for="client-north">Orientation Nord</label>
+                  <input id="client-north" type="range" min="0" max="360" step="5" value="0" aria-label="Orientation du Nord en degrés">
+                  <output id="client-north-value" for="client-north">0°</output>
                 </div>
                 <div class="solar-presets" role="group" aria-label="Repères de la course du soleil">
                   <button type="button" data-solar-hour="8">8 h <span>Matin</span></button>
@@ -120,8 +138,27 @@
                   <button type="button" data-solar-hour="20">20 h <span>Soir</span></button>
                 </div>
                 <div id="client-hour-scale" class="client-hour-scale">07h00 — simulation indicative — 20h00</div>
-                <label class="client-check"><input id="solar-geo" type="checkbox"> Étude par lieu et date</label>
+                <label class="client-check"><input id="solar-geo" type="checkbox"> Étude par ville, lieu et saison (NOAA)</label>
                 <div id="solar-inputs" class="solar-inputs" hidden>
+                  <label>Ville rapide
+                    <select id="solar-city">
+                      <option value="">Coordonnées libres</option>
+                      <option value="3.848,11.502,1">Yaoundé (3,85° N)</option>
+                      <option value="4.051,9.768,1">Douala (4,05° N)</option>
+                      <option value="5.360,-4.008,0">Abidjan (5,36° N)</option>
+                      <option value="14.717,-17.468,0">Dakar (14,72° N)</option>
+                      <option value="48.857,2.352,2">Paris (48,86° N)</option>
+                    </select>
+                  </label>
+                  <label>Saison rapide
+                    <select id="solar-season">
+                      <option value="">Date choisie</option>
+                      <option value="01-15">Saison sèche (15 janv.)</option>
+                      <option value="03-21">Équinoxe (21 mars)</option>
+                      <option value="06-21">Saison des pluies (21 juin)</option>
+                      <option value="10-15">Inter-saison (15 oct.)</option>
+                    </select>
+                  </label>
                   <label>Latitude (°)<input id="solar-lat" type="number" min="-90" max="90" step="any" placeholder="Nord +"></label>
                   <label>Longitude (°)<input id="solar-lon" type="number" min="-180" max="180" step="any" placeholder="Est +"></label>
                   <label>Date locale<input id="solar-date" type="date"></label>
@@ -203,7 +240,15 @@
             <div class="client-tool-fields viewer-options-fields">
               <a id="viewer-home" data-view="cover" class="btn-toggle btn-small" href="accueil.html">Présentation du projet ↗</a>
               <label class="client-field" id="guided-select-label">Aller à une étape <select id="guided-select"></select></label>
+              <label class="client-field" id="tour-pace-label">Rythme cinématographique
+                <select id="tour-pace">
+                  <option value="contemplatif">Très lent · 72 s (contemplatif)</option>
+                  <option value="cinema" selected>Cinéma lent · 52 s (recommandé)</option>
+                  <option value="fluide">Fluide · 34 s</option>
+                </select>
+              </label>
               <button type="button" id="btn-toggle-mode" class="btn-toggle btn-small">Visite libre (clavier)</button>
+              <label class="client-check"><input id="toggle-living-scene" type="checkbox" checked> Vie extérieure &amp; personnages animés</label>
               <label class="client-check"><input id="viewer-shortcuts" type="checkbox" checked> Raccourcis clavier (N, R…)</label>
               <div class="btn-row client-actions">
                 <button type="button" id="btn-night" class="btn-toggle btn-small" title="Touche N"><svg class="i" aria-hidden="true"><use href="#i-sun"></use></svg> Jour</button>
@@ -254,6 +299,7 @@
         </div>
         <div class="guided-actions" id="guided-actions">
           <button type="button" id="guided-prev" class="btn-toggle dock-arrow" aria-label="Étape précédente" disabled>←</button>
+          <button type="button" id="guided-autoplay" class="btn-toggle" aria-pressed="false" title="Lecture cinématique lente automatique d’une pièce à l’autre">▶ Cinéma</button>
           <button type="button" id="guided-next" class="btn-toggle dock-arrow" aria-label="Étape suivante">→</button>
         </div>
         <button type="button" id="guided-action" class="btn-toggle guided-next">Démarrer la visite</button>
@@ -361,7 +407,9 @@
       </div>
       <div class="rg-actions">
         <button id="rg-regen" class="btn-toggle btn-small" title="Recapture gratuitement toutes les vues depuis la maquette Three.js"><svg class="i" aria-hidden="true"><use href="#i-camera"></use></svg> Actualiser toutes les vues 3D</button>
+        <button id="rg-render-film" class="btn-toggle btn-small" title="Assembler un film réaliste HD (MP4 H.264) à partir des vues du projet"><svg class="i" aria-hidden="true"><use href="#i-video"></use></svg> Film réaliste (MP4)</button>
         <button id="rg-generate-videos" class="btn-toggle btn-small" title="Générer les deux clips Seedance après confirmation du coût"><svg class="i" aria-hidden="true"><use href="#i-film"></use></svg> Générer les clips IA · estimation 0,67 $</button>
+        <button id="rg-open-ai-studio" class="btn-toggle btn-small" title="Insertion terrain, retouche ciblée, vidéo Début→Fin, voix off IA, 360° et audit bioclimatique/CCTP">Studio IA</button>
         <button id="rg-close" class="btn-toggle btn-small" autofocus><svg class="i" aria-hidden="true"><use href="#i-close"></use></svg> Fermer</button>
       </div>
     </div>
@@ -466,6 +514,8 @@
       </div>
     </form>
   </dialog>
+
+  <dialog id="dlg-ai-studio" class="ai-studio-dialog" aria-labelledby="dlg-ai-studio-title"></dialog>
 
   <dialog id="dlg-shortcuts" class="rg-publish-dialog shortcuts-dialog" aria-labelledby="dlg-shortcuts-title">
     <form method="dialog">

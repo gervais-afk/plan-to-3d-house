@@ -1021,8 +1021,48 @@ window.ProjectCoverReady = (() => {
     if (controller.signal.aborted) return;
     renderViews([...baseViews, ...showcasePlates]);
     renderPlanBook(projectRecord, projectData, media);
+    void loadRevisionsSheet(item.slug, controller.signal);
     if (gallery.status === 'rejected') el('cover-empty').textContent = 'Les rendus sont momentanément indisponibles. Vous pouvez toujours ouvrir la maquette.';
     else el('cover-empty').textContent = 'Aucun visuel publié. Entrez dans le cockpit pour découvrir la maquette.';
+    if (location.hash === '#meeting' && typeof window.MeetingMode !== 'undefined' && projectRecord) {
+      window.MeetingMode.open({ project: projectRecord, media, slug: item.slug, cabinet: currentCabinet });
+    }
+  }
+
+  async function loadRevisionsSheet(slug, signal) {
+    const section = el('sheet-revisions');
+    const list = el('sheet-revisions-list');
+    if (!section || !list) return;
+    section.hidden = true;
+    list.replaceChildren();
+    if (!slug || !slugPattern.test(slug)) return;
+    try {
+      const data = await json(`api/projects/${encodeURIComponent(slug)}/revisions`, signal);
+      const items = Array.isArray(data?.items) ? data.items : [];
+      if (!items.length) return;
+      const fmt = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+      [...items].reverse().forEach(rev => {
+        const li = document.createElement('li');
+        li.className = 'sheet-rev-item';
+        const head = element('div', '', 'sheet-rev-head');
+        head.append(
+          element('span', rev.tag || 'V', 'sheet-rev-tag'),
+          element('strong', rev.label || 'Révision'),
+          element('span', rev.phase || '', 'sheet-rev-phase'),
+          element('time', rev.createdAt ? fmt.format(new Date(rev.createdAt)) : '', 'sheet-rev-date')
+        );
+        li.append(head);
+        if (rev.note) li.append(element('p', rev.note, 'sheet-rev-note'));
+        const m = rev.metrics || {};
+        const summaryBits = [];
+        if (m.habitable) summaryBits.push(`${number.format(m.habitable)} m² habitables`);
+        if (m.roomsCount) summaryBits.push(`${m.roomsCount} pièces`);
+        if (rev.diff?.habitableDelta) summaryBits.push(`écart ${rev.diff.habitableDelta > 0 ? '+' : ''}${number.format(rev.diff.habitableDelta)} m²`);
+        if (summaryBits.length) li.append(element('p', summaryBits.join(' · '), 'sheet-rev-meta'));
+        list.append(li);
+      });
+      section.hidden = false;
+    } catch { /* journal facultatif */ }
   }
 
   document.querySelectorAll('[data-print]').forEach(button => button.addEventListener('click', () => {
@@ -1045,6 +1085,32 @@ window.ProjectCoverReady = (() => {
     else if (event.key === 'ArrowRight') { event.preventDefault(); void showView(current + 1); }
   });
   el('sheet-open-deliverables')?.addEventListener('click', () => el('home-deliverables')?.click());
+  el('btn-meeting-mode')?.addEventListener('click', () => {
+    if (typeof window.MeetingMode === 'undefined' || !loadedProjectRecord) return;
+    stopCoverAutoplay();
+    window.MeetingMode.open({
+      project: loadedProjectRecord,
+      media: loadedProjectMedia || currentMedia,
+      slug: currentProject || select?.value || '',
+      cabinet: currentCabinet
+    });
+  });
+  el('sheet-export-apd')?.addEventListener('click', async () => {
+    const btn = el('sheet-export-apd');
+    if (typeof ApdDossier === 'undefined' || !loadedProjectRecord) return;
+    btn.disabled = true;
+    try {
+      await ApdDossier.exportPDF({
+        project: loadedProjectRecord,
+        cabinet: currentCabinet,
+        media: loadedProjectMedia || currentMedia
+      });
+    } catch (err) {
+      status.textContent = `Export APD impossible : ${err.message}`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
   cover.addEventListener('pointerenter', () => { coverHoverPaused = true; stopCoverAutoplay(); });
   cover.addEventListener('pointerleave', () => { coverHoverPaused = false; if (!coverUserPaused) startCoverAutoplay(); });
   return json('api/projects').then(items => {

@@ -617,4 +617,251 @@
       dlgVar.showModal();
     });
   }
+
+  // =========================================================================
+  // 4. DOSSIER APD / PERMIS DE CONSTRUIRE (PC-01 → PC-08)
+  // =========================================================================
+  const dlgApd = $('dlg-apd-dossier');
+  const apdScoreLabel = $('apd-score-label');
+  const apdReadyCount = $('apd-ready-count');
+  const apdFill = $('apd-progress-fill');
+  const apdStatus = $('apd-status');
+  const apdList = $('apd-pieces-list');
+  const apdExportBtn = $('apd-export-pdf');
+  let apdContext = null;
+
+  async function refreshApdChecklist() {
+    if (!dlgApd || typeof ApdDossier === 'undefined') return;
+    const snap = currentProjectSnapshot();
+    const slug = activeSlug();
+    if (apdStatus) apdStatus.textContent = 'Vérification des pièces du dossier…';
+    const [cabRes, mediaRes, plRes] = await Promise.allSettled([
+      fetch('api/cabinet/profile', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)),
+      slug ? fetch(`api/gallery/media?project=${encodeURIComponent(slug)}`, { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)) : Promise.resolve(null),
+      slug ? fetch(`api/projects/${encodeURIComponent(slug)}/planches`, { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)) : Promise.resolve(null)
+    ]);
+    const cabinet = cabRes.status === 'fulfilled' ? cabRes.value : null;
+    const media = mediaRes.status === 'fulfilled' ? mediaRes.value : null;
+    const planches = plRes.status === 'fulfilled' && Array.isArray(plRes.value?.items) ? plRes.value.items : [];
+    const evaluation = ApdDossier.evaluate({ project: snap, cabinet, media, planches });
+    apdContext = { project: snap, cabinet, media, planches, evaluation };
+
+    if (apdScoreLabel) apdScoreLabel.textContent = `Complétude du dossier : ${evaluation.completeness} %`;
+    if (apdReadyCount) apdReadyCount.textContent = `${evaluation.readyCount} / ${evaluation.totalCount} pièces prêtes`;
+    if (apdFill) apdFill.style.width = `${evaluation.completeness}%`;
+    if (apdExportBtn) apdExportBtn.disabled = !evaluation.canExport;
+    if (apdStatus) {
+      apdStatus.textContent = evaluation.canExport
+        ? 'Le bordereau, la notice descriptive, les surfaces, le plan de toiture et la coupe vectorielle sont prêts à être reliés en PDF A4.'
+        : 'Dessinez au moins une pièce pour activer l’export PDF du dossier APD / Permis.';
+    }
+    if (apdList) {
+      const labels = { ready: 'Prêt', partial: 'À compléter', missing: 'Manquant' };
+      apdList.innerHTML = evaluation.pieces.map(piece => `
+        <li class="ed-apd-item is-${piece.status}">
+          <div class="ed-apd-item-head">
+            <span class="ed-apd-code">${esc(piece.code)}</span>
+            <strong>${esc(piece.title)}</strong>
+            <span class="ed-apd-state is-${piece.status}">${labels[piece.status] || piece.status}</span>
+          </div>
+          <p class="ed-apd-detail">${esc(piece.detail)}</p>
+        </li>
+      `).join('');
+    }
+  }
+
+  if (dlgApd) {
+    $('btn-apd-dossier')?.addEventListener('click', () => {
+      void refreshApdChecklist();
+      dlgApd.showModal();
+    });
+    $('apd-open-info')?.addEventListener('click', () => {
+      dlgApd.close();
+      $('btn-project-info')?.click();
+    });
+    apdExportBtn?.addEventListener('click', async () => {
+      if (!apdContext || typeof ApdDossier === 'undefined') return;
+      apdExportBtn.disabled = true;
+      if (apdStatus) apdStatus.textContent = 'Assemblage du dossier APD / Permis en cours…';
+      try {
+        const out = await ApdDossier.exportPDF(apdContext);
+        if (apdStatus) apdStatus.textContent = `Dossier exporté : ${out.filename} (${out.pages} pages A4).`;
+        E.toast(`Dossier APD / Permis exporté (${out.pages} pages)`);
+      } catch (err) {
+        if (apdStatus) apdStatus.textContent = `Export impossible : ${err.message}`;
+        E.toast(err.message || 'Échec de l’export APD', true);
+      } finally {
+        apdExportBtn.disabled = false;
+      }
+    });
+    $('apd-close')?.addEventListener('click', () => dlgApd.close());
+  }
+
+  // =========================================================================
+  // 5. JOURNAL DES RÉVISIONS (V1, V2, V3…)
+  // =========================================================================
+  const dlgRev = $('dlg-revisions');
+  const revForm = $('rev-create-form');
+  const revLabel = $('rev-label');
+  const revPhase = $('rev-phase');
+  const revNote = $('rev-note');
+  const revSaveBtn = $('rev-save-btn');
+  const revStatus = $('rev-status');
+  const revTimeline = $('rev-timeline');
+  const revDateFmt = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  let revisionsCache = [];
+
+  function formatDelta(val, unit, isMoney = false) {
+    if (!val) return '';
+    if (isMoney) return val > 0 ? `+${fmtXAF(val)}` : `-${fmtXAF(Math.abs(val))}`;
+    return `${val > 0 ? '+' : ''}${numFr.format(val)}${unit ? ` ${unit}` : ''}`;
+  }
+
+  function renderRevisionsTimeline() {
+    if (!revTimeline) return;
+    if (!revisionsCache.length) {
+      revTimeline.innerHTML = '<p class="ed-note">Aucune révision archivée pour ce dossier. Enregistrez la première révision V1 pour démarrer le journal.</p>';
+      return;
+    }
+    const items = [...revisionsCache].reverse();
+    revTimeline.innerHTML = items.map(item => {
+      const m = item.metrics || {};
+      const d = item.diff || null;
+      const dateStr = item.createdAt ? revDateFmt.format(new Date(item.createdAt)) : '';
+      const diffBits = [];
+      if (d) {
+        if (d.habitableDelta) diffBits.push(`Habitable ${formatDelta(d.habitableDelta, 'm²')}`);
+        if (d.annexesDelta) diffBits.push(`Annexes ${formatDelta(d.annexesDelta, 'm²')}`);
+        if (d.roomsDelta) diffBits.push(`Pièces ${d.roomsDelta > 0 ? '+' : ''}${d.roomsDelta}`);
+        if (d.budgetHighDelta) diffBits.push(`Budget haut ${formatDelta(d.budgetHighDelta, '', true)}`);
+        if (d.feedbackDelta) diffBits.push(`Remarques ${d.feedbackDelta > 0 ? '+' : ''}${d.feedbackDelta}`);
+      }
+      return `<article class="ed-rev-card" data-rev-id="${esc(item.id)}">
+        <div class="ed-rev-head">
+          <div class="ed-rev-title">
+            <span class="ed-rev-tag">${esc(item.tag)}</span>
+            <strong>${esc(item.label)}</strong>
+            ${item.phase ? `<span class="ed-rev-phase">${esc(item.phase)}</span>` : ''}
+          </div>
+          <time class="ed-rev-date">${esc(dateStr)}</time>
+        </div>
+        ${item.note ? `<p class="ed-rev-note">${esc(item.note)}</p>` : ''}
+        <dl class="ed-rev-metrics">
+          <div><dt>Habitable</dt><dd>${numFr.format(m.habitable || 0)} m²</dd></div>
+          <div><dt>Annexes</dt><dd>${numFr.format(m.annexes || 0)} m²</dd></div>
+          <div><dt>Pièces</dt><dd>${m.roomsCount || 0}</dd></div>
+          <div><dt>Enveloppe</dt><dd>${m.budgetHigh ? `${fmtXAF(m.budgetLow || 0)} – ${fmtXAF(m.budgetHigh)}` : '—'}</dd></div>
+        </dl>
+        ${d ? `<p class="ed-rev-deltas">${diffBits.length ? `Écart vs version précédente : ${esc(diffBits.join(' · '))}` : 'Aucun écart de surface ni d’enveloppe par rapport à la version précédente.'}</p>` : '<p class="ed-rev-deltas">Version initiale du journal.</p>'}
+        <div class="ed-rev-actions">
+          <button type="button" data-rev-restore="${esc(item.id)}">Restaurer dans l’éditeur</button>
+          <button type="button" data-rev-delete="${esc(item.id)}">Supprimer</button>
+        </div>
+      </article>`;
+    }).join('');
+
+    revTimeline.querySelectorAll('[data-rev-restore]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = revisionsCache.find(r => r.id === btn.dataset.revRestore);
+        if (!target?.snapshot) return;
+        E.commit();
+        E.loadProject(JSON.parse(JSON.stringify(target.snapshot)));
+        E.toast(`Révision ${target.tag} (« ${target.label} ») restaurée dans l’éditeur`);
+        dlgRev?.close();
+      });
+    });
+
+    revTimeline.querySelectorAll('[data-rev-delete]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const slug = activeSlug();
+        const id = btn.dataset.revDelete;
+        if (!slug || !id) return;
+        btn.disabled = true;
+        try {
+          const res = await fetch(`api/projects/${encodeURIComponent(slug)}/revisions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data?.error || 'Suppression impossible');
+          await refreshRevisions();
+          E.toast('Révision supprimée du journal');
+        } catch (err) {
+          E.toast(err.message || 'Échec de suppression', true);
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  async function refreshRevisions() {
+    const slug = activeSlug();
+    if (!slug) {
+      revisionsCache = [];
+      if (revStatus) revStatus.textContent = 'Enregistrez d’abord le projet pour archiver des révisions V1, V2, V3…';
+      if (revSaveBtn) revSaveBtn.disabled = true;
+      renderRevisionsTimeline();
+      return;
+    }
+    if (revSaveBtn) revSaveBtn.disabled = false;
+    if (revPhase && E.S.p?.meta?.phase) revPhase.value = E.S.p.meta.phase;
+    try {
+      const res = await fetch(`api/projects/${encodeURIComponent(slug)}/revisions`, { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Journal indisponible');
+      revisionsCache = Array.isArray(data.items) ? data.items : [];
+      if (revStatus) {
+        revStatus.textContent = revisionsCache.length
+          ? `${revisionsCache.length} révision(s) archivée(s) · dernière version : ${revisionsCache[revisionsCache.length - 1].tag}.`
+          : 'Journal prêt : créez la révision V1 pour fixer un premier jalon.';
+      }
+      renderRevisionsTimeline();
+    } catch (err) {
+      if (revStatus) revStatus.textContent = err.message || 'Impossible de charger le journal.';
+    }
+  }
+
+  if (dlgRev) {
+    revForm?.addEventListener('submit', async ev => {
+      ev.preventDefault();
+      const slug = activeSlug();
+      if (!slug) { E.toast('Enregistrez d’abord le projet.', true); return; }
+      if (revSaveBtn) revSaveBtn.disabled = true;
+      try {
+        const snap = currentProjectSnapshot();
+        const est = typeof CostEstimate !== 'undefined' && Array.isArray(snap.rooms) && snap.rooms.length
+          ? CostEstimate.estimate(snap, snap.estimate || {})
+          : null;
+        if (est?.total) {
+          snap.estimate = { ...(snap.estimate || {}), low: est.total.low, high: est.total.high };
+        }
+        const openNotes = annState.notes.filter(n => (n.status || 'open') === 'open').length;
+        const resolvedNotes = annState.notes.length - openNotes;
+        const res = await fetch(`api/projects/${encodeURIComponent(slug)}/revisions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            label: revLabel?.value.trim() || '',
+            phase: revPhase?.value || snap.meta?.phase || 'APS',
+            note: revNote?.value.trim() || '',
+            author: snap.meta?.architect || '',
+            feedbackSummary: { open: openNotes, resolved: resolvedNotes },
+            snapshot: snap
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || 'Impossible d’enregistrer la révision.');
+        if (revLabel) revLabel.value = '';
+        if (revNote) revNote.value = '';
+        await refreshRevisions();
+        E.toast(`Révision ${data.item?.tag || ''} archivée dans le journal`);
+      } catch (err) {
+        E.toast(err.message || 'Échec de l’archivage', true);
+      } finally {
+        if (revSaveBtn) revSaveBtn.disabled = false;
+      }
+    });
+    $('rev-close')?.addEventListener('click', () => dlgRev.close());
+    $('btn-revisions')?.addEventListener('click', () => {
+      void refreshRevisions();
+      dlgRev.showModal();
+    });
+  }
 })();

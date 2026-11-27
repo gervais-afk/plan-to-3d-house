@@ -30,10 +30,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Faux conteneur de défilement pour piloter l'animation au scroll */
+/* Faux conteneur de défilement pour piloter l'animation au scroll (rythme lent et contemplatif) */
 #scroll-container {
   position: relative;
-  height: 900vh; /* Permet un scroll généreux et progressif */
+  height: 1800vh; /* Permet une cinématographie lente et progressive de pièce en pièce */
   pointer-events: none;
 }
 

@@ -1,4 +1,4 @@
-/** Entrée de l'atelier : aucun projet n'est affiché tant que l'utilisateur n'ouvre pas l'index des dossiers. */
+/** Entrée de l'atelier : aucun projet n'est gravé en dur dans la page ; la reprise rapide, le film HD et le profil cabinet se chargent dynamiquement. */
 (() => {
   const el = id => document.getElementById(id);
   const dialog = el('studio-index');
@@ -65,7 +65,10 @@
     const editLink = document.createElement('a');
     editLink.href = `editor.html?project=${encodeURIComponent(project.slug)}`;
     editLink.textContent = 'Éditeur 2D';
-    quick.append(visitLink, editLink);
+    const meetLink = document.createElement('a');
+    meetLink.href = `accueil.html?project=${encodeURIComponent(project.slug)}#meeting`;
+    meetLink.textContent = 'Réunion client';
+    quick.append(visitLink, editLink, meetLink);
 
     row.append(link, quick);
     li.append(row);
@@ -88,28 +91,42 @@
       : `${projects.length} dossier${projects.length > 1 ? 's' : ''} · du plus récent au plus ancien`;
   }
 
-  async function load() {
-    if (projects) return;
-    el('index-count').textContent = 'Chargement des dossiers…';
+  async function fetchProjectsList() {
+    if (projects) return projects;
     try {
       const response = await fetch('api/projects', { cache: 'no-store' });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       projects = Array.isArray(data) ? data : [];
-      el('index-search-wrap').hidden = projects.length < 2;
-      render();
+      return projects;
     } catch {
-      el('index-count').textContent = 'Les dossiers sont indisponibles pour le moment. Réessayez dans un instant.';
+      return null;
     }
   }
 
-  // --- Tirages encadrés : 5 plans & planches ultra-réalistes, défilement à intervalle, loupe et visionneuse ---
+  async function load() {
+    if (projects) { el('index-search-wrap').hidden = projects.length < 2; render(); return; }
+    el('index-count').textContent = 'Chargement des dossiers…';
+    const data = await fetchProjectsList();
+    if (!data) {
+      el('index-count').textContent = 'Les dossiers sont indisponibles pour le moment. Réessayez dans un instant.';
+      return;
+    }
+    el('index-search-wrap').hidden = data.length < 2;
+    render();
+  }
+
+  // --- Tirages encadrés : planches ultra-réalistes, film HD dynamique, loupe et visionneuse ---
   const stage = el('print-stage');
   const frame = document.querySelector('.print-frame');
   const loupe = el('print-loupe');
+  const videoHint = el('print-video-hint');
   const progress = el('print-progress');
-  const images = [...stage.querySelectorAll('.print-img')];
-  const plateButtons = [...document.querySelectorAll('.print-plates button')];
+  const platesHost = el('print-plates');
+  const projectLinkEl = el('print-project-link');
+  const lightboxProjectEl = el('print-lightbox-project');
+  let images = [...stage.querySelectorAll('.print-img')];
+  let plateButtons = [...platesHost.querySelectorAll('button')];
   const prevBtn = el('print-prev');
   const nextBtn = el('print-next');
   const toggleBtn = el('print-toggle');
@@ -117,6 +134,7 @@
   const counterEl = el('print-counter');
   const lightbox = el('print-lightbox');
   const lightboxImg = el('print-lightbox-img');
+  const lightboxVideo = el('print-lightbox-video');
   const lightboxRef = el('print-lightbox-ref');
   const lightboxTitle = el('print-lightbox-title');
   const calm = matchMedia('(prefers-reduced-motion: reduce)');
@@ -127,6 +145,13 @@
   let autoplay = null;
   let userPaused = false;
   let hoverPaused = false;
+  const seriesSlugs = { a: '', b: '' };
+
+  function slideSlug(slideEl) {
+    if (!slideEl) return '';
+    if (slideEl.dataset.projectSlug) return slideEl.dataset.projectSlug;
+    return seriesSlugs[slideEl.dataset.series] || '';
+  }
 
   function syncProgress() {
     if (!progress) return;
@@ -135,6 +160,39 @@
     void progress.offsetWidth;
     progress.style.setProperty('--slide-ms', `${AUTOPLAY_MS}ms`);
     progress.classList.add('is-running');
+  }
+
+  function renderLightboxMedia(active) {
+    if (!lightboxImg || !lightboxVideo || !active) return;
+    const videoSrc = active.dataset.videoSrc || '';
+    if (videoSrc) {
+      lightboxImg.hidden = true;
+      lightboxVideo.hidden = false;
+      lightboxVideo.poster = active.currentSrc || active.src;
+      if (lightboxVideo.getAttribute('src') !== videoSrc) {
+        lightboxVideo.src = videoSrc;
+        lightboxVideo.load();
+      }
+      lightboxVideo.play().catch(() => {});
+    } else {
+      lightboxVideo.pause();
+      lightboxVideo.removeAttribute('src');
+      lightboxVideo.hidden = true;
+      lightboxImg.hidden = false;
+      lightboxImg.src = active.currentSrc || active.src;
+      lightboxImg.alt = active.alt;
+    }
+    if (lightboxRef) lightboxRef.textContent = active.dataset.ref || '';
+    if (lightboxTitle) lightboxTitle.textContent = active.dataset.title || '';
+    const slug = slideSlug(active);
+    if (lightboxProjectEl) {
+      if (slug) {
+        lightboxProjectEl.href = `accueil.html?project=${encodeURIComponent(slug)}`;
+        lightboxProjectEl.hidden = false;
+      } else {
+        lightboxProjectEl.hidden = true;
+      }
+    }
   }
 
   function showSlide(nextIdx) {
@@ -147,12 +205,18 @@
     el('print-title').textContent = active.dataset.title || '';
     if (counterEl) counterEl.textContent = `${pad2(activeIndex + 1)} / ${pad2(images.length)}`;
     loupe.style.backgroundImage = `url("${active.currentSrc || active.src}")`;
-    if (lightbox?.open && lightboxImg) {
-      lightboxImg.src = active.currentSrc || active.src;
-      lightboxImg.alt = active.alt;
-      if (lightboxRef) lightboxRef.textContent = active.dataset.ref || '';
-      if (lightboxTitle) lightboxTitle.textContent = active.dataset.title || '';
+    const isVideo = Boolean(active.dataset.videoSrc);
+    if (videoHint) videoHint.hidden = !isVideo;
+    const slug = slideSlug(active);
+    if (projectLinkEl) {
+      if (slug) {
+        projectLinkEl.href = `accueil.html?project=${encodeURIComponent(slug)}`;
+        projectLinkEl.hidden = false;
+      } else {
+        projectLinkEl.hidden = true;
+      }
     }
+    if (lightbox?.open) renderLightboxMedia(active);
     syncProgress();
   }
 
@@ -180,10 +244,13 @@
     else startAutoplay();
   }
 
-  plateButtons.forEach(button => button.addEventListener('click', () => {
-    showSlide(Number(button.dataset.slide) || 0);
-    if (!userPaused) startAutoplay();
-  }));
+  function bindPlateButton(button) {
+    button.addEventListener('click', () => {
+      showSlide(Number(button.dataset.slide) || 0);
+      if (!userPaused) startAutoplay();
+    });
+  }
+  plateButtons.forEach(bindPlateButton);
   prevBtn?.addEventListener('click', () => { showSlide(activeIndex - 1); if (!userPaused) startAutoplay(); });
   nextBtn?.addEventListener('click', () => { showSlide(activeIndex + 1); if (!userPaused) startAutoplay(); });
   toggleBtn?.addEventListener('click', () => setPaused(!userPaused));
@@ -193,10 +260,7 @@
     const active = images[activeIndex];
     if (!active) return;
     stopAutoplay();
-    lightboxImg.src = active.currentSrc || active.src;
-    lightboxImg.alt = active.alt;
-    if (lightboxRef) lightboxRef.textContent = active.dataset.ref || '';
-    if (lightboxTitle) lightboxTitle.textContent = active.dataset.title || '';
+    renderLightboxMedia(active);
     lightbox.showModal();
   }
 
@@ -205,7 +269,10 @@
   el('print-lightbox-close')?.addEventListener('click', () => lightbox?.close());
   el('print-lightbox-prev')?.addEventListener('click', () => showSlide(activeIndex - 1));
   el('print-lightbox-next')?.addEventListener('click', () => showSlide(activeIndex + 1));
-  lightbox?.addEventListener('close', () => { if (!userPaused) startAutoplay(); });
+  lightbox?.addEventListener('close', () => {
+    if (lightboxVideo) { lightboxVideo.pause(); lightboxVideo.removeAttribute('src'); }
+    if (!userPaused) startAutoplay();
+  });
   lightbox?.addEventListener('keydown', event => {
     if (event.key === 'ArrowLeft') { event.preventDefault(); showSlide(activeIndex - 1); }
     else if (event.key === 'ArrowRight') { event.preventDefault(); showSlide(activeIndex + 1); }
@@ -234,7 +301,7 @@
 
   const ZOOM = 2.4;
   stage.addEventListener('pointermove', event => {
-    if (!finePointer.matches) return;
+    if (!finePointer.matches || images[activeIndex]?.dataset.videoSrc) return;
     const box = stage.getBoundingClientRect();
     const x = event.clientX - box.left, y = event.clientY - box.top;
     stage.classList.add('is-zooming');
@@ -266,6 +333,162 @@
   });
   print.addEventListener('pointerleave', () => { frame.style.setProperty('--tilt-x', '0deg'); frame.style.setProperty('--tilt-y', '0deg'); });
 
+  // --- Hydratation dynamique : dernier dossier actif + lien vers projet + 8e vignette Film HD ---
+  async function hydrateWorkspace() {
+    const listData = await fetchProjectsList();
+    if (!listData || !listData.length) return;
+
+    // Associer les planches d'exposition aux projets existants sans graver de slug dans le HTML.
+    const projA = listData.find(p => /veranda/i.test(p.slug)) || listData[0];
+    const projB = listData.find(p => /serena/i.test(p.slug)) || listData[1] || projA;
+    seriesSlugs.a = projA?.slug || '';
+    seriesSlugs.b = projB?.slug || '';
+
+    // Bandeau de reprise directe du dernier dossier consulté ou le plus récemment modifié.
+    let lastSlug = '';
+    try { lastSlug = localStorage.getItem('lastProject') || ''; } catch { /* ignore */ }
+    const recent = listData.find(p => p.slug === lastSlug)
+      || listData.find(p => p.default)
+      || listData.find(p => !/^essai-/i.test(p.slug))
+      || listData[0];
+    const resumeBox = el('studio-resume');
+    if (recent && resumeBox) {
+      const link = el('resume-link');
+      const meta = el('resume-meta');
+      const edit = el('resume-edit');
+      const visit = el('resume-visit');
+      const meet = el('resume-meeting');
+      const q = encodeURIComponent(recent.slug);
+      link.textContent = recent.name;
+      link.href = `accueil.html?project=${q}`;
+      const bits = [];
+      if (recent.phase) bits.push(recent.phase);
+      if (Number.isFinite(recent.updated)) bits.push(`Mis à jour le ${dateFormat.format(new Date(recent.updated))}`);
+      meta.textContent = bits.join(' · ');
+      edit.href = `editor.html?project=${q}`;
+      visit.href = `index.html?project=${q}`;
+      meet.href = `accueil.html?project=${q}#meeting`;
+      resumeBox.hidden = false;
+    }
+
+    // Ajouter la 8e vignette Film HD si le projet phare dispose d'un film réaliste MP4.
+    if (projA?.slug) {
+      try {
+        const res = await fetch(`api/gallery/media?project=${encodeURIComponent(projA.slug)}`, { cache: 'no-store' });
+        if (res.ok) {
+          const media = await res.json();
+          const videos = Array.isArray(media.videos) ? media.videos : [];
+          const heroFilm = [...videos].reverse().find(v => /film-realiste/i.test(v.id || '') || /FFmpeg/i.test(v.generator || '')) || videos[videos.length - 1];
+          if (heroFilm && heroFilm.file) {
+            const idx = images.length;
+            const img = document.createElement('img');
+            img.className = 'print-img';
+            img.src = heroFilm.poster || projA.cover || 'assets/studio/planche-villa-a.jpg';
+            img.alt = heroFilm.label || 'Film réaliste d’architecture';
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            img.dataset.slide = String(idx);
+            img.dataset.ref = `PL. ${pad2(idx + 1)}`;
+            img.dataset.title = `${heroFilm.label || 'Film réaliste HD'} (${heroFilm.duration || 24} s)`;
+            img.dataset.projectSlug = projA.slug;
+            img.dataset.videoSrc = heroFilm.file;
+            stage.insertBefore(img, loupe);
+            images = [...stage.querySelectorAll('.print-img')];
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.dataset.slide = String(idx);
+            btn.setAttribute('aria-pressed', 'false');
+            btn.textContent = 'Film HD';
+            bindPlateButton(btn);
+            platesHost.append(btn);
+            plateButtons = [...platesHost.querySelectorAll('button')];
+          }
+        }
+      } catch { /* pas de média vidéo */ }
+    }
+    showSlide(activeIndex);
+  }
+
+  // --- Profil du cabinet accessible dès l'entrée ---
+  const cabBtn = el('btn-studio-cabinet');
+  const cabDlg = el('studio-cabinet-dlg');
+  const cabForm = el('studio-cabinet-form');
+  const cabStatus = el('cab-status');
+  const cabLogoPreview = el('cab-logo-preview');
+  const cabLogoFile = el('cab-logo-file');
+  let pendingLogoDataUrl = null;
+
+  function renderCabinetLogo(url) {
+    if (!cabLogoPreview) return;
+    if (url) {
+      const img = document.createElement('img');
+      img.src = url; img.alt = 'Logo du cabinet';
+      cabLogoPreview.replaceChildren(img);
+    } else {
+      cabLogoPreview.textContent = 'Aucun logo';
+    }
+  }
+
+  async function loadCabinetProfile() {
+    try {
+      const res = await fetch('api/cabinet/profile', { cache: 'no-store' });
+      if (!res.ok) return;
+      const profile = await res.json();
+      if (profile?.name) {
+        const cartouche = el('studio-cabinet-cartouche');
+        if (cartouche) cartouche.textContent = profile.name;
+      }
+      if (el('cab-name')) el('cab-name').value = profile?.name || '';
+      if (el('cab-architect')) el('cab-architect').value = profile?.architect || '';
+      if (el('cab-contact')) el('cab-contact').value = profile?.contact || '';
+      renderCabinetLogo(profile?.logoUrl || '');
+    } catch { /* profil par défaut */ }
+  }
+
+  cabBtn?.addEventListener('click', () => {
+    pendingLogoDataUrl = null;
+    if (cabStatus) cabStatus.textContent = '';
+    void loadCabinetProfile();
+    cabDlg?.showModal();
+  });
+  el('cabinet-dlg-close')?.addEventListener('click', () => cabDlg?.close());
+  cabDlg?.addEventListener('click', event => { if (event.target === cabDlg) cabDlg.close(); });
+  cabLogoFile?.addEventListener('change', () => {
+    const file = cabLogoFile.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      pendingLogoDataUrl = String(reader.result || '');
+      renderCabinetLogo(pendingLogoDataUrl);
+    };
+    reader.readAsDataURL(file);
+  });
+  cabForm?.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (cabStatus) cabStatus.textContent = 'Enregistrement…';
+    try {
+      const payload = {
+        name: el('cab-name')?.value.trim() || '',
+        architect: el('cab-architect')?.value.trim() || ''
+      };
+      if (pendingLogoDataUrl) payload.logo = pendingLogoDataUrl;
+      const res = await fetch('api/cabinet/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result?.error || `HTTP ${res.status}`);
+      pendingLogoDataUrl = null;
+      if (result?.logoUrl) renderCabinetLogo(`${result.logoUrl}?v=${Date.now()}`);
+      if (payload.name && el('studio-cabinet-cartouche')) el('studio-cabinet-cartouche').textContent = payload.name;
+      if (cabStatus) cabStatus.textContent = 'Profil du cabinet enregistré — appliqué à tous les dossiers PDF.';
+    } catch (err) {
+      if (cabStatus) cabStatus.textContent = `Enregistrement impossible : ${err.message}`;
+    }
+  });
+
   el('door-open').addEventListener('click', () => {
     dialog.showModal();
     void load();
@@ -278,4 +501,7 @@
     if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) dialog.close();
   });
   search.addEventListener('input', () => { if (projects) render(); });
+
+  void hydrateWorkspace();
+  void loadCabinetProfile();
 })();

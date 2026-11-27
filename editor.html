@@ -37,6 +37,7 @@
             <hr>
             <button id="btn-project-info" type="button" title="Informations du projet et cartouche PDF">Informations du projet</button>
             <button id="btn-variants" type="button" title="Comparer deux variantes A / B d’aménagement ou de finitions">Comparer Variantes A / B</button>
+            <button id="btn-revisions" type="button" title="Enregistrer et consulter les révisions datées V1, V2, V3… du projet">Journal des révisions (V1, V2…)</button>
             <button id="btn-cabinet" type="button" title="Profil du cabinet">Profil Cabinet</button>
           </div>
         </details>
@@ -46,7 +47,7 @@
       </div>
       <span class="ed-sep" aria-hidden="true"></span>
       <div class="ed-action-group">
-        <label class="ed-btn-file" title="Importer une image ou un PDF de plan">Plan PDF / image…<input id="file-plan" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,.png,.jpg,.jpeg"></label>
+        <label class="ed-btn-file" for="file-plan" title="Importer une image ou un PDF de plan">Plan PDF / image…</label><input id="file-plan" type="file" hidden accept="application/pdf,.pdf,image/png,image/jpeg,.png,.jpg,.jpeg">
         <button id="btn-vector-pdf" type="button" title="Extraire directement les murs, portes et fenêtres d’un PDF CAO vectoriel (hors ligne, 0 $)">Vectoriel (0 $)</button>
         <button id="btn-ai-read" type="button" title="Lecture automatique du plan par IA (OpenRouter)"><svg class="i" aria-hidden="true"><use href="#i-sparkle"></use></svg> Lecture IA</button>
         <button id="btn-plan-cleanup" type="button" disabled title="Importez d’abord une image de plan">Nettoyage…</button>
@@ -59,6 +60,7 @@
             <button id="btn-deliverables" type="button" title="Tableau de bord d’avancement et des 5 livrables">Livrables (tableau de bord)</button>
             <button id="btn-export-premium" type="button" title="Exporter un catalogue PDF premium">🎨 Catalogue Premium</button>
             <button id="btn-aps" type="button" title="Générer un Avant-Projet Sommaire automatique">📋 APS Auto</button>
+            <button id="btn-apd-dossier" type="button" title="Checklist réglementaire PC-01 à PC-08 et export PDF du dossier APD / Permis de Construire">Dossier APD / Permis (PDF)</button>
             <button id="btn-tech-drawings" type="button" title="Plan de toiture et coupes 2D vectoriels générés depuis la maquette">Coupes 2D &amp; Toiture (maquette)</button>
             <button id="btn-annotations" type="button" title="Remarques épinglées 2D / 3D reliées au portail client">Annotations client (2D / 3D)</button>
             <button id="btn-estimate" type="button" title="Métré et estimation indicative en FCFA">Estimation FCFA</button>
@@ -94,37 +96,105 @@
     <hr>
     <button data-tool="camera" title="Caméras du parcours : déplacer, orienter, ajouter (T)"><svg class="i" aria-hidden="true"><use href="#i-video"></use></svg><span>Caméras</span><kbd>T</kbd></button>
     <button data-tool="annotate" title="Épingler une remarque 2D/3D sur une pièce ou un mur (N)"><svg class="i" aria-hidden="true"><use href="#i-pin"></use></svg><span>Annotations</span><kbd>N</kbd></button>
+    <button data-tool="measure" title="Règle : mesurer une distance entre deux points (X)"><svg class="i" aria-hidden="true"><use href="#i-scale"></use></svg><span>Mesurer</span><kbd>X</kbd></button>
   </aside>
 
   <main class="ed-stage" id="ed-stage">
-    <nav class="ed-level-tabs" aria-label="Niveau du plan">
-      <button type="button" data-level="0" class="active">Rez-de-chaussée</button>
-      <button type="button" data-level="1">Étage 1</button>
-      <label><input id="ed-ghost-toggle" type="checkbox" checked> RDC fantôme</label>
-    </nav>
-    <canvas id="ed-canvas"></canvas>
-    <div id="ed-drop-overlay" class="ed-drop-overlay hidden" aria-hidden="true">Déposez ici votre plan PDF, PNG ou JPG</div>
-    <div id="ed-hint" class="ed-hint"></div>
-    <div class="ed-status">
-      <span id="ed-coords">x 0.00 · z 0.00 m</span>
-      <button type="button" id="ed-scale-cal" class="ed-status-btn" title="Cliquer pour calibrer l’échelle sur une cote réelle (K)">Échelle : à calibrer (K)</button>
-      <label class="ed-status-opacity" id="ed-opacity-wrap" hidden title="Comparer le tracé au plan source">
-        <span>Calque plan</span>
-        <input type="range" id="ed-quick-opacity" min="0" max="1" step="0.05" value="0.55" aria-label="Opacité du plan source">
-      </label>
-      <span id="ed-scale"></span>
+    <div id="ed-stage-grid" class="ed-stage-grid" data-view="2d">
+      <div id="ed-2d-pane" class="ed-2d-pane">
+        <nav class="ed-level-tabs" aria-label="Niveau du plan">
+          <button type="button" data-level="0" class="active">Rez-de-chaussée</button>
+          <button type="button" data-level="1">Étage 1</button>
+          <label><input id="ed-ghost-toggle" type="checkbox" checked> RDC fantôme</label>
+        </nav>
+
+        <div id="ed-draft-banner" class="ed-draft-banner" hidden role="status">
+          <span id="ed-draft-text">Brouillon automatique disponible.</span>
+          <button type="button" id="ed-draft-restore" class="ed-primary">Restaurer</button>
+          <button type="button" id="ed-draft-dismiss">Ignorer</button>
+        </div>
+
+        <canvas id="ed-canvas"></canvas>
+
+        <div id="ed-empty-start" class="ed-empty-start" hidden>
+          <h2>Démarrer votre plan d’architecture</h2>
+          <p>Tracez librement en 2D avec aperçu 3D temps réel, importez un plan existant ou partez d’un modèle prêt à personnaliser.</p>
+          <div class="ed-empty-actions">
+            <button type="button" id="empty-start-import" class="ed-primary">Importer un plan PDF / image</button>
+            <button type="button" id="empty-start-wall">Tracer un mur (M)</button>
+            <button type="button" data-starter-template="villa-f4">Modèle Villa F4 (118 m²)</button>
+            <button type="button" data-starter-template="studio">Modèle Studio (38 m²)</button>
+            <button type="button" id="empty-start-villa">Exemple Villa Serena</button>
+          </div>
+        </div>
+
+        <div id="ed-drop-overlay" class="ed-drop-overlay hidden" aria-hidden="true">Déposez ici votre plan PDF, PNG ou JPG</div>
+        <div id="ed-hint" class="ed-hint"></div>
+        <div id="ed-length-hud" class="ed-length-hud" hidden aria-live="polite"></div>
+        <div id="ed-quick-bar" class="ed-quick-bar" hidden role="toolbar" aria-label="Actions rapides sur la sélection"></div>
+
+        <div class="ed-status">
+          <span id="ed-coords" class="tabular">x 0.00 · z 0.00 m</span>
+          <button type="button" id="ed-scale-cal" class="ed-status-btn" title="Cliquer pour calibrer l’échelle sur une cote réelle (K)">Échelle : à calibrer (K)</button>
+          <label class="ed-status-opacity" id="ed-opacity-wrap" hidden title="Comparer le tracé au plan source">
+            <span>Calque plan</span>
+            <input type="range" id="ed-quick-opacity" min="0" max="1" step="0.05" value="0.55" aria-label="Opacité du plan source">
+          </label>
+          <span id="ed-scale" class="tabular"></span>
+        </div>
+      </div>
+
+      <section id="ed-live3d-wrap" class="ed-live3d-wrap" hidden aria-label="Aperçu 3D en temps réel">
+        <div class="ed-live3d-bar">
+          <span class="ed-live3d-title">Maquette 3D temps réel</span>
+          <div class="ed-live3d-cams" role="group" aria-label="Angle de vue 3D">
+            <button type="button" data-live3d-cam="iso">Iso</button>
+            <button type="button" data-live3d-cam="top">Dessus</button>
+            <button type="button" data-live3d-cam="eye">Intérieur</button>
+          </div>
+        </div>
+        <div id="ed-live3d-canvas-host" class="ed-live3d-canvas-host"></div>
+        <p class="ed-live3d-tip">Glisser : orbite · Clic droit : déplacer · Clic meuble : sélectionner</p>
+      </section>
+    </div>
+
+    <div id="ed-cad-bar" class="ed-cad-bar" role="toolbar" aria-label="Affichage 2D / 3D et zoom">
+      <div class="ed-cad-seg" role="group" aria-label="Mode d’affichage">
+        <button type="button" data-view-mode="2d" class="active" aria-pressed="true" title="Vue plan 2D plein écran">2D</button>
+        <button type="button" data-view-mode="split" aria-pressed="false" title="Vue partagée Plan 2D + Maquette 3D en temps réel">2D + 3D</button>
+        <button type="button" data-view-mode="3d" aria-pressed="false" title="Maquette 3D temps réel plein écran">3D</button>
+      </div>
+      <span class="ed-cad-sep" aria-hidden="true"></span>
+      <button type="button" id="cad-toggle-dims" class="active" aria-pressed="true" title="Afficher les cotes automatiques des murs">Cotes</button>
+      <button type="button" id="cad-toggle-grid" class="active" aria-pressed="true" title="Afficher la grille métrique">Grille</button>
+      <button type="button" id="cad-toggle-snap" class="active" aria-pressed="true" title="Aimantation aux murs et alignements intelligents">Aimant</button>
+      <span class="ed-cad-sep" aria-hidden="true"></span>
+      <div class="ed-cad-zoom" role="group" aria-label="Zoom">
+        <button type="button" id="cad-zoom-out" title="Dézoomer">−</button>
+        <button type="button" id="cad-zoom-fit" title="Cadrer tout le plan">Cadrer</button>
+        <button type="button" id="cad-zoom-in" title="Zoomer">+</button>
+      </div>
     </div>
   </main>
 
   <aside class="ed-panel">
-    <section id="ed-props"></section>
-    <section id="ed-library" class="hidden"></section>
-    <section class="ed-help">
-      <h4>Raccourcis</h4>
-      <p><kbd>Molette</kbd> zoom · <kbd>Clic droit</kbd> ou <kbd>Espace</kbd>+glisser : déplacer la vue</p>
-      <p><kbd>Échap</kbd> termine un mur / désélectionne · <kbd>Suppr</kbd> efface · <kbd>R</kbd> +15° · <kbd>Maj+R</kbd> −15° pour un meuble</p>
-      <p><kbd>Maj</kbd> désactive l'aimantation · <kbd>Alt</kbd> mur en biais · <kbd>Ctrl+Z</kbd> annuler</p>
-    </section>
+    <nav id="ed-panel-tabs" class="ed-panel-tabs" role="tablist" aria-label="Panneaux de l’inspecteur">
+      <button type="button" role="tab" data-panel-tab="inspect" aria-selected="true" class="active">Inspecteur</button>
+      <button type="button" role="tab" data-panel-tab="furniture" aria-selected="false">Mobilier</button>
+      <button type="button" role="tab" data-panel-tab="dossier" aria-selected="false">Dossier PDF</button>
+    </nav>
+    <div class="ed-panel-scroll">
+      <section id="ed-props" data-tab-pane="inspect"></section>
+      <section id="ed-library" class="hidden" data-tab-pane="furniture"></section>
+      <section id="ed-dossier-pane" class="hidden" data-tab-pane="dossier"></section>
+      <details class="ed-help">
+        <summary>Raccourcis clavier</summary>
+        <p><kbd>Molette</kbd> zoom · <kbd>Clic droit</kbd> ou <kbd>Espace</kbd>+glisser : déplacer la vue</p>
+        <p><kbd>Chiffres</kbd> + <kbd>Entrée</kbd> pendant un mur : longueur exacte (ex. 4.5)</p>
+        <p><kbd>Échap</kbd> termine / désélectionne · <kbd>Suppr</kbd> efface · <kbd>R</kbd> +15° · <kbd>Maj+R</kbd> −15°</p>
+        <p><kbd>Maj</kbd> désactive l'aimantation · <kbd>Alt</kbd> mur en biais · <kbd>X</kbd> mesurer · <kbd>Ctrl+Z</kbd> annuler</p>
+      </details>
+    </div>
   </aside>
 
   <dialog id="dlg-open" class="ed-dialog" aria-labelledby="dlg-open-title">
@@ -586,6 +656,61 @@
     </div>
   </dialog>
 
+  <dialog id="dlg-apd-dossier" class="ed-dialog ed-dialog-wide ed-apd-dialog" aria-labelledby="dlg-apd-title">
+    <h3 id="dlg-apd-title">Dossier APD / Permis de Construire (PC-01 à PC-08)</h3>
+    <p class="ed-note">Vérification guidée des 8 pièces réglementaires du dossier et assemblage automatique en PDF A4 relié (cartouche cabinet, bordereau, notice descriptive, surfaces, estimation FCFA, plan de toiture et coupes vectorielles).</p>
+    <div class="ed-apd-summary">
+      <div class="ed-apd-meter-row">
+        <strong id="apd-score-label">Analyse en cours…</strong>
+        <span id="apd-ready-count" class="ed-apd-count"></span>
+      </div>
+      <div class="ed-apd-track" aria-hidden="true"><div id="apd-progress-fill" class="ed-apd-fill"></div></div>
+    </div>
+    <p id="apd-status" class="ed-note" role="status"></p>
+    <ol id="apd-pieces-list" class="ed-apd-list"></ol>
+    <div class="ed-dialog-actions">
+      <button id="apd-open-info" type="button">Compléter le cartouche projet</button>
+      <button id="apd-export-pdf" type="button" class="ed-primary">Exporter le dossier APD / Permis (PDF)</button>
+      <button id="apd-close" type="button">Fermer</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-revisions" class="ed-dialog ed-dialog-wide ed-rev-dialog" aria-labelledby="dlg-rev-title">
+    <h3 id="dlg-rev-title">Journal des révisions — V1, V2, V3…</h3>
+    <p class="ed-note">Archivez chaque jalon du dossier (esquisse, retour client, ajustement surfaces ou budget). Les écarts de surfaces, de pièces et d’enveloppe FCFA entre deux révisions sont calculés automatiquement.</p>
+    <form id="rev-create-form" class="ed-rev-form">
+      <div class="ed-rev-form-grid">
+        <div class="ed-field">
+          <label for="rev-label">Intitulé du jalon</label>
+          <input id="rev-label" type="text" maxlength="100" placeholder="Ex. : Retour réunion client — séjour agrandi">
+        </div>
+        <div class="ed-field">
+          <label for="rev-phase">Phase</label>
+          <select id="rev-phase">
+            <option value="ESQ">ESQ — Esquisse</option>
+            <option value="APS" selected>APS — Avant-projet sommaire</option>
+            <option value="APD">APD — Avant-projet définitif</option>
+            <option value="PC">PC — Permis de construire</option>
+            <option value="DCE">DCE — Consultation entreprises</option>
+            <option value="EXE">EXE — Exécution</option>
+          </select>
+        </div>
+      </div>
+      <div class="ed-field">
+        <label for="rev-note">Compte rendu / décisions retenues</label>
+        <textarea id="rev-note" rows="2" maxlength="500" placeholder="Synthèse des choix validés avec le maître d’ouvrage…"></textarea>
+      </div>
+      <div class="ed-rev-form-actions">
+        <button id="rev-save-btn" type="submit" class="ed-primary">Enregistrer une nouvelle révision</button>
+      </div>
+    </form>
+    <p id="rev-status" class="ed-note" role="status"></p>
+    <div id="rev-timeline" class="ed-rev-timeline"></div>
+    <div class="ed-dialog-actions">
+      <button id="rev-close" type="button" class="ed-primary">Fermer</button>
+    </div>
+  </dialog>
+
   <div id="ed-toast" class="ed-toast" role="status"></div>
 
   <script src="js/icons.js"></script>
@@ -624,7 +749,12 @@
   <script src="js/deliverableChecklist.js"></script>
   <script src="js/aiEnhance.js"></script>
   <script src="js/apsGenerator.js"></script>
+  <script src="js/apdDossier.js"></script>
   <script src="js/variantComparator.js"></script>
+  <script src="assets/vendor/three/three.min.js"></script>
+  <script src="js/furniture2d.js"></script>
+  <script src="js/autoFurnish.js"></script>
+  <script src="js/editorLive3d.js"></script>
   <script src="js/editor.js"></script>
   <script src="js/planCleanup.js"></script>
   <script src="js/aiTopology.js"></script>

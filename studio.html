@@ -31,7 +31,11 @@
       <img src="assets/archicam-icon.svg" alt="" width="34" height="34">
       <span class="studio-wordmark">Archicam<span class="studio-dot" aria-hidden="true"></span><small>Studio</small></span>
     </a>
-    <p class="studio-motto">Atelier numérique d’architecture</p>
+    <nav class="studio-top-links" aria-label="Accès cabinet">
+      <button type="button" class="studio-top-link" id="btn-studio-cabinet" aria-haspopup="dialog" aria-controls="studio-cabinet-dlg">Mon cabinet</button>
+      <a class="studio-top-link" href="portal.html">Portail client</a>
+      <span class="studio-motto">Atelier numérique d’architecture</span>
+    </nav>
   </header>
 
   <main class="studio-main">
@@ -40,26 +44,27 @@
       <h1 id="studio-title">Du trait<br><em>à l’espace.</em></h1>
       <p class="studio-lead">Plans cotés, maquette 3D, ambiances et dossiers d’agence&nbsp;: chaque projet de l’atelier se dessine, se visite et se décide ici.</p>
       <ul class="studio-crafts" aria-label="Savoir-faire de l’atelier">
-        <li>Plans cotés</li><li>Maquette 3D</li><li>Ambiances IA</li><li>Dossiers A3</li>
+        <li>Plans cotés</li><li>Maquette 3D</li><li>Ambiances IA</li><li>Dossiers A3</li><li>Films HD</li>
       </ul>
     </section>
 
-    <!-- Tirages encadrés : plans ultra-réalistes fidèles et planches complètes en défilement continu -->
+    <!-- Tirages encadrés : plans ultra-réalistes fidèles, planches complètes et aperçu film HD -->
     <figure class="studio-print" id="studio-print">
       <div class="print-frame">
         <div class="print-mat">
           <div class="print-stage" id="print-stage" role="region" aria-roledescription="carrousel" aria-label="Planches et plans ultra-réalistes de l’atelier">
-            <img class="print-img is-active" src="assets/studio/plan-villa-a-rdc.jpg" alt="Plan ultra-réaliste du rez-de-chaussée d’une villa à galeries couvertes, fidèle au plan d’origine" width="1280" height="960" fetchpriority="high" data-slide="0" data-ref="PL. 01" data-title="Plan RDC · Villa à galeries">
-            <img class="print-img" src="assets/studio/plan-villa-a-etage.jpg" alt="Plan ultra-réaliste de l’étage R+1 d’une villa à galeries couvertes, fidèle au plan d’origine" width="1280" height="960" loading="lazy" decoding="async" data-slide="1" data-ref="PL. 02" data-title="Plan R+1 · Villa à galeries">
-            <img class="print-img" src="assets/studio/coupe-villa-a.jpg" alt="Coupe transversale B–B d’origine à l’échelle 1/50 d’une villa R+1 à galeries couvertes" width="1800" height="1272" loading="lazy" decoding="async" data-slide="2" data-ref="PL. 03" data-title="Coupe B–B · Planche d’origine">
-            <img class="print-img" src="assets/studio/toiture-villa-a.jpg" alt="Plan de toiture d’origine à l’échelle 1/50 d’une villa R+1 à galeries couvertes" width="1272" height="1800" loading="lazy" decoding="async" data-slide="3" data-ref="PL. 04" data-title="Plan de toiture · Planche d’origine">
-            <img class="print-img" src="assets/studio/planche-villa-a.jpg" alt="Planche complète d’architecture réunissant façade, intérieur, plan colorisé et matériaux d’une villa R+1" width="1280" height="960" loading="lazy" decoding="async" data-slide="4" data-ref="PL. 05" data-title="Planche complète · Maison R+1">
-            <img class="print-img" src="assets/studio/plan-villa-b-rdc.jpg" alt="Plan ultra-réaliste de plain-pied d’une villa contemporaine à porche, fidèle au plan d’origine" width="1280" height="960" loading="lazy" decoding="async" data-slide="5" data-ref="PL. 06" data-title="Plan RDC · Villa de plain-pied">
-            <img class="print-img" src="assets/studio/planche-villa-b.jpg" alt="Planche complète d’architecture réunissant façade, séjour, plan colorisé et matériaux d’une villa de plain-pied" width="1280" height="960" loading="lazy" decoding="async" data-slide="6" data-ref="PL. 07" data-title="Planche complète · Plain-pied">
+            <img class="print-img is-active" src="assets/studio/plan-villa-a-rdc.jpg" alt="Plan ultra-réaliste du rez-de-chaussée d’une villa à galeries couvertes, fidèle au plan d’origine" width="1280" height="960" fetchpriority="high" data-slide="0" data-ref="PL. 01" data-title="Plan RDC · Villa à galeries" data-series="a">
+            <img class="print-img" src="assets/studio/plan-villa-a-etage.jpg" alt="Plan ultra-réaliste de l’étage R+1 d’une villa à galeries couvertes, fidèle au plan d’origine" width="1280" height="960" loading="lazy" decoding="async" data-slide="1" data-ref="PL. 02" data-title="Plan R+1 · Villa à galeries" data-series="a">
+            <img class="print-img" src="assets/studio/coupe-villa-a.jpg" alt="Coupe transversale B–B d’origine à l’échelle 1/50 d’une villa R+1 à galeries couvertes" width="1800" height="1272" loading="lazy" decoding="async" data-slide="2" data-ref="PL. 03" data-title="Coupe B–B · Planche d’origine" data-series="a">
+            <img class="print-img" src="assets/studio/toiture-villa-a.jpg" alt="Plan de toiture d’origine à l’échelle 1/50 d’une villa R+1 à galeries couvertes" width="1272" height="1800" loading="lazy" decoding="async" data-slide="3" data-ref="PL. 04" data-title="Plan de toiture · Planche d’origine" data-series="a">
+            <img class="print-img" src="assets/studio/planche-villa-a.jpg" alt="Planche complète d’architecture réunissant façade, intérieur, plan colorisé et matériaux d’une villa R+1" width="1280" height="960" loading="lazy" decoding="async" data-slide="4" data-ref="PL. 05" data-title="Planche complète · Maison R+1" data-series="a">
+            <img class="print-img" src="assets/studio/plan-villa-b-rdc.jpg" alt="Plan ultra-réaliste de plain-pied d’une villa contemporaine à porche, fidèle au plan d’origine" width="1280" height="960" loading="lazy" decoding="async" data-slide="5" data-ref="PL. 06" data-title="Plan RDC · Villa de plain-pied" data-series="b">
+            <img class="print-img" src="assets/studio/planche-villa-b.jpg" alt="Planche complète d’architecture réunissant façade, séjour, plan colorisé et matériaux d’une villa de plain-pied" width="1280" height="960" loading="lazy" decoding="async" data-slide="6" data-ref="PL. 07" data-title="Planche complète · Plain-pied" data-series="b">
             <span class="print-loupe" id="print-loupe" aria-hidden="true"></span>
-            <span class="print-progress" id="print-progress" aria-hidden="true"></span>
+            <span class="print-video-hint" id="print-video-hint" hidden>▶ Lire le film HD</span>
           </div>
         </div>
+        <span class="print-progress-track" aria-hidden="true"><span class="print-progress" id="print-progress"></span></span>
       </div>
       <figcaption class="print-caption">
         <span class="print-ref" id="print-ref">PL. 01</span>
@@ -72,7 +77,7 @@
           <button type="button" id="print-expand" aria-label="Agrandir le tirage en plein écran" title="Voir en grand">⤢</button>
         </span>
       </figcaption>
-      <div class="print-plates" role="group" aria-label="Sélection directe d’une planche">
+      <div class="print-plates" id="print-plates" role="group" aria-label="Sélection directe d’une planche">
         <button type="button" data-slide="0" aria-pressed="true">RDC I</button>
         <button type="button" data-slide="1" aria-pressed="false">R+1 I</button>
         <button type="button" data-slide="2" aria-pressed="false">Coupe B–B</button>
@@ -81,10 +86,25 @@
         <button type="button" data-slide="5" aria-pressed="false">RDC II</button>
         <button type="button" data-slide="6" aria-pressed="false">Planche II</button>
       </div>
-      <p class="print-note">Planches d’origine et tirages ultra-réalistes fidèles aux plans · clic pour agrandir</p>
+      <div class="print-meta-row">
+        <p class="print-note">Planches d’origine et tirages ultra-réalistes fidèles aux plans · clic pour agrandir</p>
+        <a class="print-project-link" id="print-project-link" href="editor.html" hidden>Voir ce projet <span aria-hidden="true">↗</span></a>
+      </div>
     </figure>
 
     <nav class="studio-doors" id="studio-doors" aria-label="Accès à l’atelier">
+      <div class="studio-resume" id="studio-resume" hidden>
+        <div class="resume-info">
+          <span class="resume-kicker">Reprendre le dernier dossier</span>
+          <a class="resume-name" id="resume-link" href="#">—</a>
+          <span class="resume-meta" id="resume-meta"></span>
+        </div>
+        <div class="resume-actions">
+          <a id="resume-edit" href="#">Éditeur 2D</a>
+          <a id="resume-visit" href="#">Visite 3D</a>
+          <a id="resume-meeting" href="#">Réunion client</a>
+        </div>
+      </div>
       <button type="button" class="studio-door" id="door-open" aria-haspopup="dialog" aria-controls="studio-index">
         <span class="door-num">01</span>
         <span class="door-title">Ouvrir un projet</span>
@@ -103,7 +123,7 @@
   <footer class="studio-foot">
     <dl class="studio-cartouche" aria-label="Cartouche">
       <div><dt>Planche</dt><dd>00</dd></div>
-      <div><dt>Objet</dt><dd>Entrée de l’atelier</dd></div>
+      <div><dt>Objet</dt><dd id="studio-cabinet-cartouche">Entrée de l’atelier</dd></div>
       <div><dt>Édition</dt><dd id="studio-year">MMXXVI</dd></div>
     </dl>
   </footer>
@@ -129,6 +149,39 @@
     </div>
   </dialog>
 
+  <!-- Profil du cabinet : nom, architecte responsable, contact et logo utilisés dans les PDF -->
+  <dialog class="studio-cabinet-dlg" id="studio-cabinet-dlg" aria-labelledby="cabinet-dlg-title">
+    <div class="index-head">
+      <div>
+        <p class="studio-kicker"><span aria-hidden="true"></span>Identité de l’agence</p>
+        <h2 id="cabinet-dlg-title">Mon cabinet</h2>
+        <p class="index-count">Ces informations signent automatiquement les couvertures et cartouches PDF (APS, APD, Cahier A3, Catalogue).</p>
+      </div>
+      <button type="button" class="index-close" id="cabinet-dlg-close" aria-label="Fermer">×</button>
+    </div>
+    <form class="cabinet-form" id="studio-cabinet-form">
+      <label>Nom du cabinet / de l’agence
+        <input type="text" id="cab-name" maxlength="100" placeholder="Ex. Atelier Horizon Architecture">
+      </label>
+      <label>Architecte responsable
+        <input type="text" id="cab-architect" maxlength="100" placeholder="Ex. Jean-Paul Ndiaye, Architecte DPLG">
+      </label>
+      <label>Coordonnées / Contact (affiché en pied de dossier)
+        <input type="text" id="cab-contact" maxlength="140" placeholder="Ex. Yaoundé · contact@atelier.cm · +237 …">
+      </label>
+      <div class="cabinet-logo-row">
+        <div class="cabinet-logo-preview" id="cab-logo-preview">Aucun logo</div>
+        <label class="cabinet-file-btn">Importer un logo (PNG transparent)
+          <input type="file" id="cab-logo-file" accept="image/png" hidden>
+        </label>
+      </div>
+      <p class="cabinet-status" id="cab-status" role="status"></p>
+      <div class="cabinet-actions">
+        <button type="submit" class="cabinet-save-btn">Enregistrer le profil</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog class="print-lightbox" id="print-lightbox" aria-labelledby="print-lightbox-title">
     <div class="print-lightbox-bar">
       <div class="print-lightbox-meta">
@@ -136,6 +189,7 @@
         <span class="print-title" id="print-lightbox-title">Planche</span>
       </div>
       <div class="print-lightbox-actions">
+        <a class="print-lightbox-link" id="print-lightbox-project" href="#" hidden>Ouvrir le dossier ↗</a>
         <button type="button" id="print-lightbox-prev" aria-label="Tirage précédent">←</button>
         <button type="button" id="print-lightbox-next" aria-label="Tirage suivant">→</button>
         <button type="button" id="print-lightbox-close" aria-label="Fermer l’aperçu">×</button>
@@ -143,6 +197,7 @@
     </div>
     <div class="print-lightbox-stage">
       <img id="print-lightbox-img" alt="">
+      <video id="print-lightbox-video" controls playsinline hidden></video>
     </div>
   </dialog>
 </body>

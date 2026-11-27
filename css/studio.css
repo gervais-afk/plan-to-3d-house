@@ -65,7 +65,16 @@
 .studio-wordmark { display: inline-flex; align-items: baseline; gap: 10px; font-family: var(--serif, Georgia, serif); font-size: 19px; font-weight: 600; letter-spacing: .28em; text-transform: uppercase; }
 .studio-wordmark small { font-family: var(--sans, sans-serif); font-size: 10.5px; font-weight: 800; letter-spacing: .5em; color: var(--gold); }
 .studio-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); align-self: center; }
-.studio-motto { margin: 0; font-size: 10.5px; font-weight: 700; letter-spacing: .32em; text-transform: uppercase; color: var(--muted); }
+.studio-top-links { display: inline-flex; align-items: center; gap: 22px; flex-wrap: nowrap; }
+.studio-top-link {
+  padding: 4px 0; border: 0; border-bottom: 1px solid transparent; background: none;
+  font: inherit; font-size: 11px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--ink-2); text-decoration: none; cursor: pointer; white-space: nowrap;
+  transition: color .2s var(--ease), border-color .2s var(--ease);
+}
+.studio-top-link:hover, .studio-top-link:focus-visible { color: var(--ink); border-bottom-color: var(--gold); }
+.studio-top-link:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.studio-motto { margin: 0; padding-left: 18px; border-left: 1px solid var(--rule); font-size: 10.5px; font-weight: 700; letter-spacing: .28em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
 
 /* Composition centrale */
 .studio-main {
@@ -113,13 +122,24 @@
 @keyframes print-reveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 @keyframes print-scan { 0% { left: 0; opacity: 1; } 90% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
 
-/* Barre de progression discrète du défilement automatique */
+/* Barre de progression alignée sous le cadre (jamais sur l'image) */
+.print-progress-track {
+  display: block; height: 2px; margin-top: 8px;
+  background: rgba(255, 255, 255, .14); overflow: hidden;
+}
 .print-progress {
-  position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
-  background: var(--gold); transform-origin: left; transform: scaleX(0); pointer-events: none; z-index: 2;
+  display: block; width: 100%; height: 100%;
+  background: var(--gold); transform-origin: left; transform: scaleX(0); pointer-events: none;
 }
 .print-progress.is-running { animation: print-progress-bar var(--slide-ms, 6500ms) linear forwards; }
 @keyframes print-progress-bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.print-video-hint {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  padding: 10px 20px; background: rgba(22, 28, 25, .86); color: var(--linen);
+  border: 1px solid rgba(197, 160, 101, .8); font-size: 11px; font-weight: 700;
+  letter-spacing: .18em; text-transform: uppercase; pointer-events: none; z-index: 3;
+}
+.print-video-hint[hidden] { display: none; }
 
 /* Loupe de lecture des cotes */
 .print-loupe {
@@ -156,9 +176,17 @@
 .print-plates button[aria-pressed="true"] { color: var(--ink); }
 .print-plates button[aria-pressed="true"]::after { transform: scaleX(1); }
 .print-plates button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-.print-note { margin: 8px 0 0; font-size: 10.5px; letter-spacing: .06em; color: var(--muted); }
+.print-meta-row { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
+.print-note { margin: 0; font-size: 11px; letter-spacing: .04em; color: var(--ink-2); }
+.print-project-link {
+  font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--gold-deep); text-decoration: none; border-bottom: 1px solid rgba(140, 99, 38, .4);
+  padding-bottom: 1px; white-space: nowrap; transition: color .2s var(--ease), border-color .2s var(--ease);
+}
+.print-project-link:hover, .print-project-link:focus-visible { color: var(--ink); border-bottom-color: var(--ink); }
+.print-project-link[hidden] { display: none; }
 
-/* Visionneuse plein écran des tirages */
+/* Visionneuse plein écran des tirages et du film HD */
 .print-lightbox {
   width: min(94vw, 1340px); max-width: 94vw; max-height: 92vh; padding: 18px 20px;
   border: 1px solid rgba(179, 134, 70, .45); background: var(--linen); color: var(--ink);
@@ -168,10 +196,59 @@
 .print-lightbox-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--rule); margin-bottom: 14px; }
 .print-lightbox-meta { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
 .print-lightbox-actions { display: flex; align-items: center; gap: 6px; }
+.print-lightbox-link {
+  height: 36px; display: inline-flex; align-items: center; padding: 0 12px;
+  border: 1px solid var(--gold); color: var(--gold-deep); text-decoration: none;
+  font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; white-space: nowrap;
+}
+.print-lightbox-link:hover, .print-lightbox-link:focus-visible { background: var(--ink); border-color: var(--ink); color: var(--linen); }
+.print-lightbox-link[hidden] { display: none; }
 .print-lightbox-actions button { min-width: 36px; height: 36px; border: 1px solid var(--rule); background: var(--mat); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
 .print-lightbox-actions button:hover, .print-lightbox-actions button:focus-visible { border-color: var(--gold); background: var(--ink); color: var(--linen); }
-.print-lightbox-stage { display: grid; place-items: center; background: #F7F5F0; border: 1px solid var(--rule); overflow: hidden; }
-.print-lightbox-stage img { display: block; max-width: 100%; max-height: calc(92vh - 110px); width: auto; height: auto; object-fit: contain; }
+.print-lightbox-stage { display: grid; place-items: center; background: #141b17; border: 1px solid var(--rule); overflow: hidden; }
+.print-lightbox-stage img, .print-lightbox-stage video { display: block; max-width: 100%; max-height: calc(92vh - 110px); width: auto; height: auto; object-fit: contain; }
+.print-lightbox-stage img { background: #F7F5F0; }
+.print-lightbox-stage [hidden] { display: none; }
+
+/* Reprise directe du dernier dossier */
+.studio-resume {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap;
+  padding: 10px 4px 12px; border-bottom: 1px solid var(--rule);
+}
+.studio-resume[hidden] { display: none; }
+.resume-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.resume-kicker { font-size: 10px; font-weight: 800; letter-spacing: .22em; text-transform: uppercase; color: var(--gold-deep); }
+.resume-name { font-family: var(--serif, Georgia, serif); font-size: 1.18rem; font-weight: 500; color: var(--ink); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.resume-name:hover, .resume-name:focus-visible { color: var(--gold-deep); }
+.resume-meta { font-size: 11.5px; color: var(--muted); }
+.resume-actions { display: inline-flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.resume-actions a {
+  font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink-2); text-decoration: none; border-bottom: 1px solid var(--rule); padding-bottom: 2px; white-space: nowrap;
+  transition: color .2s var(--ease), border-color .2s var(--ease);
+}
+.resume-actions a:hover, .resume-actions a:focus-visible { color: var(--ink); border-bottom-color: var(--gold); }
+
+/* Dialogue Mon cabinet */
+.studio-cabinet-dlg {
+  width: min(560px, 94vw); padding: 34px clamp(20px, 3vw, 40px);
+  border: 1px solid rgba(179, 134, 70, .45); background: var(--linen); color: var(--ink);
+  box-shadow: 0 40px 90px -30px rgba(22, 28, 25, .5);
+}
+.studio-cabinet-dlg::backdrop { background: rgba(20, 26, 22, .42); backdrop-filter: blur(4px); }
+.cabinet-form { display: grid; gap: 16px; margin-top: 22px; }
+.cabinet-form label { display: grid; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); }
+.cabinet-form input[type="text"] { padding: 11px 13px; border: 1px solid var(--rule); background: #FCFBF8; font: inherit; font-size: 14px; letter-spacing: 0; text-transform: none; color: var(--ink); }
+.cabinet-form input[type="text"]:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
+.cabinet-logo-row { display: flex; align-items: center; gap: 16px; padding: 12px; border: 1px solid var(--rule); background: var(--mat); }
+.cabinet-logo-preview { width: 88px; height: 48px; display: grid; place-items: center; font-size: 11px; color: var(--muted); border: 1px dashed var(--rule); overflow: hidden; }
+.cabinet-logo-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.cabinet-file-btn { display: inline-flex; align-items: center; padding: 9px 14px; border: 1px solid var(--rule); background: var(--linen); color: var(--ink); cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.cabinet-file-btn:hover { border-color: var(--gold); }
+.cabinet-status { margin: 0; font-size: 12.5px; color: var(--ink-2); min-height: 1.2em; }
+.cabinet-actions { display: flex; justify-content: flex-end; }
+.cabinet-save-btn { padding: 11px 22px; border: 1px solid var(--ink); background: var(--ink); color: var(--linen); font: inherit; font-size: 11.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; cursor: pointer; }
+.cabinet-save-btn:hover, .cabinet-save-btn:focus-visible { background: var(--gold-deep); border-color: var(--gold-deep); }
 
 /* Les deux portes */
 .studio-doors { grid-area: doors; align-self: start; display: grid; border-top: 1px solid var(--rule); max-width: 38rem; }

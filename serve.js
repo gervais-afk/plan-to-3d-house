@@ -1,6 +1,7 @@
 // Serveur statique minimal (alternative à serve.py quand Python n'est pas installé) : node serve.js
 const http = require('http');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execFile } = require('node:child_process');
 const { randomUUID, createHash } = require('node:crypto');
@@ -12,9 +13,17 @@ let planchesStore = null;
 try { planchesStore = require('./planchesStore'); } catch { /* fixtures isolées sans planchesStore.js */ }
 let variantsStore = null;
 try { variantsStore = require('./variantsStore'); } catch { /* fixtures isolées sans variantsStore.js */ }
+let revisionsStore = null;
+try { revisionsStore = require('./revisionsStore'); } catch { /* fixtures isolées sans revisionsStore.js */ }
 const { createPortal, safePath } = require('./privatePortal');
 let DeliverableGate = null;
 try { DeliverableGate = require('./js/deliverableGate'); } catch { /* fixtures isolées sans js/deliverableGate.js */ }
+let AiPrompt = null;
+try { AiPrompt = require('./js/aiPrompt'); } catch { /* fixtures isolées sans js/aiPrompt.js */ }
+let BioclimaticAudit = null;
+try { BioclimaticAudit = require('./js/bioclimaticAudit'); } catch { /* fixtures isolées sans js/bioclimaticAudit.js */ }
+let geminiClient = null;
+try { geminiClient = require('./geminiClient'); } catch { /* fixtures isolées sans geminiClient.js */ }
 
 const PORT = Number(process.env.PORT) || 8000;
 const ROOT = fs.realpathSync(__dirname);
@@ -23,8 +32,9 @@ const portal = createPortal({ root: ROOT, projects: PROJECTS, send: sendJson, re
 const TYPES = {
   '.pdf': 'application/pdf',
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml',
-  '.mp4': 'video/mp4', '.webm': 'video/webm', '.woff2': 'font/woff2',
+  '.json': 'application/json', '.md': 'text/markdown; charset=utf-8',
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+  '.mp4': 'video/mp4', '.webm': 'video/webm', '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.woff2': 'font/woff2',
   '.hdr': 'application/octet-stream', '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.bin': 'application/octet-stream'
 };
 
@@ -422,72 +432,285 @@ function transcodeWebmToMp4(inputPath, outputPath) {
   });
 }
 
-// Moteur de rendu vidéo FFmpeg côté serveur : assemble les vues réelles du projet en MP4 H.264 (1280×720).
+// Résout un fichier média relatif en le confinant strictement au dossier du projet demandé.
+function resolveProjectAsset(slug, relPath, allowedSubdir = '') {
+  const cleanRel = String(relPath || '').trim().replace(/^\/+/, '');
+  if (!cleanRel || cleanRel.includes('\0')) return null;
+  const projectDir = path.resolve(PROJECTS, slug);
+  const baseDir = allowedSubdir ? path.resolve(projectDir, allowedSubdir) : projectDir;
+  const abs = path.resolve(ROOT, cleanRel);
+  if (!abs.startsWith(baseDir + path.sep)) return null;
+  if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) return null;
+  return { abs, rel: path.relative(ROOT, abs).split(path.sep).join('/') };
+}
+
+function readOptionalJsonBody(req, maxBytes, cb) {
+  let raw = '';
+  let bytes = 0;
+  let aborted = false;
+  req.on('data', chunk => {
+    if (aborted) return;
+    bytes += chunk.length;
+    if (bytes > maxBytes) { aborted = true; cb(new Error('Corps de requête trop volumineux.')); return; }
+    raw += chunk.toString('utf8');
+  });
+  req.on('end', () => {
+    if (aborted) return;
+    if (!raw.trim()) return cb(null, {});
+    try { cb(null, JSON.parse(raw)); } catch { cb(new Error('JSON invalide.')); }
+  });
+  req.on('error', err => { if (!aborted) cb(err); });
+}
+
+// Moteur de rendu vidéo FFmpeg côté serveur : assemble un film réaliste d'architecture HD (MP4 H.264 1280×720)
+// avec mouvements caméra lents, fondus enchaînés, mode transition Début→Fin et mixage optionnel voix off + ambiance sonore.
 function renderProjectVideo(req, res, url) {
-  let slug;
-  let media;
-  try { slug = projectSlug(url.searchParams.get('project')); media = ensureProjectMedia(slug); }
-  catch (error) { return sendJson(res, 400, { error: error.message }); }
+  readOptionalJsonBody(req, 256 * 1024, (parseErr, opts = {}) => {
+    if (parseErr) return sendJson(res, 400, { error: parseErr.message });
+    let slug;
+    let media;
+    try { slug = projectSlug(url.searchParams.get('project') || opts?.project); media = ensureProjectMedia(slug); }
+    catch (error) { return sendJson(res, 400, { error: error.message }); }
 
-  const candidates = [];
-  const collectDir = (dir) => {
-    if (!fs.existsSync(dir)) return;
-    for (const name of fs.readdirSync(dir).sort()) {
-      if (/\.(?:jpe?g|png|webp)$/i.test(name)) candidates.push(path.join(dir, name));
-    }
-  };
-  collectDir(media.images);
-  collectDir(media.renders);
-  collectDir(path.join(PROJECTS, slug, 'planches', 'edition-art'));
-  const frames = candidates.slice(0, 6);
-  if (!frames.length) return sendJson(res, 400, { error: 'Aucune image disponible dans ce projet pour générer une vidéo.' });
-
-  const id = `visite-ffmpeg-${new Date().toISOString().replace(/[-:.]/g, '')}`;
-  const dir = media.videos;
-  fs.mkdirSync(dir, { recursive: true });
-  const target = path.join(dir, `${id}.mp4`);
-  const secPerImage = 3;
-  const args = ['-y', '-loglevel', 'error'];
-  frames.forEach(file => args.push('-loop', '1', '-t', String(secPerImage), '-i', file));
-  const filterParts = frames.map((_, i) =>
-    `[${i}:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=#1d2620,setsar=1,fps=25,fade=t=in:st=0:d=0.45,fade=t=out:st=${(secPerImage - 0.45).toFixed(2)}:d=0.45[v${i}]`
-  );
-  const concatInputs = frames.map((_, i) => `[v${i}]`).join('');
-  filterParts.push(`${concatInputs}concat=n=${frames.length}:v=1:a=0[vout]`);
-  args.push(
-    '-filter_complex', filterParts.join(';'),
-    '-map', '[vout]',
-    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22',
-    '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
-    target
-  );
-
-  execFile('ffmpeg', args, { timeout: 120000 }, (err) => {
-    if (err || !fs.existsSync(target) || !fs.statSync(target).size) {
-      fs.rm(target, { force: true }, () => {});
-      return sendJson(res, 500, { error: `Moteur FFmpeg indisponible ou erreur de rendu (${err?.message || 'échec'}).` });
-    }
+    let projectTitle = slug.replace(/-/g, ' ').toUpperCase();
+    const projectJsonPath = path.join(PROJECTS, slug, 'project.json');
     try {
-      const size = fs.statSync(target).size;
-      const file = `${media.prefix}videos/${id}.mp4`;
-      const manifestPath = media.manifest;
-      let manifest = { version: 1, items: [] };
-      if (fs.existsSync(manifestPath)) manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-      if (!manifest || !Array.isArray(manifest.items)) manifest = { version: 1, items: [] };
-      const item = {
-        id, type: 'video', file, mimeType: 'video/mp4', format: 'mp4',
-        label: 'Film de présentation (FFmpeg)',
-        duration: frames.length * secPerImage,
-        generator: 'FFmpeg H.264',
-        sourceLabel: 'Rendu vidéo FFmpeg',
-        createdAt: new Date().toISOString(), size
+      if (fs.existsSync(projectJsonPath)) {
+        const pj = JSON.parse(fs.readFileSync(projectJsonPath, 'utf8'));
+        if (pj?.meta?.name) projectTitle = String(pj.meta.name).trim();
+      }
+    } catch { /* titre par défaut */ }
+
+    let existingManifest = { version: 1, items: [] };
+    try {
+      if (fs.existsSync(media.manifest)) {
+        const parsed = JSON.parse(fs.readFileSync(media.manifest, 'utf8'));
+        if (parsed && Array.isArray(parsed.items)) existingManifest = parsed;
+      }
+    } catch { /* manifeste neuf */ }
+
+    const isTransitionMode = opts && opts.mode === 'transition' && opts.startImage && opts.endImage;
+    let scenes = [];
+
+    if (isTransitionMode) {
+      const startAsset = resolveProjectAsset(slug, opts.startImage);
+      const endAsset = resolveProjectAsset(slug, opts.endImage);
+      if (!startAsset || !endAsset) {
+        return sendJson(res, 400, { error: 'Images de départ ou d’arrivée introuvables dans ce projet.' });
+      }
+      scenes = [
+        { absPath: startAsset.abs, relFile: startAsset.rel, label: String(opts.startLabel || 'Vue de départ').slice(0, 80) },
+        { absPath: endAsset.abs, relFile: endAsset.rel, label: String(opts.endLabel || 'Vue d’arrivée').slice(0, 80) }
+      ];
+    } else {
+      const isExcludedName = (name) => {
+        const low = String(name || '').toLowerCase();
+        return /apercu|thumb|plan-|plan_|coupe-|coupe_|toiture|facade-avant|photor-cuisine|photor-sejour-etage|photor-perspective-05/.test(low);
       };
-      manifest.items.push(item);
-      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-      return sendJson(res, 200, { ok: true, item, framesUsed: frames.length });
-    } catch (error) {
-      return sendJson(res, 500, { error: error.message });
+      const narrativeRank = (idOrFile) => {
+        const s = String(idOrFile || '').toLowerCase();
+        if (/photor-perspective-01/.test(s)) return 10;
+        if (/photor-perspective-03/.test(s)) return 20;
+        if (/photor-sejour-veranda/.test(s)) return 30;
+        if (/photor-salle-a-manger/.test(s)) return 40;
+        if (/photor-suite-parentale/.test(s)) return 50;
+        if (/photor-perspective-04/.test(s)) return 60;
+        if (/photor-perspective-02/.test(s)) return 70;
+        if (/photor-/.test(s)) return 80;
+        if (/perspective-01/.test(s)) return 110;
+        if (/perspective-03/.test(s)) return 120;
+        if (/interieur-sejour/.test(s)) return 130;
+        if (/perspective-02/.test(s)) return 140;
+        if (/perspective-04/.test(s)) return 150;
+        if (/perspective-05/.test(s)) return 160;
+        return 200;
+      };
+      const cleanCaption = (rawLabel, filename) => {
+        let text = String(rawLabel || '').trim();
+        if (!text) {
+          text = path.basename(filename, path.extname(filename))
+            .replace(/^photor-/, '')
+            .replace(/[-_]+/g, ' ')
+            .replace(/\b\w/g, c => c.toUpperCase());
+        }
+        return text.replace(/\s*[—-]\s*photor[ée]aliste.*$/i, '').replace(/\s*\(maquette 3D\)\s*/i, '').trim();
+      };
+
+      const seenPaths = new Set();
+      const picked = [];
+      const addScene = (absPath, relFile, label, priority) => {
+        if (!absPath || seenPaths.has(absPath) || !fs.existsSync(absPath)) return;
+        if (isExcludedName(path.basename(absPath))) return;
+        seenPaths.add(absPath);
+        picked.push({ absPath, relFile, label: cleanCaption(label, absPath), priority });
+      };
+
+      const photorItems = existingManifest.items.filter(it =>
+        it && it.type === 'image' && typeof it.file === 'string' && !isExcludedName(it.file) && /^photor-/.test(it.id || '')
+      );
+      for (const it of photorItems) addScene(path.join(ROOT, it.file), it.file, it.label, narrativeRank(it.id || it.file));
+
+      if (picked.length < 6) {
+        for (const it of existingManifest.items) {
+          if (!it || it.type !== 'image' || typeof it.file !== 'string' || isExcludedName(it.file)) continue;
+          addScene(path.join(ROOT, it.file), it.file, it.label, narrativeRank(it.id || it.file));
+        }
+      }
+      if (picked.length < 4) {
+        const collectDir = (dir, baseRel, baseRank) => {
+          if (!fs.existsSync(dir)) return;
+          for (const name of fs.readdirSync(dir).sort()) {
+            if (!/\.(?:jpe?g|png|webp)$/i.test(name) || isExcludedName(name)) continue;
+            addScene(path.join(dir, name), `${baseRel}${name}`, '', baseRank + narrativeRank(name));
+          }
+        };
+        collectDir(media.images, `${media.prefix}images/`, 100);
+        collectDir(media.renders, `${media.prefix}renders/`, 300);
+        collectDir(path.join(PROJECTS, slug, 'planches', 'edition-art'), `projects/${slug}/planches/edition-art/`, 400);
+      }
+      picked.sort((a, b) => a.priority - b.priority);
+      scenes = picked.slice(0, 6);
     }
+
+    if (!scenes.length) return sendJson(res, 400, { error: 'Aucune image disponible dans ce projet pour générer une vidéo.' });
+
+    const voiceAsset = opts && opts.voiceoverFile
+      ? resolveProjectAsset(slug, opts.voiceoverFile, path.join('generated', 'audio'))
+      : null;
+    const withAmbient = Boolean(opts && opts.ambientSound);
+
+    const id = `${isTransitionMode ? 'transition-cinema' : (voiceAsset ? 'film-narre' : 'film-realiste')}-${new Date().toISOString().replace(/[-:.]/g, '')}`;
+    const dir = media.videos;
+    fs.mkdirSync(dir, { recursive: true });
+    const target = path.join(dir, `${id}.mp4`);
+    const tmpCaptionsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'archicam-film-'));
+
+    const fps = 25;
+    const clipSec = isTransitionMode ? 4.4 : 6.2;
+    const xfadeSec = isTransitionMode ? 1.5 : 1.1;
+    const clipFrames = Math.round(clipSec * fps);
+    const fontSerif = fs.existsSync('/usr/share/fonts/truetype/noto/NotoSerif-Regular.ttf')
+      ? '/usr/share/fonts/truetype/noto/NotoSerif-Regular.ttf'
+      : '/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf';
+    const fontSans = fs.existsSync('/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf')
+      ? '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf'
+      : '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
+    const hasFonts = fs.existsSync(fontSerif) && fs.existsSync(fontSans);
+
+    const motions = [
+      `z='1.00+0.075*(on/${clipFrames})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,
+      `z='1.02+0.06*(on/${clipFrames})':x='iw/2-(iw/zoom/2)':y='(ih-ih/zoom)*(0.62-0.24*(on/${clipFrames}))'`,
+      `z='1.08':x='(iw-iw/zoom)*(0.15+0.70*(on/${clipFrames}))':y='ih/2-(ih/zoom/2)'`,
+      `z='1.08':x='(iw-iw/zoom)*(0.85-0.70*(on/${clipFrames}))':y='ih/2-(ih/zoom/2)'`,
+      `z='1.00+0.07*(on/${clipFrames})':x='iw/2-(iw/zoom/2)':y='(ih-ih/zoom)*0.48'`,
+      `z='1.08-0.075*(on/${clipFrames})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`
+    ];
+
+    const args = ['-y', '-loglevel', 'error'];
+    scenes.forEach(sc => args.push('-i', sc.absPath));
+    const voiceInputIdx = voiceAsset ? scenes.length : -1;
+    if (voiceAsset) args.push('-i', voiceAsset.abs);
+
+    const filterParts = [];
+    scenes.forEach((sc, i) => {
+      const motion = motions[i % motions.length];
+      const titleFile = path.join(tmpCaptionsDir, `title-${i}.txt`);
+      const subFile = path.join(tmpCaptionsDir, `sub-${i}.txt`);
+      fs.writeFileSync(titleFile, sc.label, 'utf8');
+      fs.writeFileSync(subFile, `${projectTitle.toUpperCase()}  ·  RENDU D’AMBIANCE NON CONTRACTUEL`, 'utf8');
+
+      let chain = `[${i}:v]crop=iw:ih*0.955:0:0,scale=2560:1440:force_original_aspect_ratio=increase,crop=2560:1440,setsar=1,`
+        + `zoompan=${motion}:d=${clipFrames}:s=1280x720:fps=${fps},`
+        + `eq=contrast=1.03:saturation=1.05:brightness=0.005,format=yuv420p`;
+
+      if (hasFonts) {
+        const escPath = p => p.replace(/\\/g, '/').replace(/:/g, '\\:');
+        chain += `,drawbox=x=0:y=ih-78:w=iw:h=78:color=#141d17@0.72:t=fill`
+          + `,drawbox=x=42:y=ih-62:w=3:h=44:color=#c5a065@0.95:t=fill`
+          + `,drawtext=fontfile='${escPath(fontSerif)}':textfile='${escPath(titleFile)}':fontsize=24:fontcolor=#f6f2ea:x=58:y=h-63`
+          + `,drawtext=fontfile='${escPath(fontSans)}':textfile='${escPath(subFile)}':fontsize=12:fontcolor=#d6cbb8:x=58:y=h-31`;
+      }
+      chain += `[v${i}]`;
+      filterParts.push(chain);
+    });
+
+    let lastStream = 'v0';
+    for (let i = 1; i < scenes.length; i++) {
+      const offset = Number((i * (clipSec - xfadeSec)).toFixed(3));
+      const outStream = i === scenes.length - 1 ? 'vxf' : `vx${i}`;
+      const xfadeType = isTransitionMode ? 'dissolve' : 'fade';
+      filterParts.push(`[${lastStream}][v${i}]xfade=transition=${xfadeType}:duration=${xfadeSec}:offset=${offset}[${outStream}]`);
+      lastStream = outStream;
+    }
+
+    const totalDuration = Number((scenes.length * clipSec - Math.max(0, scenes.length - 1) * xfadeSec).toFixed(2));
+    const fadeOutStart = Math.max(0.5, totalDuration - 0.9).toFixed(2);
+    filterParts.push(`[${lastStream}]fade=t=in:st=0:d=0.7,fade=t=out:st=${fadeOutStart}:d=0.9[vout]`);
+
+    // Mixage audio optionnel : voix off d'architecte (Gemini TTS WAV) + lit sonore doux (brise naturelle filtrée)
+    let hasAudioTrack = false;
+    if (voiceAsset && withAmbient) {
+      hasAudioTrack = true;
+      filterParts.push(
+        `anoisesrc=color=pink:duration=${totalDuration}:sample_rate=44100,lowpass=f=480,highpass=f=90,volume=0.045,afade=t=in:st=0:d=1.2,afade=t=out:st=${fadeOutStart}:d=0.9[amb]`,
+        `[${voiceInputIdx}:a]aresample=44100,apad=whole_dur=${totalDuration},atrim=0:${totalDuration},volume=1.15[vox]`,
+        `[vox][amb]amix=inputs=2:duration=first:dropout_transition=2[aout]`
+      );
+    } else if (voiceAsset) {
+      hasAudioTrack = true;
+      filterParts.push(`[${voiceInputIdx}:a]aresample=44100,apad=whole_dur=${totalDuration},atrim=0:${totalDuration},volume=1.15[aout]`);
+    } else if (withAmbient) {
+      hasAudioTrack = true;
+      filterParts.push(`anoisesrc=color=pink:duration=${totalDuration}:sample_rate=44100,lowpass=f=480,highpass=f=90,volume=0.055,afade=t=in:st=0:d=1.2,afade=t=out:st=${fadeOutStart}:d=0.9[aout]`);
+    }
+
+    args.push('-filter_complex', filterParts.join(';'), '-map', '[vout]');
+    if (hasAudioTrack) {
+      args.push('-map', '[aout]', '-c:a', 'aac', '-b:a', '160k', '-shortest');
+    }
+    args.push(
+      '-c:v', 'libx264', '-preset', 'medium', '-crf', '19',
+      '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+      target
+    );
+
+    execFile('ffmpeg', args, { timeout: 180000 }, (err) => {
+      fs.rm(tmpCaptionsDir, { recursive: true, force: true }, () => {});
+      if (err || !fs.existsSync(target) || !fs.statSync(target).size) {
+        fs.rm(target, { force: true }, () => {});
+        return sendJson(res, 500, { error: `Moteur FFmpeg indisponible ou erreur de rendu (${err?.message || 'échec'}).` });
+      }
+      try {
+        const size = fs.statSync(target).size;
+        const file = `${media.prefix}videos/${id}.mp4`;
+        const manifestPath = media.manifest;
+        let manifest = { version: 1, items: [] };
+        if (fs.existsSync(manifestPath)) manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        if (!manifest || !Array.isArray(manifest.items)) manifest = { version: 1, items: [] };
+        const poster = scenes[0]?.relFile || undefined;
+        const label = isTransitionMode
+          ? `Transition cinéma : ${scenes[0].label} → ${scenes[1].label}`
+          : (voiceAsset ? `Film narré d’architecture — ${projectTitle}` : `Film réaliste d’architecture — ${projectTitle}`);
+        const item = {
+          id, type: 'video', file, poster, mimeType: 'video/mp4', format: 'mp4',
+          label,
+          duration: Math.round(totalDuration),
+          audio: hasAudioTrack,
+          generator: voiceAsset ? 'FFmpeg H.264 + Gemini TTS' : 'FFmpeg H.264',
+          sourceLabel: isTransitionMode ? 'Transition Début → Fin' : (voiceAsset ? 'Film narré MP4' : 'Film réaliste MP4'),
+          notes: isTransitionMode
+            ? `Transition fluide HD 1280×720 entre « ${scenes[0].label} » et « ${scenes[1].label} ».`
+            : `Film HD 1280×720 (${scenes.length} scènes réalistes${voiceAsset ? ' avec voix off architecte' : ''}${withAmbient ? ' et ambiance sonore douce' : ''}).`,
+          createdAt: new Date().toISOString(), size,
+          catalog: true, book: true
+        };
+        manifest.items.push(item);
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+        return sendJson(res, 200, { ok: true, item, framesUsed: scenes.length, scenes: scenes.map(s => s.label), audio: hasAudioTrack });
+      } catch (error) {
+        return sendJson(res, 500, { error: error.message });
+      }
+    });
   });
 }
 
@@ -841,7 +1064,229 @@ function saveProject(req, res) {
     ensureProjectMedia(slug);
     if (image) atomicFile(path.join(dir, imageFile), image);
     atomicFile(path.join(dir, 'project.json'), JSON.stringify(project, null, 2));
+    // Un enregistrement officiel purge le brouillon automatique éventuel
+    const draftPath = path.join(dir, '.draft.json');
+    try { if (fs.existsSync(draftPath)) fs.unlinkSync(draftPath); } catch { /* ignore */ }
     return sendJson(res, 200, { ok: true, slug, planImage: project.config.planImage });
+  });
+}
+
+// --- BROUILLONS AUTOMATIQUES (AUTO-SAVE SERVEUR CONFINÉ AU DOSSIER PROJET) ---
+function projectDraftApi(req, res, urlPath) {
+  if (portal.enabled && portal.roleForProject(req) !== 'architect') {
+    return sendJson(res, 403, { error: 'Accès réservé à l’architecte.' });
+  }
+  const m = /^\/api\/projects\/([a-z0-9-]{1,60})\/draft$/.exec(urlPath);
+  if (!m) return sendJson(res, 400, { error: 'Identifiant de projet invalide.' });
+  const slug = m[1];
+  const dir = path.resolve(PROJECTS, slug);
+  if (!dir.startsWith(PROJECTS + path.sep)) return sendJson(res, 403, { error: 'Chemin refusé.' });
+  const draftPath = path.join(dir, '.draft.json');
+
+  if (req.method === 'GET') {
+    if (!fs.existsSync(draftPath)) return sendJson(res, 200, { ok: true, draft: null });
+    try {
+      const data = JSON.parse(fs.readFileSync(draftPath, 'utf8'));
+      return sendJson(res, 200, { ok: true, draft: data });
+    } catch {
+      return sendJson(res, 200, { ok: true, draft: null });
+    }
+  }
+  if (req.method === 'DELETE') {
+    try { if (fs.existsSync(draftPath)) fs.unlinkSync(draftPath); } catch { /* ignore */ }
+    return sendJson(res, 200, { ok: true });
+  }
+  if (req.method === 'POST') {
+    if (req.headers['content-type']?.split(';')[0].trim().toLowerCase() !== 'application/json') {
+      return sendJson(res, 415, { error: 'JSON requis.' });
+    }
+    return readBody(req, res, 5 * 1024 * 1024, body => {
+      if (!body || typeof body.project !== 'object' || !Array.isArray(body.project.walls)) {
+        return sendJson(res, 422, { error: 'Brouillon de projet invalide.' });
+      }
+      fs.mkdirSync(dir, { recursive: true });
+      const payload = {
+        slug,
+        savedAt: new Date().toISOString(),
+        wallCount: body.project.walls.length,
+        roomCount: Array.isArray(body.project.rooms) ? body.project.rooms.length : 0,
+        furnitureCount: Array.isArray(body.project.furniture) ? body.project.furniture.length : 0,
+        project: body.project
+      };
+      atomicFile(draftPath, JSON.stringify(payload));
+      return sendJson(res, 200, { ok: true, savedAt: payload.savedAt });
+    });
+  }
+  return sendJson(res, 405, { error: 'Méthode non autorisée.' });
+}
+
+// --- MEUBLAGE AUTOMATIQUE INTELLIGENT (RÈGLES ARCHITECTURALES + CONSEIL GEMINI OPTIONNEL) ---
+function computeSmartRoomFurniture(room, allWalls) {
+  const b = room?.bounds;
+  if (!b || !Number.isFinite(b.xMin) || !Number.isFinite(b.xMax)) return [];
+  const w = b.xMax - b.xMin, d = b.zMax - b.zMin;
+  if (w < 1.3 || d < 1.3) return [];
+  const cx = (b.xMin + b.xMax) / 2;
+  const cz = (b.zMin + b.zMax) / 2;
+  const lvl = Math.max(0, Number(room.level) || 0);
+  const name = String(room.name || '').toLowerCase();
+  const r2 = v => Math.round(v * 100) / 100;
+  const clampIn = (item) => {
+    const halfX = (Math.abs(Math.cos(item.rotY || 0)) * item.w + Math.abs(Math.sin(item.rotY || 0)) * item.d) / 2 + 0.14;
+    const halfZ = (Math.abs(Math.sin(item.rotY || 0)) * item.w + Math.abs(Math.cos(item.rotY || 0)) * item.d) / 2 + 0.14;
+    item.x = r2(Math.max(b.xMin + halfX, Math.min(b.xMax - halfX, item.x)));
+    item.z = r2(Math.max(b.zMin + halfZ, Math.min(b.zMax - halfZ, item.z)));
+    return item;
+  };
+  const mk = (spec, x, z, rotY = 0) => clampIn({
+    ...spec,
+    level: lvl,
+    room: room.id,
+    x: r2(x),
+    z: r2(z),
+    elev: spec.elev || 0,
+    rotY: Math.round(rotY * 10000) / 10000,
+    dims: 'local'
+  });
+
+  // Repère les portes proches de la pièce pour éviter de bloquer un débattement
+  const doors = [];
+  for (const wall of (allWalls || [])) {
+    if ((Number(wall.level) || 0) !== lvl) continue;
+    const L = Math.hypot(wall.to[0] - wall.from[0], wall.to[1] - wall.from[1]) || 1;
+    for (const op of (wall.openings || [])) {
+      if (op.type !== 'door' && op.type !== 'open') continue;
+      const t = (op.at || L / 2) / L;
+      const dx = wall.from[0] + (wall.to[0] - wall.from[0]) * t;
+      const dz = wall.from[1] + (wall.to[1] - wall.from[1]) * t;
+      if (dx >= b.xMin - 0.5 && dx <= b.xMax + 0.5 && dz >= b.zMin - 0.5 && dz <= b.zMax + 0.5) {
+        doors.push({ x: dx, z: dz });
+      }
+    }
+  }
+  const nearDoor = (x, z, pad = 0.95) => doors.some(dr => Math.hypot(dr.x - x, dr.z - z) < pad);
+
+  const items = [];
+  if (/chambre|suite|bedroom|parent/.test(name)) {
+    const isBig = w >= 3.2 && d >= 3.2;
+    const bedW = isBig ? 1.85 : (w >= 2.5 ? 1.65 : 0.95);
+    const bedSpec = { name: bedW >= 1.8 ? 'Lit king 180' : (bedW >= 1.5 ? 'Lit double 160' : 'Lit simple 90'), symbol: bedW < 1.2 ? 'bedSingle' : 'bed', model: 'bed', w: bedW, d: 2.05, h: 0.52, color: '#dcd6cd' };
+    // Préfère adosser la tête de lit au mur nord (-Z), sinon sud (+Z) si porte au nord
+    const northBlocked = nearDoor(cx, b.zMin + 0.3, 1.1);
+    const rotY = northBlocked ? Math.PI : 0;
+    const bedZ = northBlocked ? b.zMax - 1.22 : b.zMin + 1.22;
+    items.push(mk(bedSpec, cx, bedZ, rotY));
+    if (w >= bedW + 1.1) {
+      const ns = { name: 'Chevet', symbol: 'nightstand', model: 'nightstand', w: 0.45, d: 0.42, h: 0.52, color: '#8d6d4d' };
+      const nsZ = northBlocked ? b.zMax - 0.38 : b.zMin + 0.38;
+      items.push(mk(ns, cx - bedW / 2 - 0.32, nsZ, rotY));
+      items.push(mk(ns, cx + bedW / 2 + 0.32, nsZ, rotY));
+    }
+    if (w >= 3.0 && d >= 3.0) {
+      const wardX = !nearDoor(b.xMin + 0.45, cz, 1.0) ? b.xMin + 0.45 : b.xMax - 0.45;
+      const wardRot = wardX < cx ? Math.PI / 2 : -Math.PI / 2;
+      if (!nearDoor(wardX, cz, 0.95)) {
+        items.push(mk({ name: 'Armoire / Dressing', symbol: 'wardrobe', model: 'wardrobe', w: Math.min(1.8, d - 1.1), d: 0.6, h: 2.2, color: '#ece7df' }, wardX, cz, wardRot));
+      }
+    }
+  } else if (/séjour|sejour|salon|living/.test(name)) {
+    const wide = w >= d;
+    if (w >= 4.2 && d >= 3.6) {
+      items.push(mk({ name: 'Canapé d’angle', symbol: 'sofaCorner', model: 'sofaCorner', w: 2.55, d: 1.75, h: 0.82, color: '#6b6560' }, cx - (wide ? 0.5 : 0), b.zMin + 1.15, 0));
+    } else {
+      items.push(mk({ name: 'Canapé 3 places', symbol: 'sofa', model: 'sofa', w: Math.min(2.1, w - 0.8), d: 0.92, h: 0.82, color: '#78716a' }, cx, b.zMin + 0.75, 0));
+    }
+    items.push(mk({ name: 'Tapis', symbol: 'rug', model: 'rug', w: Math.min(2.4, w * 0.55), d: Math.min(1.6, d * 0.42), h: 0.02, color: '#e4dac9' }, cx, cz, 0));
+    items.push(mk({ name: 'Table basse', symbol: 'coffeeTable', model: 'coffeeTable', w: 1.2, d: 0.65, h: 0.4, color: '#9c7d5a' }, cx, cz, 0));
+    if (!nearDoor(cx, b.zMax - 0.4, 1.0)) {
+      items.push(mk({ name: 'Meuble TV', symbol: 'tvUnit', model: 'tvUnit', w: Math.min(1.85, w - 1.0), d: 0.46, h: 0.52, color: '#35383c' }, cx, b.zMax - 0.42, Math.PI));
+    }
+    items.push(mk({ name: 'Plante haute', symbol: 'plantTall', model: 'plantTall', w: 0.55, d: 0.55, h: 1.35, color: '#4c6b39' }, b.xMax - 0.48, b.zMin + 0.48, 0));
+  } else if (/manger|repas|dining/.test(name)) {
+    items.push(mk({ name: 'Table à manger 6p', symbol: 'diningTable', model: 'diningTable', w: Math.min(1.8, w - 1.2), d: 0.95, h: 0.76, color: '#8c6b4a' }, cx, cz, 0));
+    [-0.55, 0, 0.55].forEach(dx => {
+      items.push(mk({ name: 'Chaise', symbol: 'chair', model: 'chair', w: 0.46, d: 0.48, h: 0.88, color: '#3b3d40' }, cx + dx, cz - 0.72, 0));
+      items.push(mk({ name: 'Chaise', symbol: 'chair', model: 'chair', w: 0.46, d: 0.48, h: 0.88, color: '#3b3d40' }, cx + dx, cz + 0.72, Math.PI));
+    });
+  } else if (/cuisine|kitchen/.test(name)) {
+    const cw = Math.max(1.4, Math.min(2.8, w - 1.1));
+    items.push(mk({ name: 'Plan de travail', symbol: 'kitchenCounter', model: 'kitchenCounter', w: cw, d: 0.62, h: 0.9, color: '#45494e' }, b.xMin + cw / 2 + 0.22, b.zMin + 0.48, 0));
+    items.push(mk({ name: 'Évier inox', symbol: 'sink', model: 'sink', w: 0.85, d: 0.5, h: 0.04, elev: 0.9, color: '#b4b9be' }, b.xMin + cw * 0.35 + 0.22, b.zMin + 0.48, 0));
+    items.push(mk({ name: 'Plaque cuisson', symbol: 'cooktop', model: 'cooktop', w: 0.65, d: 0.52, h: 0.05, elev: 0.9, color: '#1f2226' }, b.xMin + cw * 0.78 + 0.22, b.zMin + 0.48, 0));
+    items.push(mk({ name: 'Réfrigérateur', symbol: 'fridge', model: 'fridge', w: 0.7, d: 0.68, h: 1.9, color: '#d6d9dc' }, b.xMax - 0.52, b.zMin + 0.52, 0));
+    if (w >= 3.4 && d >= 3.2) {
+      items.push(mk({ name: 'Îlot central', symbol: 'kitchenIsland', model: 'kitchenIsland', w: Math.min(2.0, w - 1.8), d: 0.9, h: 0.9, color: '#51565c' }, cx, cz + 0.25, 0));
+    }
+  } else if (/sdb|bain|douche|eau|bath/.test(name)) {
+    items.push(mk({ name: 'Douche italienne', symbol: 'shower', model: 'shower', w: Math.min(1.15, w * 0.48), d: 0.9, h: 2.1, color: '#e6ecef' }, b.xMin + 0.68, b.zMin + 0.6, 0));
+    items.push(mk({ name: 'Meuble vasque', symbol: 'vanity', model: 'vanity', w: Math.min(0.95, w * 0.45), d: 0.48, h: 0.85, color: '#f3f1ec' }, b.xMax - 0.62, b.zMin + 0.42, 0));
+    if (!nearDoor(b.xMax - 0.45, cz + 0.4, 0.8)) {
+      items.push(mk({ name: 'Cuvette WC', symbol: 'toilet', model: 'toilet', w: 0.4, d: 0.66, h: 0.78, color: '#f6f6f4' }, b.xMax - 0.45, cz + 0.45, -Math.PI / 2));
+    }
+  } else if (/\bwc\b|toilet/.test(name)) {
+    items.push(mk({ name: 'Cuvette WC', symbol: 'toilet', model: 'toilet', w: 0.4, d: 0.66, h: 0.78, color: '#f6f6f4' }, cx, b.zMin + 0.48, 0));
+  } else if (/bureau|office|travail/.test(name)) {
+    items.push(mk({ name: 'Bureau', symbol: 'desk', model: 'desk', w: Math.min(1.4, w - 0.7), d: 0.68, h: 0.75, color: '#8f6f4f' }, cx, b.zMin + 0.56, 0));
+    items.push(mk({ name: 'Chaise', symbol: 'chair', model: 'chair', w: 0.46, d: 0.48, h: 0.88, color: '#3b3d40' }, cx, b.zMin + 1.25, Math.PI));
+    items.push(mk({ name: 'Bibliothèque', symbol: 'shelf', model: 'shelf', w: Math.min(1.2, d - 0.8), d: 0.38, h: 1.95, color: '#7c654d' }, b.xMin + 0.35, cz, Math.PI / 2));
+  } else if (/terrasse|veranda|véranda|patio/.test(name)) {
+    items.push(mk({ name: 'Salon terrasse', symbol: 'terraceSet', model: 'diningTable', w: Math.min(1.5, w - 0.8), d: 0.9, h: 0.74, color: '#9c7c58' }, cx, cz, 0));
+    items.push(mk({ name: 'Plante haute', symbol: 'plantTall', model: 'plantTall', w: 0.55, d: 0.55, h: 1.35, color: '#4c6b39' }, b.xMin + 0.45, b.zMin + 0.45, 0));
+  } else if (/garage|parking/.test(name) && w >= 2.6 && d >= 4.8) {
+    items.push(mk({ name: 'Voiture (garage)', symbol: 'car', model: 'car', w: 1.85, d: 4.4, h: 1.48, color: '#5f6b74' }, cx, cz, 0));
+  }
+
+  return items;
+}
+
+function aiAutoFurnish(req, res) {
+  if (portal.enabled && portal.roleForProject(req) !== 'architect') {
+    return sendJson(res, 403, { error: 'Accès réservé à l’architecte.' });
+  }
+  readBody(req, res, 4 * 1024 * 1024, async body => {
+    try {
+      let project = body?.project;
+      if (typeof project === 'string') {
+        const slug = projectSlug(project);
+        const pPath = path.join(PROJECTS, slug, 'project.json');
+        if (!fs.existsSync(pPath)) return sendJson(res, 404, { error: 'Projet introuvable.' });
+        project = JSON.parse(fs.readFileSync(pPath, 'utf8'));
+      }
+      if (!project || !Array.isArray(project.rooms)) {
+        return sendJson(res, 422, { error: 'Fournissez un projet contenant des pièces.' });
+      }
+      const targetRoomId = typeof body?.roomId === 'string' && body.roomId ? body.roomId : null;
+      const targetLevel = Number.isInteger(body?.level) ? body.level : null;
+      const rooms = project.rooms.filter(r => {
+        if (targetRoomId) return r.id === targetRoomId;
+        if (targetLevel !== null) return (Number(r.level) || 0) === targetLevel;
+        return true;
+      });
+      const furniture = [];
+      for (const room of rooms) {
+        furniture.push(...computeSmartRoomFurniture(room, project.walls || []));
+      }
+
+      let note = `${furniture.length} élément${furniture.length > 1 ? 's' : ''} placé${furniture.length > 1 ? 's' : ''} selon les normes de circulation (90 cm devant portes).`;
+      let source = 'local';
+      if (body?.useAi && furniture.length && geminiClient && geminiClient.isConfigured(ROOT)) {
+        try {
+          const summary = rooms.map(r => `${r.name} (${((r.bounds.xMax - r.bounds.xMin) * (r.bounds.zMax - r.bounds.zMin)).toFixed(1)} m²)`).join(', ');
+          const out = await geminiClient.generateText({
+            prompt: `En 2 phrases concises d'architecte d'intérieur, commente et conseille l'aménagement pour : ${summary}. Mentionne la fluidité de circulation et la lumière naturelle.`,
+            systemInstruction: 'Tu es un architecte d’intérieur pragmatique. Réponse courte en français (2 phrases max, sans markdown).',
+            maxOutputTokens: 200
+          });
+          if (out?.text) {
+            note = out.text.trim();
+            source = `Gemini (${out.model})`;
+          }
+        } catch { /* fallback local note */ }
+      }
+      return sendJson(res, 200, { ok: true, source, furniture, count: furniture.length, note });
+    } catch (err) {
+      return sendJson(res, 500, { error: err.message || 'Erreur lors du meublage automatique.' });
+    }
   });
 }
 
@@ -877,8 +1322,214 @@ function openRouterKey() {
 }
 
 function aiStatus(res) {
-  res.writeHead(200, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ configured: !!openRouterKey() }));
+  const openRouter = Boolean(openRouterKey());
+  const gemini = Boolean(geminiClient && geminiClient.isConfigured(ROOT));
+  res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify({ configured: openRouter || gemini, openRouter, gemini }));
+}
+
+// --- AUDIT BIOCLIMATIQUE, NOTICE ARCHITECTURALE & CCTP (Gemini 4 Hydrogen + physique locale) ---
+function aiBioclimaticCctp(req, res) {
+  readBody(req, res, 2 * 1024 * 1024, async body => {
+    try {
+      const slug = projectSlug(body?.project);
+      const projectPath = path.join(PROJECTS, slug, 'project.json');
+      if (!fs.existsSync(projectPath)) return sendJson(res, 404, { error: 'Projet introuvable.' });
+      const project = JSON.parse(fs.readFileSync(projectPath, 'utf8'));
+      const audit = BioclimaticAudit
+        ? BioclimaticAudit.analyze(project, { city: body?.city, northAngle: Number.isFinite(Number(body?.northAngle)) ? Number(body.northAngle) : undefined })
+        : null;
+      if (!audit) return sendJson(res, 500, { error: 'Module BioclimaticAudit indisponible.' });
+
+      if (body?.localOnly) {
+        return sendJson(res, 200, {
+          ok: true, source: 'local', audit,
+          markdown: BioclimaticAudit.buildLocalCctpMarkdown(project, audit)
+        });
+      }
+
+      const systemInstruction = 'Tu es un architecte DPLG expert en conception bioclimatique tropicale et tempérée, et en rédaction de notices architecturales et CCTP (Cahier des Clauses Techniques Particulières). Tu rédiges en français professionnel, précis, clair et directement utilisable dans un dossier APD ou Permis de Construire. Ne jamais inventer de surface ou de pièce absente des mesures fournies.';
+      const prompt = `À partir de ces mesures réelles issues de la maquette 3D, rédige en Markdown structuré :
+1) Une **Notice Architecturale & Bioclimatique** synthétique (parti architectural, adaptation au climat de ${audit.city}, orientation solaire, ventilation traversante).
+2) Un plan d'**Optimisations Bioclimatiques Prioritaires** concrètes (brise-soleil, débords, matériaux, ventilation naturelle) chiffrées/localisées selon les façades ci-dessous.
+3) Un **Descriptif Technique Sommaire par Lots (CCTP — Lots 01 à 08)** adapté au standing et au climat local.
+
+DONNÉES RÉELLES DE LA MAQUETTE :
+${JSON.stringify(audit, null, 2)}`;
+
+      if (geminiClient && geminiClient.isConfigured(ROOT)) {
+        const out = await geminiClient.generateText({ prompt, systemInstruction });
+        return sendJson(res, 200, { ok: true, source: `Gemini (${out.model})`, audit, markdown: out.text });
+      }
+      const orKey = openRouterKey();
+      if (orKey) {
+        const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${orKey}`, 'Content-Type': 'application/json', 'X-Title': 'ArchiCam Studio' },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash',
+            messages: [{ role: 'system', content: systemInstruction }, { role: 'user', content: prompt }],
+            max_tokens: 4000
+          })
+        });
+        const data = await r.json().catch(() => ({}));
+        const text = data?.choices?.[0]?.message?.content?.trim();
+        if (r.ok && text) return sendJson(res, 200, { ok: true, source: 'OpenRouter', audit, markdown: text });
+      }
+      return sendJson(res, 401, {
+        error: 'Clé GEMINI_API_KEY ou OPENROUTER_API_KEY absente pour l’enrichissement IA. L’audit physique local reste disponible immédiatement.',
+        audit
+      });
+    } catch (err) {
+      return sendJson(res, err.statusCode || 502, { error: err.message || 'Erreur lors de la rédaction IA.' });
+    }
+  });
+}
+
+// --- ANALYSE MULTIMODALE D'UNE PHOTO DE TERRAIN POUR INSERTION PAYSAGÈRE (Gemini 4 Hydrogen) ---
+function aiSiteInsertionAdvice(req, res) {
+  readBody(req, res, 14 * 1024 * 1024, async body => {
+    try {
+      const siteImage = String(body?.siteImage || '');
+      if (!/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/i.test(siteImage)) {
+        return sendJson(res, 400, { error: 'Importez une photo de terrain valide (JPEG, PNG ou WebP).' });
+      }
+      const projectName = String(body?.projectName || 'la villa').slice(0, 120);
+      const city = String(body?.city || 'Douala, Cameroun').slice(0, 80);
+      if (!geminiClient || !geminiClient.isConfigured(ROOT)) {
+        return sendJson(res, 401, { error: 'Clé GEMINI_API_KEY non configurée sur le serveur pour analyser la photo du terrain.' });
+      }
+      const prompt = `Analyse cette photo réelle du terrain d’implantation pour intégrer le projet architectural « ${projectName} » (${city}).
+Réponds en JSON strict avec les clés :
+- "sunDirection": direction estimée du soleil et des ombres sur la photo (français, 1 phrase)
+- "terrainAdvice": conseils pratiques d’implantation, ligne d’horizon et mise à l’échelle de la maquette 3D sur cette parcelle (français, 2 phrases)
+- "insertionPrompt": prompt en anglais ultra-précis pour un modèle image-vers-image chargé d’incruster la maquette 3D sur ce terrain réel en harmonisant ciel, ombres au sol, végétation existante et voisinage sans modifier les volumes du bâtiment.`;
+      const out = await geminiClient.generateText({
+        prompt,
+        imageDataUrl: siteImage,
+        responseMimeType: 'application/json'
+      });
+      let parsed = null;
+      try { parsed = JSON.parse(out.text); } catch { parsed = { sunDirection: '', terrainAdvice: out.text, insertionPrompt: '' }; }
+      return sendJson(res, 200, { ok: true, model: out.model, analysis: parsed });
+    } catch (err) {
+      return sendJson(res, err.statusCode || 502, { error: err.message || 'Analyse du terrain indisponible.' });
+    }
+  });
+}
+
+// --- SCRIPT ARCHITECTURAL & VOIX OFF IA (Gemini 4 Hydrogen + Gemini 3.8 Flash Lite TTS WAV) ---
+function aiVoiceover(req, res) {
+  readBody(req, res, 2 * 1024 * 1024, async body => {
+    try {
+      const slug = projectSlug(body?.project);
+      const media = ensureProjectMedia(slug);
+      const projectPath = path.join(PROJECTS, slug, 'project.json');
+      if (!fs.existsSync(projectPath)) return sendJson(res, 404, { error: 'Projet introuvable.' });
+      const project = JSON.parse(fs.readFileSync(projectPath, 'utf8'));
+      const audit = BioclimaticAudit ? BioclimaticAudit.analyze(project, { city: body?.city }) : null;
+
+      let script = String(body?.script || '').trim();
+      const action = String(body?.action || 'synthesize');
+
+      if (!script || action === 'script') {
+        const fallbackScript = audit ? BioclimaticAudit.buildLocalVoiceoverScript(project, audit) : `Bienvenue dans la découverte de ${project?.meta?.name || slug}.`;
+        if (geminiClient && geminiClient.isConfigured(ROOT)) {
+          const out = await geminiClient.generateText({
+            systemInstruction: 'Tu es un architecte présentant chaleureusement son projet à un client lors d’un film cinématographique lent de 35 à 45 secondes. Rédige uniquement le texte à lire à voix haute en français fluide, naturel, sans didascalies ni titres, entre 85 et 120 mots.',
+            prompt: `Rédige la narration du film architectural pour « ${project?.meta?.name || slug} » à ${audit?.city || 'Douala'}. Données réelles : ${JSON.stringify(audit?.metrics || {})}. Pièces : ${(audit?.rooms || []).map(r => `${r.name} (${r.areaM2} m²)`).join(', ')}.`
+          });
+          script = out.text;
+        } else {
+          script = fallbackScript;
+        }
+        if (action === 'script') {
+          return sendJson(res, 200, { ok: true, script, source: geminiClient?.isConfigured(ROOT) ? 'Gemini' : 'local' });
+        }
+      }
+
+      if (!geminiClient || !geminiClient.isConfigured(ROOT)) {
+        return sendJson(res, 401, { error: 'Clé GEMINI_API_KEY requise pour synthétiser la voix off audio WAV (Gemini TTS).', script });
+      }
+      const voiceName = String(body?.voiceName || 'Charon');
+      const { wavBuffer, voiceName: usedVoice, model } = await geminiClient.generateSpeechWav({ text: script, voiceName });
+      const audioDir = path.join(media.generated, 'audio');
+      fs.mkdirSync(audioDir, { recursive: true });
+      const stamp = new Date().toISOString().replace(/[-:.]/g, '');
+      const filename = `voiceover-${stamp}.wav`;
+      const absTarget = path.join(audioDir, filename);
+      atomicFile(absTarget, wavBuffer);
+      const relFile = `${media.prefix}audio/${filename}`;
+      return sendJson(res, 200, {
+        ok: true,
+        script,
+        voiceName: usedVoice,
+        model,
+        file: relFile,
+        audioUrl: relFile,
+        size: wavBuffer.length
+      });
+    } catch (err) {
+      return sendJson(res, err.statusCode || 502, { error: err.message || 'Erreur lors de la synthèse vocale.' });
+    }
+  });
+}
+
+// --- PANORAMAS 360° ÉQUIRECTANGULAIRES PAR PIÈCE ---
+function listPanoramas(res, url) {
+  try {
+    const slug = projectSlug(url.searchParams.get('project'));
+    const media = ensureProjectMedia(slug);
+    const dir = path.join(media.generated, 'panoramas');
+    const indexFile = path.join(dir, 'panoramas.json');
+    let items = [];
+    if (fs.existsSync(indexFile)) {
+      const parsed = JSON.parse(fs.readFileSync(indexFile, 'utf8'));
+      if (Array.isArray(parsed)) items = parsed.filter(it => it && typeof it.file === 'string' && fs.existsSync(path.join(ROOT, it.file)));
+    }
+    return sendJson(res, 200, { project: slug, items });
+  } catch (err) {
+    return sendJson(res, 400, { error: err.message });
+  }
+}
+
+function savePanorama(req, res, url) {
+  readBody(req, res, 16 * 1024 * 1024, body => {
+    try {
+      const slug = projectSlug(url.searchParams.get('project') || body?.project);
+      const media = ensureProjectMedia(slug);
+      const rawId = String(body?.id || `pano-${Date.now()}`).trim().replace(/[^a-z0-9_-]/gi, '-').slice(0, 72);
+      const label = String(body?.label || 'Panorama 360°').trim().slice(0, 120);
+      const roomId = String(body?.roomId || '').trim().slice(0, 60);
+      const source = String(body?.source || '3d') === 'ai' ? 'ai' : '3d';
+      const match = /^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/i.exec(String(body?.dataUrl || ''));
+      if (!rawId || !match) return sendJson(res, 400, { error: 'Image équirectangulaire 360° invalide (JPEG/PNG requis).' });
+      const ext = match[1].toLowerCase() === 'png' ? 'png' : 'jpg';
+      const dir = path.join(media.generated, 'panoramas');
+      fs.mkdirSync(dir, { recursive: true });
+      const filename = `${rawId}.${ext}`;
+      const absTarget = path.resolve(dir, filename);
+      if (!absTarget.startsWith(path.resolve(dir) + path.sep)) return sendJson(res, 400, { error: 'Nom de panorama invalide.' });
+      const buf = Buffer.from(match[2], 'base64');
+      atomicFile(absTarget, buf);
+      const relFile = `${media.prefix}panoramas/${filename}`;
+
+      const indexFile = path.join(dir, 'panoramas.json');
+      let items = [];
+      if (fs.existsSync(indexFile)) {
+        try { items = JSON.parse(fs.readFileSync(indexFile, 'utf8')); } catch { items = []; }
+        if (!Array.isArray(items)) items = [];
+      }
+      const entry = { id: rawId, label, roomId, source, file: relFile, createdAt: new Date().toISOString(), size: buf.length };
+      const idx = items.findIndex(it => it && it.id === rawId);
+      if (idx >= 0) items[idx] = entry;
+      else items.unshift(entry);
+      atomicFile(indexFile, JSON.stringify(items, null, 2));
+      return sendJson(res, 200, { ok: true, item: entry });
+    } catch (err) {
+      return sendJson(res, 400, { error: err.message });
+    }
+  });
 }
 
 // Relais vers https://openrouter.ai/api/v1/chat/completions (modèle, messages, format, modalités)
@@ -925,12 +1576,14 @@ function aiImage(req, res) {
           || !/^(?:data:image\/(?:png|jpeg|webp);base64,|https:\/\/)/i.test(reference.image_url.url))) {
         return sendJson(res, 400, { error: 'Modèle, prompt ou références d’image invalides.' });
       }
+      const allowedRatios = new Set(['16:9', '4:3', '1:1', '3:2', '2:1', '9:16']);
+      const aspectRatio = allowedRatios.has(String(body.aspect_ratio || '')) ? String(body.aspect_ratio) : '16:9';
       const r = await fetch('https://openrouter.ai/api/v1/images', {
         method: 'POST',
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'ArchiCam Studio' },
         body: JSON.stringify({
           model: body.model, prompt: body.prompt, input_references: body.input_references,
-          aspect_ratio: body.aspect_ratio || '16:9', n: 1, output_format: 'png', response_format: 'b64_json'
+          aspect_ratio: aspectRatio, n: 1, output_format: 'png', response_format: 'b64_json'
         })
       });
       const text = await r.text();
@@ -974,26 +1627,45 @@ function saveSequenceManifest(req, res, url) {
       const { dir, prefix } = sequenceDir(url, sequence);
       if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.segments)) throw new Error('manifeste de séquence invalide');
       fs.mkdirSync(dir, { recursive: true });
+      const livingPeople = manifest.livingPeople !== false;
+      const livingEnvironment = manifest.livingEnvironment !== false;
+      const pace = manifest.pace === 'contemplatif' ? 'contemplative' : 'slow';
+      const segsWithPrompts = manifest.segments.slice(0, 99).map(s => {
+        const label = String(s.label || '').slice(0, 120);
+        const kind = s.aerial || /façade|facade|arrivée|arrivee|extérieur|exterieur|jardin|véranda|veranda|ensemble|envol/i.test(label) ? 'exterior' : 'interior';
+        const prompt = AiPrompt && typeof AiPrompt.buildVideoPrompt === 'function'
+          ? AiPrompt.buildVideoPrompt({ kind, movement: `Slow continuous architectural camera glide across ${label}`, livingPeople, livingEnvironment, pace })
+          : `Ultra-slow architectural gimbal glide across ${label}, strictly preserving walls and geometry, gentle tropical wind swaying foliage, natural shifting light and calm realistic residents moving softly.`;
+        return {
+          index: Number(s.index), label, frames: Number(s.frames), seconds: Number(s.seconds),
+          start: Number(s.start), end: Number(s.end), aerial: Boolean(s.aerial), kind, prompt
+        };
+      });
       const clean = {
         sequence, project: projectSlug(url.searchParams.get('project')), created: new Date().toISOString(),
         fps: Number(manifest.fps) || 24, width: Number(manifest.width) || 1280, height: Number(manifest.height) || 720,
         passes: (manifest.passes || []).filter(p => SEQUENCE_PASSES[p]),
-        segments: manifest.segments.slice(0, 99).map(s => ({ index: Number(s.index), label: String(s.label || '').slice(0, 120), frames: Number(s.frames), seconds: Number(s.seconds), start: Number(s.start), end: Number(s.end) })),
-        notice: 'Rendu d’ambiance illustratif non contractuel : l’IA ne doit modifier que les matières et la lumière.'
+        pace, livingPeople, livingEnvironment,
+        segments: segsWithPrompts,
+        notice: 'Rendu d’ambiance illustratif non contractuel : la géométrie reste verrouillée par depth + edges ; l’IA sublime matières, lumière, végétation au vent et vie humaine naturelle.'
       };
       fs.writeFileSync(path.join(dir, 'sequence.json'), JSON.stringify(clean, null, 2));
       const lines = [
-        'SÉQUENCE POUR L’IA — ArchiCam Studio',
-        `Projet : ${clean.project} · ${clean.fps} images/s · ${clean.width}×${clean.height}`,
+        'SÉQUENCE CINÉMATOGRAPHIQUE POUR L’IA — ArchiCam Studio',
+        `Projet : ${clean.project} · ${clean.fps} images/s · ${clean.width}×${clean.height} · Rythme : ${pace}`,
+        `Vie animée : personnages=${livingPeople ? 'oui' : 'non'} · environnement extérieur au vent=${livingEnvironment ? 'oui' : 'non'}`,
         '',
         'Dossiers : seg-XX/color (rendu de la maquette), seg-XX/depth (profondeur, proche = blanc), seg-XX/edges (contours).',
         '',
         'Utilisation :',
-        ' - Runway (Aleph / Gen-4, vidéo vers vidéo) ou Luma (Modify) : importer la vidéo color d’un segment, structure élevée.',
-        ' - ComfyUI + Wan VACE : séquence color en entrée, depth et/ou edges en contrôle (la géométrie reste verrouillée).',
+        ' - Runway (Aleph / Gen-4, vidéo vers vidéo) ou Luma (Modify) : importer la vidéo color d’un segment, structure élevée (0.85+), coller le prompt du segment ci-dessous.',
+        ' - ComfyUI + Wan VACE / ControlNet Depth + Canny : séquence color en entrée, depth et/ou edges en contrôle pour verrouiller murs et ouvertures.',
         '',
         'Assembler un segment en vidéo (ffmpeg) :',
         ...clean.segments.map(s => `  ffmpeg -framerate ${clean.fps} -i seg-${String(s.index).padStart(2, '0')}/color/%04d.jpg -c:v libx264 -pix_fmt yuv420p -crf 16 seg-${String(s.index).padStart(2, '0')}-color.mp4   # ${s.label} (${s.seconds} s)`),
+        '',
+        'Prompts cinéma IA recommandés par segment (cinématographie lente + personnages + environnement vivant) :',
+        ...clean.segments.map(s => `\n[Segment ${String(s.index).padStart(2, '0')} — ${s.label} (${s.seconds} s)]\n${s.prompt}`),
         '',
         clean.notice
       ];
@@ -1014,18 +1686,27 @@ const VIDEO_COST_PER_SECOND_ESTIMATE = 0.06726;
 const VIDEO_CLIPS = {
   'anim-arrivee': {
     candidates: ['photor-perspective-01.png', 'perspective-01.jpg', 'facade-sud.jpg', 'facade.jpg'],
+    kind: 'exterior',
     label: 'Arrivée porche & façade',
-    movement: 'Travelling avant fluide et lent vers le porche et la façade principale'
+    movement: 'Ultra-slow stabilized forward dolly push toward the shaded porch and main facade'
   },
   'anim-sejour': {
     candidates: ['photor-sejour-veranda.png', 'interieur-sejour-reference.jpg', 'sejour.jpg', 'r12.jpg'],
+    kind: 'interior',
     label: 'Visite panoramique du séjour',
-    movement: 'Panoramique horizontal fluide du grand séjour et de la véranda'
+    movement: 'Ultra-slow smooth horizontal architectural gimbal pan across the living room opening onto the veranda'
   },
   'anim-veranda': {
     candidates: ['photor-perspective-02.png', 'perspective-02.jpg'],
+    kind: 'exterior',
     label: 'Véranda arrière & terrasse',
-    movement: 'Travelling latéral le long de la terrasse arrière ouverte sur le jardin'
+    movement: 'Ultra-slow lateral steadicam glide along the rear veranda overlooking the lush tropical garden'
+  },
+  'anim-transition': {
+    candidates: ['photor-perspective-01.png', 'perspective-01.jpg'],
+    kind: 'interior',
+    label: 'Transition cinéma Début → Fin',
+    movement: 'Ultra-slow seamless architectural steadicam transition gliding smoothly from the starting viewpoint to the ending room while strictly preserving materials, light, and architectural proportions'
   }
 };
 
@@ -1088,11 +1769,26 @@ async function submitVideo(req, res, body) {
   try { slug = projectSlug(body && body.project); media = ensureProjectMedia(slug); }
   catch (error) { return sendJson(res, 400, { error: error.message }); }
   if (!clip) return sendJson(res, 400, { error: 'Clip vidéo non autorisé.' });
-  const sourceName = resolveClipSource(clip, media);
-  if (!sourceName) return sendJson(res, 400, { error: 'Image source introuvable pour ce clip.' });
-  const sourceImage = `${media.prefix}images/${sourceName}`;
-  const sourcePath = path.join(media.images, sourceName);
-  if (!fs.existsSync(sourcePath)) return sendJson(res, 400, { error: `Fichier source introuvable : ${sourcePath}` });
+  let sourceName = resolveClipSource(clip, media);
+  let sourceImage = sourceName ? `${media.prefix}images/${sourceName}` : '';
+  let sourcePath = sourceName ? path.join(media.images, sourceName) : '';
+  let endImageRel = '';
+  let endImageAbs = '';
+
+  if (body && body.startImage) {
+    const startAsset = resolveProjectAsset(slug, body.startImage);
+    if (!startAsset) return sendJson(res, 400, { error: 'Image de départ introuvable dans ce projet.' });
+    sourceImage = startAsset.rel;
+    sourcePath = startAsset.abs;
+    sourceName = path.basename(startAsset.abs);
+  }
+  if (body && body.endImage) {
+    const endAsset = resolveProjectAsset(slug, body.endImage);
+    if (!endAsset) return sendJson(res, 400, { error: 'Image d’arrivée introuvable dans ce projet.' });
+    endImageRel = endAsset.rel;
+    endImageAbs = endAsset.abs;
+  }
+  if (!sourcePath || !fs.existsSync(sourcePath)) return sendJson(res, 400, { error: 'Image source introuvable pour ce clip.' });
 
   const jobKey = videoJobKey(slug, clipId);
   const active = videoJobs.get(jobKey);
@@ -1105,13 +1801,14 @@ async function submitVideo(req, res, body) {
     metadata = {
       id: clipId, type: 'video', file: `${media.prefix}videos/${clipId}.mp4`, mimeType: 'video/mp4',
       sourceImage, poster: sourceImage, duration: 5, durationIsEstimated: true,
-      label: clip.label, sourceLabel: '✨ Rendu IA', generator: `OpenRouter · ${VIDEO_MODEL}`,
+      label: String(body?.label || clip.label).slice(0, 120), sourceLabel: endImageAbs ? '✨ Transition IA Début→Fin' : '✨ Rendu IA',
+      generator: `OpenRouter · ${VIDEO_MODEL}`,
       movement: clip.movement, catalog: true, book: true, generationStatus: 'pending'
     };
     manifest.items.push(metadata);
     fs.writeFileSync(media.manifest, JSON.stringify(manifest, null, 2));
   }
-  if (metadata.jobId && ['pending', 'in_progress', 'completed'].includes(metadata.generationStatus)
+  if (!endImageAbs && metadata.jobId && ['pending', 'in_progress', 'completed'].includes(metadata.generationStatus)
     && !fs.existsSync(path.join(media.videos, `${clipId}.mp4`))) {
     const resumed = { id: metadata.jobId, status: metadata.generationStatus, estimatedCost: metadata.estimatedCost || VIDEO_COST_PER_SECOND_ESTIMATE * 5,
       actualCost: metadata.actualCost, clipId };
@@ -1119,23 +1816,40 @@ async function submitVideo(req, res, body) {
     videoJobs.set(jobKey, resumed);
     return sendJson(res, 202, { clipId, project: slug, jobId: resumed.id, status: resumed.status, estimatedCost: resumed.estimatedCost, model: VIDEO_MODEL, resolution: '720p', resumed: true });
   }
-  const image = fs.readFileSync(sourcePath);
-  const ext = path.extname(sourcePath).toLowerCase();
-  const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
-  // OpenRouter/Seedance requiert idéalement une URL HTTPS accessible publiquement.
-  // OPENROUTER_PUBLIC_BASE_URL permet d’utiliser une copie publique du projet ; sinon on transmet le frame en data URL.
-  let firstFrameUrl = `data:${mime};base64,${image.toString('base64')}`;
-  const publicBase = process.env.OPENROUTER_PUBLIC_BASE_URL;
-  if (publicBase) {
-    const parsed = new URL(publicBase);
-    if (parsed.protocol !== 'https:') throw new Error('OPENROUTER_PUBLIC_BASE_URL doit utiliser HTTPS.');
-    firstFrameUrl = new URL(sourceImage, publicBase.endsWith('/') ? publicBase : publicBase + '/').toString();
+  const toFrameUrl = (absPath, relPath) => {
+    const publicBase = process.env.OPENROUTER_PUBLIC_BASE_URL;
+    if (publicBase) {
+      const parsed = new URL(publicBase);
+      if (parsed.protocol !== 'https:') throw new Error('OPENROUTER_PUBLIC_BASE_URL doit utiliser HTTPS.');
+      return new URL(relPath, publicBase.endsWith('/') ? publicBase : publicBase + '/').toString();
+    }
+    const buf = fs.readFileSync(absPath);
+    const ext = path.extname(absPath).toLowerCase();
+    const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+    return `data:${mime};base64,${buf.toString('base64')}`;
+  };
+  const firstFrameUrl = toFrameUrl(sourcePath, sourceImage);
+  const frameImages = [{ type: 'image_url', image_url: { url: firstFrameUrl }, frame_type: 'first_frame' }];
+  if (endImageAbs) {
+    frameImages.push({ type: 'image_url', image_url: { url: toFrameUrl(endImageAbs, endImageRel) }, frame_type: 'last_frame' });
   }
   const estimatedCost = VIDEO_COST_PER_SECOND_ESTIMATE * 5;
+  const defaultVideoPrompt = AiPrompt && typeof AiPrompt.buildVideoPrompt === 'function'
+    ? AiPrompt.buildVideoPrompt({
+        kind: clip.kind || 'exterior',
+        movement: endImageAbs
+          ? 'Ultra-slow continuous architectural gimbal glide transitioning seamlessly from the first frame to the final frame with consistent materials, lighting, and natural life'
+          : clip.movement,
+        livingPeople: body?.livingPeople !== false,
+        livingEnvironment: body?.livingEnvironment !== false,
+        pace: body?.pace === 'contemplatif' ? 'contemplative' : 'slow'
+      })
+    : `${clip.movement}. Strictly preserve building architecture. Gentle tropical breeze moving foliage and clouds, natural residents walking calmly in the scene.`;
+  const effectivePrompt = String((body && body.prompt) || metadata.prompt || defaultVideoPrompt).trim();
   const payload = {
-    model: VIDEO_MODEL, prompt: String(metadata.prompt || ''), duration: 5, resolution: '720p', aspect_ratio: '16:9', generate_audio: false,
+    model: VIDEO_MODEL, prompt: effectivePrompt, duration: 5, resolution: '720p', aspect_ratio: '16:9', generate_audio: false,
     provider: { only: ['seed'] },
-    frame_images: [{ type: 'image_url', image_url: { url: firstFrameUrl }, frame_type: 'first_frame' }]
+    frame_images: frameImages
   };
   const upstream = await fetch('https://openrouter.ai/api/v1/videos', {
     method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'ArchiCam Studio' },
@@ -1317,6 +2031,47 @@ function planchesApi(req, res, url, urlPath, access) {
   return sendJson(res, 405, { error: 'Méthode non autorisée.' });
 }
 
+function revisionsApi(req, res, url, urlPath, access) {
+  if (!revisionsStore) return sendJson(res, 501, { error: 'Module journal des révisions indisponible.' });
+  const match = /^\/api\/projects\/([^/]+)\/revisions(?:\/([^/]+))?$/.exec(urlPath);
+  if (!match) return sendJson(res, 404, { error: 'Route révisions introuvable.' });
+  const slug = match[1];
+  const idFromPath = match[2] || '';
+  const respondError = error => sendJson(res, error.status || 500, {
+    error: error.status ? error.message : 'Stockage des révisions indisponible.'
+  });
+
+  if (req.method === 'GET') {
+    if (portal.enabled && access?.session?.role !== 'architect' && access?.session?.project !== slug.toLowerCase()) {
+      return sendJson(res, 403, { error: 'Accès non autorisé à ce projet.' });
+    }
+    try { return sendJson(res, 200, { slug: slug.toLowerCase(), items: revisionsStore.list(PROJECTS, slug) }); }
+    catch (error) { return respondError(error); }
+  }
+
+  if (portal.enabled && access?.session?.role !== 'architect') {
+    return sendJson(res, 403, { error: 'Gestion des révisions réservée à l’architecte.' });
+  }
+  if (req.method === 'POST') {
+    if (idFromPath) return sendJson(res, 405, { error: 'Méthode non autorisée sur cette ressource.' });
+    if (req.headers['content-type']?.split(';')[0] !== 'application/json') {
+      return sendJson(res, 415, { error: 'JSON requis.' });
+    }
+    return readBody(req, res, 2 * 1024 * 1024, body => {
+      try {
+        const item = revisionsStore.create(PROJECTS, slug, body);
+        return sendJson(res, 201, { slug: slug.toLowerCase(), item });
+      } catch (error) { return respondError(error); }
+    });
+  }
+  if (req.method === 'DELETE') {
+    const id = idFromPath || url.searchParams.get('id') || '';
+    try { return sendJson(res, 200, revisionsStore.remove(PROJECTS, slug, id)); }
+    catch (error) { return respondError(error); }
+  }
+  return sendJson(res, 405, { error: 'Méthode non autorisée.' });
+}
+
 function variantsApi(req, res, url, urlPath, access) {
   if (!variantsStore) return sendJson(res, 501, { error: 'Module variantes indisponible.' });
   const match = /^\/api\/projects\/([^/]+)\/variants(?:\/([^/]+))?$/.exec(urlPath);
@@ -1386,6 +2141,10 @@ http.createServer((req, res) => {
   if (req.method === 'GET' && urlPath === '/api/ai/status') return aiStatus(res);
   if (req.method === 'POST' && urlPath === '/api/ai/chat') return aiChat(req, res);
   if (req.method === 'POST' && urlPath === '/api/ai/images') return aiImage(req, res);
+  if (req.method === 'POST' && urlPath === '/api/ai/bioclimatic-cctp') return aiBioclimaticCctp(req, res);
+  if (req.method === 'POST' && urlPath === '/api/ai/site-insertion-advice') return aiSiteInsertionAdvice(req, res);
+  if (req.method === 'POST' && urlPath === '/api/ai/voiceover') return aiVoiceover(req, res);
+  if (req.method === 'POST' && urlPath === '/api/ai/auto-furnish') return aiAutoFurnish(req, res);
   if (req.method === 'GET' && urlPath === '/api/ai/video-quote') return videoQuote(res);
   if (req.method === 'POST' && urlPath === '/api/ai/videos') return readBody(req, res, 64 * 1024, body => {
     submitVideo(req, res, body).catch(error => sendJson(res, 502, { error: error.message }));
@@ -1393,17 +2152,25 @@ http.createServer((req, res) => {
   if (req.method === 'GET' && urlPath === '/api/ai/videos/status') return videoStatus(req, res, new URL(req.url, 'http://localhost'));
   if (req.method === 'POST' && urlPath === '/api/save-render') return saveRender(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/save-generated') return saveGenerated(req, res, requestUrl);
+  if (req.method === 'POST' && urlPath === '/api/save-panorama') return savePanorama(req, res, requestUrl);
+  if (req.method === 'GET' && urlPath === '/api/panoramas') return listPanoramas(res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/gallery/flags') return galleryFlags(req, res, requestUrl, access);
   if (req.method === 'POST' && urlPath === '/api/save-video') return saveVideo(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/render-video') return renderProjectVideo(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/save-sequence-frame') return saveSequenceFrame(req, res, requestUrl);
   if (req.method === 'POST' && urlPath === '/api/save-sequence-manifest') return saveSequenceManifest(req, res, requestUrl);
   if (req.method === 'GET' && urlPath === '/api/gallery/media') return galleryMedia(res, requestUrl, access);
+  if (urlPath.startsWith('/api/projects/') && /^\/api\/projects\/[^/]+\/draft$/.test(urlPath)) {
+    return projectDraftApi(req, res, urlPath);
+  }
   if (urlPath.startsWith('/api/projects/') && /^\/api\/projects\/[^/]+\/planches(?:\/[^/]+)?$/.test(urlPath)) {
     return planchesApi(req, res, requestUrl, urlPath, access);
   }
   if (urlPath.startsWith('/api/projects/') && /^\/api\/projects\/[^/]+\/variants(?:\/[^/]+)?$/.test(urlPath)) {
     return variantsApi(req, res, requestUrl, urlPath, access);
+  }
+  if (urlPath.startsWith('/api/projects/') && /^\/api\/projects\/[^/]+\/revisions(?:\/[^/]+)?$/.test(urlPath)) {
+    return revisionsApi(req, res, requestUrl, urlPath, access);
   }
   if (req.method === 'GET' && urlPath === '/api/projects') return listProjects(res, access.only);
   if (req.method === 'POST' && urlPath === '/api/save-project') return saveProject(req, res);

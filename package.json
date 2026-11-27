@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "PORT=3000 HOST=0.0.0.0 node serve.js",
     "start": "node serve.js",
-    "build": "node --check serve.js privatePortal.js cabinetStore.js decisionStore.js feedbackStore.js presentationStore.js",
-    "lint": "node --check serve.js privatePortal.js cabinetStore.js decisionStore.js feedbackStore.js presentationStore.js"
+    "build": "node --check serve.js geminiClient.js privatePortal.js cabinetStore.js decisionStore.js feedbackStore.js presentationStore.js planchesStore.js variantsStore.js revisionsStore.js",
+    "lint": "node --check serve.js geminiClient.js privatePortal.js cabinetStore.js decisionStore.js feedbackStore.js presentationStore.js planchesStore.js variantsStore.js revisionsStore.js"
+  },
+  "dependencies": {
+    "@google/genai": "^3.6.1"
   }
 }

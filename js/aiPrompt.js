@@ -196,7 +196,40 @@ const AiPrompt = (() => {
     return `${displayName}${qualifier} — ${baseSentence}`;
   }
 
-  return { build, sunAt, planVersion, compass, warmRoomCaption, FLOORS, FACADES };
+  /**
+   * Construit un prompt vidéo réaliste (Seedance / Runway Gen-4 / Luma / Veo / Wan VACE)
+   * combinant fidélité architecturale stricte, cinématographie très lente et vie naturelle
+   * (personnages en mouvement doux + végétation/ciel/lumière extérieure vivants).
+   */
+  function buildVideoPrompt({ kind = 'exterior', movement = '', room = null, city = 'douala', livingPeople = true, livingEnvironment = true, pace = 'slow' } = {}) {
+    const inside = kind === 'interior';
+    const climate = CLIMATES[city] || CLIMATES.douala;
+    const isContemplative = pace === 'contemplative' || pace === 'contemplatif';
+    const roomName = typeof room === 'string' ? room : room?.name;
+    const paceCue = isContemplative
+      ? 'Ultra-slow, meditative architectural cinema gimbal glide (24 fps, 35mm prime lens, buttery stabilization, lingering smoothly so every volume and material breathes).'
+      : 'Very slow, fluid architectural steadicam glide (24 fps, natural depth of field, zero abrupt camera cuts or rapid turns).';
+    const lock = inside
+      ? 'Strictly preserve the exact architecture, walls, floor plan, ceiling lines, doors, windows, columns, and furniture proportions from the reference frame. Do not alter or invent structural geometry.'
+      : 'Strictly preserve the exact building volumes, rooflines, facades, verandas, columns, doors, windows, and garden layout from the reference frame. Do not alter or invent storeys or openings.';
+    const parts = [lock, paceCue];
+    if (movement) parts.push(`Camera motion: ${movement}.`);
+    if (roomName && inside) parts.push(`Interior setting: « ${roomName} » bathed in soft natural light.`);
+    if (livingEnvironment) {
+      parts.push(inside
+        ? `Living environment: warm daylight and dappled sunbeams drift subtly across the floor and lime-plaster walls; sheer linen curtains breathe gently in a soft breeze; through the glazing, tropical garden trees and palms sway naturally in the wind (${climate.split(':')[0]}).`
+        : `Living environment (${climate}): a gentle tropical breeze smoothly sways palm fronds, mango leaves, hedges, and grass; soft high clouds drift across the warm sky, creating subtle shifting dappled shadows across the facade, veranda, and lawn; distant birds glide across the upper sky.`);
+    }
+    if (livingPeople) {
+      parts.push(inside
+        ? 'Natural human presence: one or two stylishly dressed residents appear naturally in the background — relaxing calmly in the seating area or strolling unhurriedly toward the veranda with subtle, lifelike posture and head movement, never obstructing the architecture.'
+        : 'Natural human presence: two or three residents dressed in understated contemporary attire bring authentic human scale — strolling calmly along the garden path, stepping onto the shaded veranda, or conversing softly on the terrace with fluid, realistic motion.');
+    }
+    parts.push('Photorealistic architectural film color grading, natural filmic dynamic range, crisp textures, no text, no watermarks, no morphing walls.');
+    return parts.join(' ');
+  }
+
+  return { build, buildVideoPrompt, sunAt, planVersion, compass, warmRoomCaption, FLOORS, FACADES };
 })();
 
 if (typeof module !== 'undefined') module.exports = AiPrompt;

@@ -58,8 +58,23 @@ class ClientTools {
     this.clearButton.addEventListener('click', () => this.clear());
     this.hour.addEventListener('input', () => this.setHour(Number(this.hour.value)));
     this.hotspotToggle.addEventListener('change', () => { if (this.hotspotToggle.checked) onLiveView(); });
-    document.getElementById('client-floor').addEventListener('change', event => { this.finishes.setFloor(event.target.value); onLiveView(); });
-    document.getElementById('client-facade').addEventListener('change', event => { this.finishes.setFacade(event.target.value); onLiveView(); });
+    const floorSel = document.getElementById('client-floor');
+    const facadeSel = document.getElementById('client-facade');
+    const ambianceNote = document.getElementById('ambiance-note');
+    const ambianceBtns = [...document.querySelectorAll('[data-ambiance]')];
+    const syncAmbianceState = (activeId) => {
+      ambianceBtns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.ambiance === activeId)));
+    };
+    ambianceBtns.forEach(btn => btn.addEventListener('click', () => {
+      const palette = this.finishes.applyPalette(btn.dataset.ambiance);
+      if (floorSel) floorSel.value = palette.floor;
+      if (facadeSel) facadeSel.value = palette.facade;
+      if (ambianceNote) ambianceNote.textContent = palette.note;
+      syncAmbianceState(palette.id);
+      onLiveView();
+    }));
+    floorSel.addEventListener('change', event => { this.finishes.setFloor(event.target.value); syncAmbianceState(''); if (ambianceNote) ambianceNote.textContent = 'Combinaison personnalisée appliquée.'; onLiveView(); });
+    facadeSel.addEventListener('change', event => { this.finishes.setFacade(event.target.value); syncAmbianceState(''); if (ambianceNote) ambianceNote.textContent = 'Combinaison personnalisée appliquée.'; onLiveView(); });
   }
 
   setHour(hour) {

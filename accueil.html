@@ -65,6 +65,7 @@
         <p class="welcome-declaration">Le cockpit architectural immersif.</p>
         <div class="cover-actions welcome-actions">
           <button id="welcome-present" class="welcome-secondary" type="button" aria-controls="project-sheet" aria-expanded="false"><span id="welcome-present-label">Présenter le projet</span><span id="welcome-present-icon" aria-hidden="true">↓</span></button>
+          <button id="btn-meeting-mode" class="welcome-secondary welcome-meeting-btn" type="button" title="Présentation plein écran en 6 chapitres (iPad &amp; salle de réunion)"><span>Réunion client</span><span aria-hidden="true">⤢</span></button>
           <a id="cover-enter" class="primary" data-view="visit" href="index.html">Entrer dans le cockpit <span aria-hidden="true">↗</span></a>
         </div>
       </div>
@@ -134,6 +135,7 @@
         <a href="#sheet-concept-block">L’esprit</a>
         <a href="#sheet-schedule">Surfaces</a>
         <a href="#view-title">Visuels &amp; Planches</a>
+        <button type="button" id="sheet-export-apd">Dossier APD / Permis (PDF)</button>
         <button type="button" id="sheet-open-deliverables">Livrables</button>
       </nav>
       <div class="welcome-presentation-intro">
@@ -172,6 +174,13 @@
           <button class="primary" id="presentation-save" type="button">Enregistrer la présentation</button>
           <p class="author-status" id="presentation-status" role="status"></p>
         </div>
+      </section>
+      <section class="sheet-revisions" id="sheet-revisions" aria-labelledby="revisions-sheet-title" hidden>
+        <div class="sheet-schedule-head">
+          <p class="welcome-section-label">JOURNAL DES RÉVISIONS</p>
+          <h3 id="revisions-sheet-title">Évolution du dossier (V1, V2, V3…)</h3>
+        </div>
+        <ol id="sheet-revisions-list" class="sheet-revisions-list"></ol>
       </section>
       <a id="welcome-enter-from-presentation" class="welcome-presentation-enter" data-view="visit" href="index.html">Entrer dans le cockpit 3D <span aria-hidden="true">↗</span></a>
     </section>
