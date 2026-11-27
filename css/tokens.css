@@ -57,13 +57,14 @@
   /* Typographie */
   --serif: "Source Serif 4", "Source Serif", Georgia, "Times New Roman", serif;
   --sans: Manrope, "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --text-xs: 0.72rem;
   --text-sm: 0.82rem;
   --text-md: 0.95rem;
   --text-lg: 1.15rem;
   --text-xl: 1.5rem;
   --text-2xl: clamp(1.8rem, 3.2vw, 2.6rem);
-  --tracking-label: 0.14em;
+  --tracking-label: 0.12em;
 
   /* Espacements : grille de 4 px */
   --space-1: 4px;
@@ -75,21 +76,24 @@
   --space-8: 32px;
   --space-10: 40px;
 
-  /* Formes */
+  /* Formes & profondeurs */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
   --radius-pill: 999px;
-  --shadow-1: 0 1px 2px rgba(27, 35, 32, 0.06), 0 4px 14px rgba(27, 35, 32, 0.06);
-  --shadow-2: 0 18px 44px rgba(20, 26, 22, 0.18);
+  --hairline: rgba(22, 28, 25, 0.1);
+  --shadow-1: 0 1px 2px rgba(22, 28, 25, 0.05), 0 4px 14px rgba(22, 28, 25, 0.05);
+  --shadow-2: 0 18px 44px rgba(20, 26, 22, 0.16);
+  --shadow-lift: 0 12px 28px -12px rgba(22, 28, 25, 0.18), 0 2px 6px rgba(22, 28, 25, 0.06);
   --target: 44px;
 
-  /* Mouvement : courbes douces, jamais de rebond */
-  --dur-1: 120ms;
-  --dur-2: 200ms;
-  --dur-3: 320ms;
-  --dur-4: 560ms;
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Mouvement : réactif (<= 200ms routine), sans rebond, GPU-only */
+  --dur-1: 110ms;
+  --dur-2: 180ms;
+  --dur-3: 280ms;
+  --dur-4: 440ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-snappy: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 
   color-scheme: light;
@@ -103,6 +107,7 @@
     --surface: #1f2822;
     --rule: #34403a;
     --rule-soft: #2a342e;
+    --hairline: rgba(238, 240, 232, 0.11);
     --ink: #eef0e8;
     --ink-2: #c9d0c5;
     --muted: #a3ad9f;
@@ -110,12 +115,19 @@
     --accent-wash: #2e2a1f;
     --focus: #e4cf9a;
     --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.25);
+    --shadow-lift: 0 14px 32px -12px rgba(0, 0, 0, 0.48), 0 2px 6px rgba(0, 0, 0, 0.3);
     color-scheme: dark;
   }
 }
 
+/* Taille optique serif & équilibre des titres */
+h1, h2, h3 {
+  font-optical-sizing: auto;
+  text-wrap: balance;
+}
+
 /* Chiffres alignés partout où l'on compare des valeurs. */
-.tabular, time, output, [data-number] { font-variant-numeric: tabular-nums; }
+.tabular, time, output, [data-number], kbd { font-variant-numeric: tabular-nums; }
 
 /* Icônes du sprite (js/icons.js) : trait fin, couleur héritée du texte. */
 .i {

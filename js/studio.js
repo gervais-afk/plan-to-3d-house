@@ -368,6 +368,21 @@
       edit.href = `editor.html?project=${q}`;
       visit.href = `index.html?project=${q}`;
       meet.href = `accueil.html?project=${q}#meeting`;
+      const resumeThumb = el('resume-thumb');
+      if (resumeThumb) {
+        resumeThumb.replaceChildren();
+        if (recent.cover) {
+          const tImg = document.createElement('img');
+          tImg.src = recent.cover;
+          tImg.alt = '';
+          tImg.loading = 'lazy';
+          tImg.decoding = 'async';
+          tImg.onerror = () => { resumeThumb.textContent = String(recent.name || 'P').trim().charAt(0).toUpperCase(); };
+          resumeThumb.append(tImg);
+        } else {
+          resumeThumb.textContent = String(recent.name || 'P').trim().charAt(0).toUpperCase();
+        }
+      }
       resumeBox.hidden = false;
     }
 
@@ -470,7 +485,8 @@
     try {
       const payload = {
         name: el('cab-name')?.value.trim() || '',
-        architect: el('cab-architect')?.value.trim() || ''
+        architect: el('cab-architect')?.value.trim() || '',
+        contact: el('cab-contact')?.value.trim() || ''
       };
       if (pendingLogoDataUrl) payload.logo = pendingLogoDataUrl;
       const res = await fetch('api/cabinet/profile', {
@@ -489,10 +505,13 @@
     }
   });
 
-  el('door-open').addEventListener('click', () => {
+  function openIndex() {
     dialog.showModal();
     void load();
-  });
+  }
+  el('door-open').addEventListener('click', openIndex);
+  el('btn-studio-index-nav')?.addEventListener('click', openIndex);
+  el('btn-studio-shortcuts')?.addEventListener('click', () => window.__archicamIHM?.openShortcuts?.());
   el('index-close').addEventListener('click', () => dialog.close());
   // Un clic sur le voile (hors du panneau) ferme l'index ; un clic dans les marges du panneau, non.
   dialog.addEventListener('click', event => {
@@ -501,6 +520,35 @@
     if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) dialog.close();
   });
   search.addEventListener('input', () => { if (projects) render(); });
+
+  // Raccourcis clavier directs sur la planche d'entrée (quand aucune boîte de dialogue ni champ n'est actif)
+  document.addEventListener('keydown', event => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (document.querySelector('dialog[open]')) return;
+    const tag = (event.target?.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || event.target?.isContentEditable) return;
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      showSlide(activeIndex - 1);
+      if (!userPaused) startAutoplay();
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      showSlide(activeIndex + 1);
+      if (!userPaused) startAutoplay();
+    } else if (event.key === ' ' && tag !== 'button' && tag !== 'a') {
+      event.preventDefault();
+      setPaused(!userPaused);
+    } else if (event.key.toLowerCase() === 'f') {
+      event.preventDefault();
+      openLightbox();
+    } else if (event.key.toLowerCase() === 'o') {
+      event.preventDefault();
+      openIndex();
+    } else if (event.key.toLowerCase() === 'n') {
+      event.preventDefault();
+      location.href = 'editor.html';
+    }
+  });
 
   void hydrateWorkspace();
   void loadCabinetProfile();

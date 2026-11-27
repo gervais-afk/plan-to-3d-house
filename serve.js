@@ -18,12 +18,24 @@ try { revisionsStore = require('./revisionsStore'); } catch { /* fixtures isolé
 const { createPortal, safePath } = require('./privatePortal');
 let DeliverableGate = null;
 try { DeliverableGate = require('./js/deliverableGate'); } catch { /* fixtures isolées sans js/deliverableGate.js */ }
+let PdfIdentity = null;
+try { PdfIdentity = require('./js/pdfIdentity'); } catch { /* fixtures isolées sans js/pdfIdentity.js */ }
+let DeliverableChecklist = null;
+try { DeliverableChecklist = require('./js/deliverableChecklist'); } catch { /* fixtures isolées sans js/deliverableChecklist.js */ }
+let ApdDossier = null;
+try { ApdDossier = require('./js/apdDossier'); } catch { /* fixtures isolées sans js/apdDossier.js */ }
+let CodeCompliance = null;
+try { CodeCompliance = require('./js/codeCompliance'); } catch { /* fixtures isolées sans js/codeCompliance.js */ }
 let AiPrompt = null;
 try { AiPrompt = require('./js/aiPrompt'); } catch { /* fixtures isolées sans js/aiPrompt.js */ }
 let BioclimaticAudit = null;
 try { BioclimaticAudit = require('./js/bioclimaticAudit'); } catch { /* fixtures isolées sans js/bioclimaticAudit.js */ }
+let CostEstimate = null;
+try { CostEstimate = require('./js/costEstimate'); } catch { /* fixtures isolées sans js/costEstimate.js */ }
 let geminiClient = null;
 try { geminiClient = require('./geminiClient'); } catch { /* fixtures isolées sans geminiClient.js */ }
+let aiDesignEngine = null;
+try { aiDesignEngine = require('./aiDesignEngine'); } catch { /* fixtures isolées sans aiDesignEngine.js */ }
 
 const PORT = Number(process.env.PORT) || 8000;
 const ROOT = fs.realpathSync(__dirname);
@@ -1475,6 +1487,860 @@ function aiVoiceover(req, res) {
   });
 }
 
+// --- ASSISTANT CHAT IA ARCHITECTURAL (STREAMING SSE + CONTEXTE PROJET + RBAC) ---
+function buildAssistantProjectContext(slug, liveContext, isClientMode) {
+  const lines = [];
+  let projectName = '';
+  let stats = null;
+
+  // Live Sync : si l'architecte travaille dans l'éditeur, on priorise l'état temps réel (non encore sauvegardé)
+  const rawLive = (!isClientMode && liveContext && liveContext.liveProject && typeof liveContext.liveProject === 'object'
+    && (Array.isArray(liveContext.liveProject.walls) || Array.isArray(liveContext.liveProject.rooms)))
+    ? liveContext.liveProject
+    : null;
+
+  let diskProj = null;
+  if (slug) {
+    const projectFile = path.resolve(PROJECTS, slug, 'project.json');
+    if (projectFile.startsWith(path.resolve(PROJECTS) + path.sep) && fs.existsSync(projectFile)) {
+      try { diskProj = JSON.parse(fs.readFileSync(projectFile, 'utf8')); } catch { /* fichier projet illisible */ }
+    }
+  }
+
+  const proj = rawLive
+    ? {
+        ...(diskProj || {}),
+        ...rawLive,
+        meta: { ...((diskProj && diskProj.meta) || {}), ...((rawLive && rawLive.meta) || {}) },
+        config: { ...((diskProj && diskProj.config) || {}), ...((rawLive && rawLive.config) || {}) }
+      }
+    : diskProj;
+
+  if (proj && typeof proj === 'object') {
+    try {
+      const meta = proj.meta && typeof proj.meta === 'object' ? proj.meta : {};
+      projectName = String(meta.name || slug || 'Tracé en cours').slice(0, 120);
+      if (rawLive) {
+        lines.push('Synchronisation en direct (Live Sync) : les mesures, murs et pièces ci-dessous reflètent le tracé actif dans l’éditeur (y compris les éléments non encore enregistrés).');
+      }
+      lines.push(`Projet actif : ${projectName}${slug ? ` (slug: ${slug})` : ' (brouillon libre non encore enregistré)'}`);
+      if (meta.subtitle) lines.push(`Sous-titre : ${String(meta.subtitle).slice(0, 180)}`);
+      if (meta.location) lines.push(`Localisation : ${String(meta.location).slice(0, 140)}`);
+      if (meta.phase) lines.push(`Phase : ${String(meta.phase).slice(0, 80)}`);
+      if (meta.architect) lines.push(`Architecte : ${String(meta.architect).slice(0, 120)}`);
+      if (!isClientMode || meta.clientVisible === true) {
+        if (meta.client) lines.push(`Maître d’ouvrage : ${String(meta.client).slice(0, 120)}`);
+      }
+      if (meta.parti) lines.push(`Parti architectural : ${String(meta.parti).slice(0, 400)}`);
+      if (meta.description) lines.push(`Description : ${String(meta.description).slice(0, 400)}`);
+
+      const rooms = Array.isArray(proj.rooms) ? proj.rooms : [];
+      const walls = Array.isArray(proj.walls) ? proj.walls : [];
+      const openings = Array.isArray(proj.openings) && proj.openings.length
+        ? proj.openings
+        : walls.flatMap(w => (Array.isArray(w?.openings) ? w.openings : []));
+      const furniture = Array.isArray(proj.furniture) ? proj.furniture : [];
+      const wallHeight = Number(proj.config?.wallHeight || 2.8);
+      const audit = BioclimaticAudit ? BioclimaticAudit.analyze(proj, { city: meta.location || undefined }) : null;
+      const areaM2 = audit?.metrics?.habitableM2 ?? null;
+      stats = {
+        walls: walls.length,
+        openings: openings.length,
+        rooms: rooms.length,
+        furniture: furniture.length,
+        areaM2,
+        liveSync: Boolean(rawLive)
+      };
+      lines.push(`${rawLive ? 'Maquette en direct' : 'Maquette enregistrée'} : ${walls.length} murs (HSP ${wallHeight} m), ${openings.length} ouvertures, ${rooms.length} pièces, ${furniture.length} éléments de mobilier${areaM2 ? `, ~${areaM2} m² habitables` : ''}.`);
+      if (audit?.rooms?.length) {
+        const roomSummary = audit.rooms.slice(0, 16).map(r => `${r.name}${r.areaM2 ? ` (${r.areaM2} m²)` : ''}`).join(', ');
+        lines.push(`Pièces : ${roomSummary}.`);
+      } else if (rooms.length) {
+        const roomSummary = rooms.slice(0, 16).map(r => String(r?.name || 'Pièce').slice(0, 40)).join(', ');
+        lines.push(`Pièces : ${roomSummary}.`);
+      }
+      if (audit && !isClientMode) {
+        lines.push(`Audit bioclimatique (${audit.city || 'climat local'}) : score ${audit.score}/100, ratio vitrage ${audit.metrics?.glazingRatioPct ?? '—'} %, ventilation traversante : ${audit.metrics?.crossVentilation ? 'oui' : 'à renforcer'}.`);
+      }
+      if (CostEstimate && typeof CostEstimate.estimate === 'function' && !isClientMode) {
+        try {
+          const est = CostEstimate.estimate(proj);
+          if (est && Number.isFinite(est.total)) {
+            const unit = est.currency || 'FCFA';
+            const topLots = Array.isArray(est.lots)
+              ? est.lots.slice(0, 5).map(l => `${l.name || l.label}: ${Math.round(l.total || l.amount || 0).toLocaleString('fr-FR')} ${unit}`).join(', ')
+              : '';
+            lines.push(`Estimation budgétaire indicative actuelle : ~${Math.round(est.total).toLocaleString('fr-FR')} ${unit}${est.perM2 ? ` (${Math.round(est.perM2).toLocaleString('fr-FR')} ${unit}/m²)` : ''}${topLots ? ` — Principaux lots : ${topLots}` : ''}.`);
+          }
+        } catch { /* estimation non calculable sur ce brouillon */ }
+      }
+      if (slug && !isClientMode) {
+        try {
+          const safety = evaluateAndResolveDocumentSafety(slug, { mode: 'audit' });
+          if (safety && safety.ok) {
+            const bits = [];
+            if (safety.missingCartouche.length) bits.push(`cartouche à compléter (${safety.missingCartouche.join(', ')})`);
+            else bits.push('cartouche complet');
+            if (safety.porteE.blockedAi > 0) bits.push(`Porte E : ${safety.porteE.blockedAi}/${safety.porteE.totalAi} rendu(s) IA non conforme(s)${safety.porteE.exposedBlockedAi ? ` dont ${safety.porteE.exposedBlockedAi} encore exposé(s) dans le catalogue/cahier` : ' (déjà mis en quarantaine)'}`);
+            if (safety.apd) bits.push(`APD/Permis : ${safety.apd.readyCount}/${safety.apd.totalCount} pièces prêtes (${safety.apd.completeness}%)`);
+            if (safety.compliance?.totalViolations || safety.compliance?.totalWarnings) {
+              bits.push(`conformité PMR/RE2020/habitabilité : ${safety.compliance.totalViolations} écart(s), ${safety.compliance.totalWarnings} vigilance(s)`);
+            }
+            if (bits.length) lines.push(`Sécurité & préparation des documents PDF : ${bits.join(' · ')}.`);
+          }
+        } catch { /* audit sécurité non bloquant */ }
+      }
+    } catch { /* contexte projet partiel */ }
+  }
+
+  if (liveContext && typeof liveContext === 'object') {
+    const safePage = String(liveContext.page || '').slice(0, 32);
+    if (safePage) lines.push(`Vue active de l’utilisateur : ${safePage}`);
+    if (liveContext.floor) lines.push(`Niveau affiché : ${String(liveContext.floor).slice(0, 40)}`);
+    if (liveContext.tool) lines.push(`Outil actif : ${String(liveContext.tool).slice(0, 40)}`);
+    if (liveContext.liveStats && typeof liveContext.liveStats === 'object') {
+      const ls = liveContext.liveStats;
+      const bits = [];
+      if (ls.walls) bits.push(`${String(ls.walls).slice(0, 12)} murs`);
+      if (ls.openings) bits.push(`${String(ls.openings).slice(0, 12)} ouvertures`);
+      if (ls.rooms) bits.push(`${String(ls.rooms).slice(0, 12)} pièces`);
+      if (ls.area) bits.push(`${String(ls.area).slice(0, 20)} habitables`);
+      if (bits.length) lines.push(`État temps réel de l’éditeur : ${bits.join(', ')}.`);
+    }
+  }
+
+  return { text: lines.join('\n'), projectName, stats };
+}
+
+function aiAssistant(req, res, access) {
+  readBody(req, res, 8 * 1024 * 1024, async body => {
+    const isClientMode = Boolean(portal.enabled && access?.session?.role !== 'architect');
+    const requestedRaw = String(body?.project || '').trim();
+    let slug = '';
+
+    if (isClientMode) {
+      const allowedSlug = String(access?.session?.project || '').trim();
+      if (requestedRaw && requestedRaw.toLowerCase() !== allowedSlug.toLowerCase()) {
+        return sendJson(res, 403, { error: 'Accès non autorisé à ce projet.' });
+      }
+      slug = allowedSlug;
+    } else if (requestedRaw) {
+      try { slug = projectSlug(requestedRaw); }
+      catch { return sendJson(res, 400, { error: 'Identifiant de projet invalide.' }); }
+    }
+
+    const messages = Array.isArray(body?.messages) ? body.messages : [];
+    const cleanedMessages = messages
+      .slice(-24)
+      .map(m => ({
+        role: m && m.role === 'model' ? 'model' : 'user',
+        text: String(m && (m.text ?? m.content) || '').trim().slice(0, 4000)
+      }))
+      .filter(m => m.text.length > 0);
+
+    if (!cleanedMessages.length) {
+      return sendJson(res, 400, { error: 'Veuillez saisir un message.' });
+    }
+
+    let imageDataUrl = '';
+    if (body && typeof body.imageDataUrl === 'string' && body.imageDataUrl.trim()) {
+      const candidate = body.imageDataUrl.trim();
+      if (!/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/i.test(candidate)) {
+        return sendJson(res, 400, { error: 'Capture visuelle invalide (PNG, JPEG ou WebP requis).' });
+      }
+      imageDataUrl = candidate;
+    }
+
+    if (!geminiClient || !geminiClient.isConfigured(ROOT)) {
+      return sendJson(res, 401, {
+        error: 'Assistant IA indisponible : configurez GEMINI_API_KEY dans les secrets du serveur pour activer les réponses Gemini.'
+      });
+    }
+
+    const ctx = buildAssistantProjectContext(slug, body?.liveContext, isClientMode);
+    const rolePrompt = isClientMode
+      ? [
+          'Tu es l’assistant architectural d’ArchiCam Studio en mode Portail Client (lecture seule).',
+          'Tu réponds avec clarté, chaleur et précision en français aux questions du maître d’ouvrage sur son projet (pièces, surfaces, matériaux, confort, lumière, étapes).',
+          'Ne révèle aucune donnée interne confidentielle et précise toujours que les chiffres ou suggestions restent indicatifs et soumis à validation de l’architecte.'
+        ].join(' ')
+      : [
+          'Tu es l’assistant architectural expert d’ArchiCam Studio, copilote d’un cabinet d’architecture contemporaine.',
+          'Tu réponds en français clair, structuré et concis (listes courtes, chiffres précis, recommandations concrètes et immédiatement exploitables).',
+          'Tu t’appuies toujours sur les données réelles du projet transmises ci-dessous (surfaces, pièces, audit bioclimatique, estimation budgétaire) sans inventer de mesures absentes. Pour les simulations « Et si… » (budget, surfaces, matériaux), donne une fourchette réaliste argumentée par poste.',
+          'Si une capture du plan 2D, de la vue 3D ou une photo d’inspiration/croquis est jointe, analyse-la visuellement et propose des adaptations concrètes au projet.',
+          'Sur une consigne de sécurité, conformité ou contrôle avant export PDF : propose immédiatement l’action resolve_document_safety qui sécurise tout ce que le dispositif autorise (synchronisation réelle du profil cabinet, assainissement des métadonnées et confidentialité client, mise en quarantaine automatique Porte E des rendus IA non conformes) SANS jamais inventer de champs légaux (client, localisation, phase, indice, date) ni contourner le verrou Porte E. Si l’architecte demande explicitement une phase, un indice, la date du jour ou le masquage client, propose set_cartouche avec les paramètres exacts (ex. [[ACTION:set_cartouche:phase=APD,revision=B,issueDate=today|Appliquer APD · Indice B]]). Signale clairement ce qui reste à valider par l’architecte.',
+          'Quand une ou plusieurs actions directes dans l’application aident immédiatement l’architecte, propose 1 à 4 boutons en toute fin de réponse avec la syntaxe STRICTE [[ACTION:id|Libellé court]] ou [[ACTION:id:param|Libellé court]] uniquement parmi ces identifiants autorisés :',
+          '- Conception générative & chaîne complète (sans plan importé) : run_studio_pipeline (orchestrateur complet : conception directe dans l’éditeur 2D/3D → meublage auto → conformité PMR/RE2020 & notice → enregistrement → contrôle sécurité & cartouche → APS Auto PDF + Devis Excel FCFA + Cahier de plans A3 + Catalogue Premium PDF ; param optionnel: brief court), generate_plan_brief (param: brief court, ex. Villa 140 m2 3 chambres veranda), apply_plan_patch (param: modification concrète, ex. Passe la hauteur sous plafond à 3.10 m ou Ajoute une pergola 4x3 m), autofix_compliance (correction automatique PMR 0.90m / HSP 2.50m / RE2020 1/6 vitrage), inject_editorial_brief (rédaction et injection du sous-titre, parti architectural et description dans le dossier), create_ab_variants (création automatique de Variantes A et B chiffrées en FCFA).',
+          '- Documents, BIM & conformité : resolve_document_safety, set_cartouche (param: phase=ESQ|APS|APD|PC|DCE|EXE, revision=A, issueDate=today|YYYY-MM-DD, clientVisible=true|false), generate_aps, generate_apd, generate_catalog, generate_tech_drawings, generate_estimate, export_ifc, export_gbxml, run_compliance, run_bioclimatic, run_structural, compose_planbook, print_planbook, export_json, open_project_info, open_deliverables.',
+          '- Dossier, variantes & collaboration : open_revisions, save_revision (param optionnel: libellé court), compare_versions, open_variants, generate_variants, open_annotations, open_cabinet, open_meeting, save_project, open_index.',
+          '- Visite 3D, ambiances & cinéma : set_ambiance (param: origin|pierre-chaux|beton-bois|villa-tropicale), set_finish (param: floor=oak|tile|concrete, facade=plaster|timber|stone), set_solar_hour (param: 7..20 ex. 8, 13, 17, 20), toggle_solar_play, toggle_night, toggle_section_3d, toggle_explode_3d, toggle_timelapse_4d, toggle_clearances, toggle_plan_compare, toggle_present_mode, open_gallery, open_sublimate, export_video, export_ai_sequence, open_bioclimatic, view_3d.',
+          '- Éditeur 2D/3D : set_floor (param: 0 ou 1), select_tool (param: select|calibrate|wall-ext|wall-int|door|window|open|room-auto|room|room-poly|column|slab|stairwell|pergola|furniture|camera|annotate|measure), editor_undo, editor_redo, load_template (param: villa-f4|studio|villa-serena), open_ai_read, open_vector_pdf, open_plan_cleanup, auto_furnish, view_split, view_2d.'
+        ].join(' ');
+
+    const systemInstruction = ctx.text
+      ? `${rolePrompt}\n\nContexte réel de l’atelier :\n${ctx.text}`
+      : rolePrompt;
+
+    const wantsStream = body?.stream !== false;
+    if (!wantsStream) {
+      try {
+        const result = await geminiClient.streamAssistantChat({
+          messages: cleanedMessages,
+          systemInstruction,
+          imageDataUrl,
+          rootDir: ROOT
+        });
+        return sendJson(res, 200, {
+          ok: true,
+          text: result.text,
+          model: result.model,
+          project: slug || null,
+          projectName: ctx.projectName || null,
+          mode: isClientMode ? 'client' : 'architect',
+          stats: ctx.stats
+        });
+      } catch (err) {
+        return sendJson(res, err.statusCode || 502, { error: err.message || 'Erreur de l’assistant IA.' });
+      }
+    }
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no'
+    });
+    const sendEvent = (event, data) => {
+      if (res.writableEnded) return;
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    sendEvent('meta', {
+      model: geminiClient.TEXT_MODEL,
+      project: slug || null,
+      projectName: ctx.projectName || null,
+      mode: isClientMode ? 'client' : 'architect',
+      stats: ctx.stats
+    });
+
+    try {
+      const result = await geminiClient.streamAssistantChat({
+        messages: cleanedMessages,
+        systemInstruction,
+        imageDataUrl,
+        rootDir: ROOT,
+        onChunk: piece => sendEvent('chunk', { text: piece })
+      });
+      sendEvent('done', { ok: true, model: result.model });
+    } catch (err) {
+      sendEvent('error', {
+        error: err.message || 'Erreur lors de la génération de la réponse.',
+        status: err.statusCode || 502
+      });
+    } finally {
+      if (!res.writableEnded) res.end();
+    }
+  });
+}
+
+// --- LECTURE VOCALE D'UNE RÉPONSE ASSISTANT (GEMINI TTS WAV) ---
+function aiAssistantTts(req, res) {
+  readBody(req, res, 32 * 1024, async body => {
+    const rawText = String(body?.text || '')
+      .replace(/\[\[ACTION:[^\]]+\]\]/g, '')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/[#`_*]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 2200);
+    if (!rawText) return sendJson(res, 400, { error: 'Texte requis pour la lecture vocale.' });
+    if (!geminiClient || !geminiClient.isConfigured(ROOT)) {
+      return sendJson(res, 401, { error: 'Clé GEMINI_API_KEY requise sur le serveur pour la voix Gemini.' });
+    }
+    try {
+      const voiceName = String(body?.voiceName || 'Charon');
+      const { wavBuffer } = await geminiClient.generateSpeechWav({
+        text: rawText,
+        voiceName,
+        style: 'Voix d’architecte française posée, claire, précise et chaleureuse.'
+      });
+      res.writeHead(200, {
+        'Content-Type': 'audio/wav',
+        'Content-Length': String(wavBuffer.length),
+        'Cache-Control': 'no-store'
+      });
+      res.end(wavBuffer);
+    } catch (err) {
+      return sendJson(res, err.statusCode || 502, { error: err.message || 'Lecture vocale indisponible.' });
+    }
+  });
+}
+
+// --- SÉCURISATION & AUDIT DES GÉNÉRATEURS DE DOCUMENTS (ARCHITECTE UNIQUEMENT) ---
+const ALLOWED_SAFETY_PHASES = new Set(['ESQ', 'APS', 'APD', 'PC', 'DCE', 'EXE']);
+
+function isAiManifestImage(item) {
+  if (!item || item.type !== 'image') return false;
+  if (DeliverableGate && typeof DeliverableGate.isAiRender === 'function') return DeliverableGate.isAiRender(item);
+  return Boolean(item.ai || item.model || /photor/i.test(String(item.id || '')));
+}
+
+function evaluateManifestGate(item) {
+  if (DeliverableGate && typeof DeliverableGate.evaluate === 'function') return DeliverableGate.evaluate(item);
+  if (!isAiManifestImage(item)) return { eligible: true, status: 'non-ai', reason: 'Image non générée par IA.' };
+  const verdict = String(item?.fidelity?.verdict || '').toLowerCase();
+  const v = Number(item?.fidelity?.version || 1);
+  if (verdict === 'faithful' && v >= 2) return { eligible: true, status: 'faithful', reason: 'Rendu IA vérifié fidèle.' };
+  if (item?.fidelityOverride && item.fidelityOverride.reason) return { eligible: true, status: 'override', reason: 'Forçage tracé par l’architecte.' };
+  return { eligible: false, status: 'blocked', reason: 'Contrôle géométrique Porte E non validé.' };
+}
+
+function fallbackMissingCartouche(proj, cabinet) {
+  const m = proj?.meta && typeof proj.meta === 'object' ? proj.meta : {};
+  const has = v => {
+    const s = String(v || '').trim();
+    return Boolean(s && s !== '—' && s !== '-');
+  };
+  const missing = [];
+  if (!has(m.client)) missing.push("Maître d'ouvrage");
+  if (!has(m.location || m.address)) missing.push('Localisation');
+  if (!has(m.architect) && !has(m.agency) && !has(cabinet?.name) && !has(cabinet?.architect)) missing.push("Agence / maître d'œuvre");
+  if (!has(m.phase)) missing.push('Phase');
+  if (!has(m.revision)) missing.push('Indice');
+  if (!has(m.issueDate || m.date)) missing.push("Date d'émission");
+  return missing;
+}
+
+function evaluateAndResolveDocumentSafety(rawSlug, opts = {}) {
+  const slug = projectSlug(rawSlug);
+  const projectFile = path.resolve(PROJECTS, slug, 'project.json');
+  if (!projectFile.startsWith(path.resolve(PROJECTS) + path.sep) || !fs.existsSync(projectFile)) {
+    throw Object.assign(new Error('Projet introuvable.'), { status: 404 });
+  }
+
+  const mode = opts.mode === 'audit' ? 'audit' : 'resolve';
+  const applyCartouche = opts.applyCartouche !== false;
+  const enforceDeliverableGate = opts.enforceDeliverableGate !== false;
+  const proj = JSON.parse(fs.readFileSync(projectFile, 'utf8'));
+  if (!proj || typeof proj !== 'object') throw Object.assign(new Error('Dossier projet illisible.'), { status: 409 });
+  if (!proj.meta || typeof proj.meta !== 'object') proj.meta = {};
+
+  const cabinet = cabinetStore.read(ROOT);
+  const resolved = [];
+  let projectDirty = false;
+
+  // 1. Résolutions sûres sur project.meta (sans JAMAIS inventer client, lieu, phase, indice ou date)
+  if (mode === 'resolve' && applyCartouche) {
+    const cleanField = (key) => {
+      if (typeof proj.meta[key] !== 'string') return;
+      const trimmed = proj.meta[key].trim();
+      if (trimmed === '—' || trimmed === '-') {
+        proj.meta[key] = '';
+        projectDirty = true;
+        resolved.push(`Valeur fictive « ${trimmed} » retirée du champ ${key} (masqué proprement dans le cartouche PDF).`);
+      } else if (trimmed !== proj.meta[key]) {
+        proj.meta[key] = trimmed;
+        projectDirty = true;
+      }
+    };
+    for (const key of ['client', 'location', 'address', 'architect', 'agency', 'phase', 'revision', 'issueDate', 'date']) {
+      cleanField(key);
+    }
+
+    // Synchronisation réelle du profil cabinet déjà configuré (jamais de valeur fabriquée)
+    if (cabinet.name && !String(proj.meta.agency || '').trim()) {
+      proj.meta.agency = cabinet.name;
+      projectDirty = true;
+      resolved.push(`Agence synchronisée depuis le profil cabinet : ${cabinet.name}.`);
+    }
+    if (cabinet.architect && !String(proj.meta.architect || '').trim()) {
+      proj.meta.architect = cabinet.architect;
+      projectDirty = true;
+      resolved.push(`Architecte responsable synchronisé depuis le profil cabinet : ${cabinet.architect}.`);
+    }
+
+    // Confidentialité client : jamais exposé sur les couvertures partagées si client vide ou flag non booléen
+    if (!String(proj.meta.client || '').trim() && proj.meta.clientVisible === true) {
+      proj.meta.clientVisible = false;
+      projectDirty = true;
+      resolved.push('Option d’exposition du client désactivée (aucun maître d’ouvrage renseigné).');
+    }
+
+    // Mises à jour explicites uniquement si transmises volontairement par l'architecte
+    const explicit = opts.metaUpdates && typeof opts.metaUpdates === 'object' ? opts.metaUpdates : null;
+    const isPlaceholderVal = (val) => /^[-—–._/]+$|^(?:n\/a|na|tbd|todo|inconnu|non\s*renseign[ée])$/i.test(String(val || '').trim());
+    if (explicit) {
+      if (typeof explicit.client === 'string') {
+        const cl = explicit.client.trim().slice(0, 120);
+        if (cl && !isPlaceholderVal(cl) && proj.meta.client !== cl) {
+          proj.meta.client = cl;
+          projectDirty = true;
+          resolved.push('Maître d’ouvrage renseigné explicitement par l’architecte.');
+        }
+      }
+      if (typeof explicit.location === 'string') {
+        const loc = explicit.location.trim().slice(0, 140);
+        if (loc && !isPlaceholderVal(loc) && proj.meta.location !== loc) {
+          proj.meta.location = loc;
+          projectDirty = true;
+          resolved.push(`Localisation renseignée explicitement : ${loc}.`);
+        }
+      }
+      if (typeof explicit.phase === 'string') {
+        const ph = explicit.phase.trim().toUpperCase();
+        if (ALLOWED_SAFETY_PHASES.has(ph) && proj.meta.phase !== ph) {
+          proj.meta.phase = ph;
+          projectDirty = true;
+          resolved.push(`Phase du dossier définie explicitement : ${ph}.`);
+        }
+      }
+      if (typeof explicit.revision === 'string') {
+        const rev = explicit.revision.trim().slice(0, 16);
+        if (/^[A-Z0-9._-]+$/i.test(rev) && proj.meta.revision !== rev) {
+          proj.meta.revision = rev;
+          projectDirty = true;
+          resolved.push(`Indice du dossier défini explicitement : ${rev}.`);
+        }
+      }
+      if (typeof explicit.issueDate === 'string') {
+        const dt = explicit.issueDate.trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dt) && proj.meta.issueDate !== dt) {
+          proj.meta.issueDate = dt;
+          projectDirty = true;
+          resolved.push(`Date d’émission définie explicitement : ${dt}.`);
+        }
+      }
+      if (typeof explicit.clientVisible === 'boolean' && proj.meta.clientVisible !== explicit.clientVisible) {
+        proj.meta.clientVisible = explicit.clientVisible;
+        projectDirty = true;
+        resolved.push(explicit.clientVisible
+          ? 'Affichage du maître d’ouvrage activé sur les couvertures partagées.'
+          : 'Confidentialité renforcée : maître d’ouvrage masqué sur les couvertures partagées.');
+      }
+    }
+
+    if (projectDirty) {
+      atomicFile(projectFile, JSON.stringify(proj, null, 2));
+    }
+  }
+
+  // 2. Verrouillage Porte E (DeliverableGate) : quarantaine automatique des rendus IA non conformes
+  const mediaPaths = projectMedia(slug);
+  let manifest = { version: 1, items: [] };
+  let hasManifestFile = false;
+  if (fs.existsSync(mediaPaths.manifest)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(mediaPaths.manifest, 'utf8'));
+      if (parsed && Array.isArray(parsed.items)) {
+        manifest = parsed;
+        hasManifestFile = true;
+      }
+    } catch { /* manifeste illisible */ }
+  }
+  const renders = fs.existsSync(mediaPaths.renders)
+    ? fs.readdirSync(mediaPaths.renders).filter(f => /\.(jpe?g|png|webp)$/i.test(f))
+    : [];
+
+  const images = manifest.items.filter(it => it && it.type === 'image');
+  let totalAi = 0;
+  let eligibleAi = 0;
+  let blockedAi = 0;
+  let exposedBlockedAi = 0;
+  const quarantinedNow = [];
+  const blockedItems = [];
+  let manifestDirty = false;
+
+  for (const item of images) {
+    if (!isAiManifestImage(item)) continue;
+    totalAi += 1;
+    const verdict = evaluateManifestGate(item);
+    if (verdict.eligible) {
+      eligibleAi += 1;
+    } else {
+      blockedAi += 1;
+      const wasExposed = item.catalog === true || item.book === true || item.published === true;
+      if (mode === 'resolve' && enforceDeliverableGate && wasExposed) {
+        item.catalog = false;
+        item.book = false;
+        if (item.published === true) item.published = false;
+        manifestDirty = true;
+        quarantinedNow.push(item.label || item.id);
+      } else if (wasExposed) {
+        exposedBlockedAi += 1;
+      }
+      blockedItems.push({ id: item.id, label: item.label || item.id, reason: verdict.reason });
+    }
+  }
+
+  if (manifestDirty && hasManifestFile) {
+    atomicFile(mediaPaths.manifest, JSON.stringify(manifest, null, 2));
+    resolved.push(`Porte E appliquée : ${quarantinedNow.length} rendu(s) IA non conforme(s) retiré(s) du catalogue et du cahier client (${quarantinedNow.join(', ')}).`);
+  }
+
+  // 3. Diagnostics complets post-résolution (Cartouche, Checklist, APD, Conformité PMR/RE2020/Habitabilité)
+  const missingCartouche = PdfIdentity && typeof PdfIdentity.missingFields === 'function'
+    ? (PdfIdentity.missingFields(proj, { cabinet }).missing || [])
+    : fallbackMissingCartouche(proj, cabinet);
+
+  const savedPlanches = planchesStore && typeof planchesStore.list === 'function'
+    ? (() => { try { return planchesStore.list(PROJECTS, slug) || []; } catch { return []; } })()
+    : [];
+
+  let checklist = null;
+  if (DeliverableChecklist && typeof DeliverableChecklist.evaluate === 'function') {
+    try {
+      checklist = DeliverableChecklist.evaluate({
+        project: proj,
+        cabinet,
+        media: { images, renders },
+        planches: savedPlanches
+      });
+    } catch { checklist = null; }
+  }
+
+  let apd = null;
+  if (ApdDossier && typeof ApdDossier.evaluate === 'function') {
+    try {
+      const ev = ApdDossier.evaluate({
+        project: proj,
+        cabinet,
+        media: { images, renders },
+        planches: savedPlanches
+      });
+      apd = {
+        readyCount: ev.readyCount,
+        partialCount: ev.partialCount,
+        totalCount: ev.totalCount,
+        completeness: ev.completeness,
+        canExport: ev.canExport,
+        missingPieces: (ev.pieces || []).filter(p => p.status !== 'ready').map(p => `${p.code} ${p.title} (${p.status === 'partial' ? 'partiel' : 'manquant'})`)
+      };
+    } catch { apd = null; }
+  }
+
+  let compliance = null;
+  if (CodeCompliance && typeof CodeCompliance.generateComplianceReport === 'function') {
+    try {
+      const rep = CodeCompliance.generateComplianceReport(proj, { checkPMR: true });
+      compliance = {
+        compliant: Boolean(rep?.summary?.compliant),
+        totalViolations: Number(rep?.summary?.totalViolations || 0),
+        totalWarnings: Number(rep?.summary?.totalWarnings || 0),
+        violations: (rep?.summary?.violations || []).slice(0, 8).map(v => v.message || `${v.rule}`),
+        warnings: (rep?.summary?.warnings || []).slice(0, 6).map(w => w.message || `${w.rule}`)
+      };
+    } catch { compliance = null; }
+  }
+
+  const remaining = [];
+  if (missingCartouche.length) {
+    remaining.push(`Cartouche PDF à renseigner manuellement (jamais inventé) : ${missingCartouche.join(', ')}.`);
+  }
+  if (blockedItems.length) {
+    remaining.push(`Porte E : ${blockedItems.length} rendu(s) IA exclu(s) des PDF client — régénérez-les ou enregistrez un forçage tracé par l’architecte si besoin.`);
+  }
+  if (compliance && compliance.violations.length) {
+    for (const v of compliance.violations.slice(0, 4)) remaining.push(`Conformité géométrique (à ajuster en 2D) : ${v}`);
+  }
+  if (apd && apd.missingPieces.length) {
+    remaining.push(`Pièces APD / Permis à compléter : ${apd.missingPieces.slice(0, 4).join(' · ')}.`);
+  }
+
+  const walls = Array.isArray(proj.walls) ? proj.walls : [];
+  const rooms = Array.isArray(proj.rooms) ? proj.rooms : [];
+  const modelReady = walls.length > 0 && rooms.length > 0;
+  const safeVisualCount = renders.length + eligibleAi;
+
+  const readyGenerators = [
+    {
+      id: 'generate_aps',
+      label: 'APS Auto PDF',
+      ready: modelReady,
+      note: modelReady
+        ? (missingCartouche.length ? 'Prêt (champs vides masqués dans le cartouche)' : 'Prêt avec cartouche complet')
+        : 'Tracez murs et pièces dans l’éditeur 2D'
+    },
+    {
+      id: 'generate_apd',
+      label: 'Dossier APD / Permis PDF',
+      ready: modelReady,
+      note: apd ? `${apd.readyCount}/${apd.totalCount} pièces prêtes (${apd.completeness}%)` : (modelReady ? 'Prêt' : 'Maquette requise')
+    },
+    {
+      id: 'generate_catalog',
+      label: 'Catalogue Premium PDF',
+      ready: safeVisualCount > 0,
+      note: safeVisualCount > 0
+        ? `${safeVisualCount} visuel(s) sûr(s) (vues 3D + rendus IA Porte E)`
+        : 'Aucune vue 3D ni rendu IA conforme Porte E'
+    },
+    {
+      id: 'generate_tech_drawings',
+      label: 'Coupes 2D & Toiture',
+      ready: modelReady,
+      note: modelReady ? 'Génération vectorielle exacte prête' : 'Maquette requise'
+    },
+    {
+      id: 'generate_estimate',
+      label: 'Métré & Estimation FCFA / Excel',
+      ready: rooms.length > 0,
+      note: rooms.length > 0 ? 'Calcul des quantités prêt' : 'Définissez au moins une pièce'
+    }
+  ];
+
+  return {
+    ok: true,
+    slug,
+    projectName: String(proj.meta?.name || slug),
+    mode,
+    meta: {
+      agency: String(proj.meta?.agency || ''),
+      architect: String(proj.meta?.architect || ''),
+      client: String(proj.meta?.client || ''),
+      clientVisible: proj.meta?.clientVisible === true,
+      location: String(proj.meta?.location || ''),
+      phase: String(proj.meta?.phase || ''),
+      revision: String(proj.meta?.revision || ''),
+      issueDate: String(proj.meta?.issueDate || proj.meta?.date || '')
+    },
+    resolved,
+    remaining,
+    missingCartouche,
+    porteE: { totalAi, eligibleAi, blockedAi, exposedBlockedAi, quarantinedNow, blockedItems },
+    checklist: checklist ? { doneCount: checklist.doneCount, totalSteps: checklist.totalSteps, ready: checklist.ready } : null,
+    apd,
+    compliance,
+    readyGenerators
+  };
+}
+
+function documentSafetyApi(req, res, urlPath, access = {}) {
+  if (portal.enabled && access?.session?.role !== 'architect') {
+    return sendJson(res, 403, { error: 'La sécurisation des générateurs de documents est réservée à l’architecte.' });
+  }
+  const match = /^\/api\/projects\/([^/]+)\/document-safety$/.exec(urlPath);
+  if (!match) return sendJson(res, 404, { error: 'Route introuvable.' });
+  const rawSlug = match[1];
+
+  if (req.method === 'GET') {
+    try {
+      return sendJson(res, 200, evaluateAndResolveDocumentSafety(rawSlug, { mode: 'audit' }));
+    } catch (err) {
+      return sendJson(res, err.status || 400, { error: err.message || 'Audit sécurité impossible.' });
+    }
+  }
+  if (req.method === 'POST') {
+    return readBody(req, res, 16 * 1024, body => {
+      try {
+        const result = evaluateAndResolveDocumentSafety(rawSlug, {
+          mode: body?.mode === 'audit' ? 'audit' : 'resolve',
+          applyCartouche: body?.applyCartouche !== false,
+          enforceDeliverableGate: body?.enforceDeliverableGate !== false,
+          metaUpdates: body?.metaUpdates
+        });
+        return sendJson(res, 200, result);
+      } catch (err) {
+        return sendJson(res, err.status || 400, { error: err.message || 'Sécurisation impossible.' });
+      }
+    });
+  }
+  return sendJson(res, 405, { error: 'Méthode non autorisée.' });
+}
+
+// --- CONCEPTION GÉNÉRATIVE SANS PLAN, PATCH NATUREL, AUTO-FIX PMR/RE2020, ÉDITORIAL & VARIANTES A/B ---
+function requireArchitectDesignEngine(res, access) {
+  if (portal.enabled && access?.session?.role !== 'architect') {
+    sendJson(res, 403, { error: 'Cette action de conception est réservée à l’architecte.' });
+    return false;
+  }
+  if (!aiDesignEngine) {
+    sendJson(res, 503, { error: 'Moteur de conception IA indisponible.' });
+    return false;
+  }
+  return true;
+}
+
+function readProjectJsonSafe(rawSlug) {
+  const slug = projectSlug(rawSlug);
+  const projectFile = path.resolve(PROJECTS, slug, 'project.json');
+  if (!projectFile.startsWith(path.resolve(PROJECTS) + path.sep) || !fs.existsSync(projectFile)) {
+    throw Object.assign(new Error('Dossier projet introuvable.'), { status: 404 });
+  }
+  const project = JSON.parse(fs.readFileSync(projectFile, 'utf8'));
+  return { slug, projectFile, project };
+}
+
+function aiGeneratePlan(req, res, access = {}) {
+  if (!requireArchitectDesignEngine(res, access)) return;
+  return readBody(req, res, 64 * 1024, async body => {
+    try {
+      const brief = String(body?.brief || '').trim();
+      const result = await aiDesignEngine.generatePlanFromBrief(brief, { geminiClient, rootDir: ROOT });
+      let savedSlug = null;
+      if (body?.saveAsNew === true) {
+        const rawCandidate = String(body?.slug || result.project?.meta?.slug || 'projet-ia')
+          .toLowerCase()
+          .replace(/[^a-z0-9-]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 48) || 'projet-ia';
+        let finalSlug = rawCandidate;
+        let idx = 2;
+        while (fs.existsSync(path.join(PROJECTS, finalSlug, 'project.json')) && idx < 99) {
+          finalSlug = `${rawCandidate.slice(0, 44)}-${idx++}`;
+        }
+        const dir = path.resolve(PROJECTS, finalSlug);
+        if (!dir.startsWith(path.resolve(PROJECTS) + path.sep)) {
+          return sendJson(res, 400, { error: 'Identifiant de dossier invalide.' });
+        }
+        result.project.meta = { ...(result.project.meta || {}), slug: finalSlug };
+        fs.mkdirSync(dir, { recursive: true });
+        ensureProjectMedia(finalSlug);
+        atomicFile(path.join(dir, 'project.json'), JSON.stringify(result.project, null, 2));
+        savedSlug = finalSlug;
+      }
+      return sendJson(res, 200, { ...result, savedSlug });
+    } catch (err) {
+      return sendJson(res, err.status || 400, { error: err.message || 'Génération de plan impossible.' });
+    }
+  });
+}
+
+function aiPlanPatch(req, res, access = {}) {
+  if (!requireArchitectDesignEngine(res, access)) return;
+  return readBody(req, res, 4 * 1024 * 1024, async body => {
+    try {
+      const instruction = String(body?.instruction || '').trim();
+      let baseProject = (body?.project && typeof body.project === 'object' && Array.isArray(body.project.walls))
+        ? body.project
+        : null;
+      if (!baseProject && body?.slug) {
+        baseProject = readProjectJsonSafe(body.slug).project;
+      }
+      if (!baseProject) {
+        return sendJson(res, 400, { error: 'Aucun plan actif trouvé pour appliquer cette modification.' });
+      }
+      const result = await aiDesignEngine.computeNaturalLanguagePatch(baseProject, instruction, { geminiClient, rootDir: ROOT });
+      return sendJson(res, 200, result);
+    } catch (err) {
+      return sendJson(res, err.status || 400, { error: err.message || 'Modification du plan impossible.' });
+    }
+  });
+}
+
+function complianceAutofixApi(req, res, urlPath, access = {}) {
+  if (!requireArchitectDesignEngine(res, access)) return;
+  if (req.method !== 'POST') return sendJson(res, 405, { error: 'Méthode non autorisée.' });
+  const match = /^\/api\/projects\/([^/]+)\/compliance-autofix$/.exec(urlPath);
+  if (!match) return sendJson(res, 404, { error: 'Route introuvable.' });
+  return readBody(req, res, 4 * 1024 * 1024, body => {
+    try {
+      const { slug, projectFile, project: diskProject } = readProjectJsonSafe(match[1]);
+      const baseProject = (body?.project && typeof body.project === 'object' && Array.isArray(body.project.walls))
+        ? body.project
+        : diskProject;
+      const result = aiDesignEngine.computeComplianceAutoFix(baseProject);
+      let persisted = false;
+      if (body?.apply === true && result.fixedCount > 0) {
+        atomicFile(projectFile, JSON.stringify(result.patchedProject, null, 2));
+        persisted = true;
+      }
+      return sendJson(res, 200, { ...result, slug, persisted });
+    } catch (err) {
+      return sendJson(res, err.status || 400, { error: err.message || 'Correction PMR/RE2020 impossible.' });
+    }
+  });
+}
+
+function editorialBriefApi(req, res, urlPath, access = {}) {
+  if (!requireArchitectDesignEngine(res, access)) return;
+  if (req.method !== 'POST') return sendJson(res, 405, { error: 'Méthode non autorisée.' });
+  const match = /^\/api\/projects\/([^/]+)\/editorial-brief$/.exec(urlPath);
+  if (!match) return sendJson(res, 404, { error: 'Route introuvable.' });
+  return readBody(req, res, 2 * 1024 * 1024, async body => {
+    try {
+      const { slug, projectFile, project: diskProject } = readProjectJsonSafe(match[1]);
+      const sourceProject = (body?.project && typeof body.project === 'object' && Array.isArray(body.project.rooms))
+        ? { ...diskProject, ...body.project, meta: { ...(diskProject.meta || {}), ...(body.project.meta || {}) } }
+        : diskProject;
+      const mode = body?.mode === 'apply' ? 'apply' : 'preview';
+      let draft;
+      let source = 'user-confirmed';
+      if (mode === 'apply' && body?.draft && typeof body.draft === 'object') {
+        draft = {
+          subtitle: String(body.draft.subtitle || '').trim().slice(0, 180),
+          parti: String(body.draft.parti || '').trim().slice(0, 900),
+          description: String(body.draft.description || '').trim().slice(0, 1400)
+        };
+      } else {
+        const gen = await aiDesignEngine.generateEditorialBrief(sourceProject, {
+          geminiClient,
+          rootDir: ROOT,
+          tone: String(body?.tone || 'architectural').slice(0, 40)
+        });
+        draft = gen.draft;
+        source = gen.source;
+      }
+      if (!draft.subtitle && !draft.parti && !draft.description) {
+        return sendJson(res, 400, { error: 'Brouillon éditorial vide.' });
+      }
+      let applied = false;
+      if (mode === 'apply') {
+        // N'injecte QUE les champs éditoriaux (jamais client, localisation, phase, indice ou date)
+        if (!diskProject.meta || typeof diskProject.meta !== 'object') diskProject.meta = {};
+        if (draft.subtitle) diskProject.meta.subtitle = draft.subtitle;
+        if (draft.parti) diskProject.meta.parti = draft.parti;
+        if (draft.description) diskProject.meta.description = draft.description;
+        atomicFile(projectFile, JSON.stringify(diskProject, null, 2));
+        applied = true;
+      }
+      return sendJson(res, 200, { ok: true, slug, mode, applied, source, draft });
+    } catch (err) {
+      return sendJson(res, err.status || 400, { error: err.message || 'Rédaction éditoriale impossible.' });
+    }
+  });
+}
+
+function generateAbVariantsApi(req, res, urlPath, access = {}) {
+  if (!requireArchitectDesignEngine(res, access)) return;
+  if (req.method !== 'POST') return sendJson(res, 405, { error: 'Méthode non autorisée.' });
+  const match = /^\/api\/projects\/([^/]+)\/generate-ab-variants$/.exec(urlPath);
+  if (!match) return sendJson(res, 404, { error: 'Route introuvable.' });
+  if (!variantsStore || typeof variantsStore.save !== 'function') {
+    return sendJson(res, 503, { error: 'Gestionnaire de variantes indisponible.' });
+  }
+  return readBody(req, res, 4 * 1024 * 1024, body => {
+    try {
+      const { slug, project: diskProject } = readProjectJsonSafe(match[1]);
+      const baseProject = (body?.project && typeof body.project === 'object' && Array.isArray(body.project.walls))
+        ? body.project
+        : diskProject;
+      const built = aiDesignEngine.buildABVariants(baseProject, { costEstimate: CostEstimate });
+      const savedA = variantsStore.save(PROJECTS, slug, 'A', {
+        label: built.variantA.label,
+        notes: built.variantA.notes,
+        materials: built.variantA.materials,
+        snapshot: built.variantA.snapshot
+      });
+      const savedB = variantsStore.save(PROJECTS, slug, 'B', {
+        label: built.variantB.label,
+        notes: built.variantB.notes,
+        materials: built.variantB.materials,
+        snapshot: built.variantB.snapshot
+      });
+      return sendJson(res, 200, {
+        ok: true,
+        slug,
+        variantA: { ...savedA, metrics: built.variantA.metrics },
+        variantB: { ...savedB, metrics: built.variantB.metrics },
+        delta: built.delta
+      });
+    } catch (err) {
+      return sendJson(res, err.status || 400, { error: err.message || 'Création des variantes A/B impossible.' });
+    }
+  });
+}
+
 // --- PANORAMAS 360° ÉQUIRECTANGULAIRES PAR PIÈCE ---
 function listPanoramas(res, url) {
   try {
@@ -2140,6 +3006,10 @@ http.createServer((req, res) => {
   if (urlPath.startsWith('/api/presentation/')) return presentationApi(req, res, requestUrl, urlPath);
   if (req.method === 'GET' && urlPath === '/api/ai/status') return aiStatus(res);
   if (req.method === 'POST' && urlPath === '/api/ai/chat') return aiChat(req, res);
+  if (req.method === 'POST' && urlPath === '/api/ai/assistant') return aiAssistant(req, res, access);
+  if (req.method === 'POST' && urlPath === '/api/ai/assistant-tts') return aiAssistantTts(req, res);
+  if (req.method === 'POST' && urlPath === '/api/ai/generate-plan') return aiGeneratePlan(req, res, access);
+  if (req.method === 'POST' && urlPath === '/api/ai/plan-patch') return aiPlanPatch(req, res, access);
   if (req.method === 'POST' && urlPath === '/api/ai/images') return aiImage(req, res);
   if (req.method === 'POST' && urlPath === '/api/ai/bioclimatic-cctp') return aiBioclimaticCctp(req, res);
   if (req.method === 'POST' && urlPath === '/api/ai/site-insertion-advice') return aiSiteInsertionAdvice(req, res);
@@ -2171,6 +3041,18 @@ http.createServer((req, res) => {
   }
   if (urlPath.startsWith('/api/projects/') && /^\/api\/projects\/[^/]+\/revisions(?:\/[^/]+)?$/.test(urlPath)) {
     return revisionsApi(req, res, requestUrl, urlPath, access);
+  }
+  if (urlPath.startsWith('/api/projects/') && /^\/api\/projects\/[^/]+\/document-safety$/.test(urlPath)) {
+    return documentSafetyApi(req, res, urlPath, access);
+  }
+  if (urlPath.startsWith('/api/projects/') && /^\/api\/projects\/[^/]+\/compliance-autofix$/.test(urlPath)) {
+    return complianceAutofixApi(req, res, urlPath, access);
+  }
+  if (urlPath.startsWith('/api/projects/') && /^\/api\/projects\/[^/]+\/editorial-brief$/.test(urlPath)) {
+    return editorialBriefApi(req, res, urlPath, access);
+  }
+  if (urlPath.startsWith('/api/projects/') && /^\/api\/projects\/[^/]+\/generate-ab-variants$/.test(urlPath)) {
+    return generateAbVariantsApi(req, res, urlPath, access);
   }
   if (req.method === 'GET' && urlPath === '/api/projects') return listProjects(res, access.only);
   if (req.method === 'POST' && urlPath === '/api/save-project') return saveProject(req, res);

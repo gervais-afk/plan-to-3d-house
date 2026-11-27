@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Logo ArchiCam AI">
+  <defs>
+    <linearGradient id="acAiBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1B251F"/>
+      <stop offset="52%" stop-color="#141B17"/>
+      <stop offset="100%" stop-color="#0D120F"/>
+    </linearGradient>
+
+    <linearGradient id="acAiGold" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#9A6F2E"/>
+      <stop offset="38%" stop-color="#B88B49"/>
+      <stop offset="72%" stop-color="#DFBE7D"/>
+      <stop offset="100%" stop-color="#F7E8C3"/>
+    </linearGradient>
+
+    <linearGradient id="acAiFine" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#EFE0BA" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#A87A38" stop-opacity="0.72"/>
+    </linearGradient>
+
+    <radialGradient id="acAiHalo" cx="76%" cy="24%" r="48%">
+      <stop offset="0%" stop-color="#E7C988" stop-opacity="0.28"/>
+      <stop offset="55%" stop-color="#B38646" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#141B17" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Carré architectural biseauté -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#acAiBg)"/>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#acAiHalo)"/>
+  <rect x="18" y="18" width="476" height="476" rx="110" fill="none" stroke="url(#acAiGold)" stroke-opacity="0.42" stroke-width="3"/>
+
+  <!-- Monogramme architectural ArchiCam (A + arc C) -->
+  <g id="archicam-ai-mark">
+    <!-- Orbite d'épure géométrique -->
+    <circle cx="248" cy="264" r="144" fill="none" stroke="url(#acAiGold)" stroke-width="3.2" stroke-dasharray="8 6" stroke-opacity="0.42"/>
+    <path d="M 164 328 A 132 132 0 1 1 350 264" fill="none" stroke="url(#acAiGold)" stroke-width="12" stroke-linecap="round"/>
+
+    <!-- Portique monumental A -->
+    <path d="M 156 382 L 236 150 L 260 150 L 340 382" fill="none" stroke="url(#acAiGold)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Traverse d'horizon -->
+    <line x1="188" y1="302" x2="308" y2="302" stroke="url(#acAiGold)" stroke-width="14" stroke-linecap="round"/>
+
+    <!-- Oculus focal doré -->
+    <circle cx="248" cy="224" r="18" fill="url(#acAiGold)"/>
+    <circle cx="248" cy="224" r="6.5" fill="#141B17"/>
+
+    <!-- Socle architectural -->
+    <line x1="138" y1="406" x2="358" y2="406" stroke="url(#acAiFine)" stroke-width="4" stroke-linecap="round" stroke-opacity="0.65"/>
+
+    <!-- Étoile d'intelligence architecturale (4 branches) en haut à droite -->
+    <path d="M 380 74 C 383 108, 396 121, 430 124 C 396 127, 383 140, 380 174 C 377 140, 364 127, 330 124 C 364 121, 377 108, 380 74 Z" fill="url(#acAiGold)"/>
+    <!-- Micro-éclat satellite -->
+    <path d="M 426 168 C 427.5 180, 432 184.5, 444 186 C 432 187.5, 427.5 192, 426 204 C 424.5 192, 420 187.5, 408 186 C 420 184.5, 424.5 180, 426 168 Z" fill="#F5E5BF" opacity="0.92"/>
+  </g>
+</svg>

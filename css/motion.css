@@ -17,12 +17,16 @@ dialog[open]::backdrop { animation: t-fade-in var(--dur-3) var(--ease-out); }
 .client-tools[open] > .client-tool-fields { animation: t-panel-in var(--dur-3) var(--ease-out); transform-origin: top right; }
 
 /* ---------- Chiffres qui apparaissent (number pop-in), avec décalage --i ---------- */
-@keyframes t-pop { from { opacity: 0; transform: translateY(0.35em); filter: blur(2px); } }
-.t-pop { animation: t-pop var(--dur-4) var(--ease-out) both; animation-delay: calc(var(--i, 0) * 70ms); }
+@keyframes t-pop { from { opacity: 0; transform: translateY(0.28em); } }
+.t-pop { animation: t-pop var(--dur-3) var(--ease-out) both; animation-delay: calc(var(--i, 0) * 45ms); }
 
 /* ---------- Changement de message (text swap) ---------- */
 @keyframes t-swap { from { opacity: 0; transform: translateY(4px); } }
 .t-swap { animation: t-swap var(--dur-2) var(--ease-out); }
+
+/* ---------- Feedback tactile universel (boutons & actions) ---------- */
+.t-press { transition: transform var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out); }
+.t-press:active { transform: scale(0.98); }
 
 /* ---------- Succès : coche tracée ---------- */
 @keyframes t-draw { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
@@ -36,7 +40,7 @@ dialog[open]::backdrop { animation: t-fade-in var(--dur-3) var(--ease-out); }
   60% { transform: translateX(-2px); }
   80% { transform: translateX(2px); }
 }
-.t-shake { animation: t-shake 360ms var(--ease-in-out); }
+.t-shake { animation: t-shake 320ms var(--ease-in-out); }
 .t-error { color: var(--danger); }
 
 /* ---------- Squelettes de chargement des vignettes ---------- */
@@ -49,9 +53,9 @@ dialog[open]::backdrop { animation: t-fade-in var(--dur-3) var(--ease-out); }
 }
 .rg-thumb-wrap { background-color: var(--night-2); background-image: linear-gradient(100deg, transparent 30%, rgba(238, 240, 232, 0.08) 50%, transparent 70%); }
 
-/* ---------- Passage animé accueil → maquette (View Transitions entre documents) ---------- */
+/* ---------- Passage animé entre vues (View Transitions natives) ---------- */
 @media (prefers-reduced-motion: no-preference) {
   @view-transition { navigation: auto; }
-  ::view-transition-group(plan3d-hero) { animation-duration: var(--dur-4); animation-timing-function: var(--ease-in-out); }
-  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: var(--dur-3); }
+  ::view-transition-group(plan3d-hero) { animation-duration: var(--dur-4); animation-timing-function: var(--ease-out); }
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: var(--dur-2); }
 }

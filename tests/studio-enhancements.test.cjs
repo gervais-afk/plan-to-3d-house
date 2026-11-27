@@ -88,11 +88,11 @@ function makeSandbox(t) {
     for (const s of servers.reverse()) await s.close();
     fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
-  for (const f of ['serve.js', 'geminiClient.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'presentationStore.js', 'cabinetStore.js', 'variantsStore.js', 'revisionsStore.js', 'planchesStore.js', 'portal.html', 'accueil.html', 'studio.html', 'index.html', 'editor.html']) {
+  for (const f of ['serve.js', 'geminiClient.js', 'aiDesignEngine.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'presentationStore.js', 'cabinetStore.js', 'variantsStore.js', 'revisionsStore.js', 'planchesStore.js', 'portal.html', 'accueil.html', 'studio.html', 'index.html', 'editor.html']) {
     fs.copyFileSync(path.join(ROOT, f), path.join(root, f));
   }
   fs.mkdirSync(path.join(root, 'js'));
-  for (const f of ['variantState.js', 'data.js', 'coverImage.js', 'workspace.js', 'xlsxExport.js', 'technicalDrawings.js', 'variantComparator.js', 'apdDossier.js', 'meetingMode.js', 'bioclimaticAudit.js']) {
+  for (const f of ['variantState.js', 'data.js', 'coverImage.js', 'workspace.js', 'xlsxExport.js', 'technicalDrawings.js', 'variantComparator.js', 'apdDossier.js', 'meetingMode.js', 'bioclimaticAudit.js', 'deliverableGate.js', 'pdfIdentity.js', 'deliverableChecklist.js', 'codeCompliance.js']) {
     fs.copyFileSync(path.join(ROOT, 'js', f), path.join(root, 'js', f));
   }
   for (const slug of ['projet-a', 'projet-b']) {
@@ -929,6 +929,508 @@ test('Éditeur 2D/3D : Furniture2D, aimantation murs, modèles de départ, API b
     assert.ok(editorHtml.includes(token), `editor.html doit contenir ${token}`);
   }
 });
+
+// ============================================================================
+// 12. SUBLIMATION ATELIER (STUDIO.HTML) & IHM UNIVERSELLE (PALETTE ⌘K + RACCOURCIS)
+// ============================================================================
+test('Atelier & IHM universelle : typographie, transitions GPU-only et palette ⌘K sur les 4 vues', () => {
+  const tokensCss = fs.readFileSync(path.join(ROOT, 'css', 'tokens.css'), 'utf8');
+  assert.match(tokensCss, /--mono:/, 'tokens.css doit définir la police technique --mono');
+  assert.match(tokensCss, /font-optical-sizing:\s*auto/, 'tokens.css doit activer la taille optique serif');
+  assert.match(tokensCss, /text-wrap:\s*balance/, 'tokens.css doit équilibrer les titres');
+
+  const studioCss = fs.readFileSync(path.join(ROOT, 'css', 'studio.css'), 'utf8');
+  assert.doesNotMatch(studioCss, /transition:[^;]*letter-spacing/, 'studio.css ne doit pas animer letter-spacing (reflow)');
+  assert.match(studioCss, /prefers-reduced-motion:\s*reduce/, 'studio.css doit respecter prefers-reduced-motion');
+
+  const studioHtml = fs.readFileSync(path.join(ROOT, 'studio.html'), 'utf8');
+  assert.ok(!studioHtml.includes('studio-dot'), 'studio.html supprime la pastille décorative dans le logo');
+  assert.ok(studioHtml.includes('data-cmd-trigger="1"'), 'studio.html intègre le déclencheur ⌘K dans la barre 3 zones');
+  assert.ok(studioHtml.includes('id="resume-thumb"'), 'studio.html inclut la vignette aperçu du dernier dossier');
+  assert.ok(studioHtml.includes('id="btn-studio-index-nav"'), 'studio.html expose l’accès Index dans l’en-tête');
+
+  const ihmCss = fs.readFileSync(path.join(ROOT, 'css', 'ihm.css'), 'utf8');
+  const cmdJs = fs.readFileSync(path.join(ROOT, 'js', 'commandPalette.js'), 'utf8');
+  assert.match(ihmCss, /\.ihm-palette/, 'css/ihm.css doit styler la palette de commandes');
+  assert.match(cmdJs, /__archicamIHM/, 'js/commandPalette.js doit exposer l’API IHM globale');
+  assert.ok(!cmdJs.includes('innerHTML'), 'js/commandPalette.js doit construire le DOM sans innerHTML');
+
+  for (const page of ['studio.html', 'accueil.html', 'editor.html', 'index.html']) {
+    const html = fs.readFileSync(path.join(ROOT, page), 'utf8');
+    assert.ok(html.includes('css/ihm.css'), `${page} doit charger css/ihm.css`);
+    assert.ok(html.includes('js/commandPalette.js'), `${page} doit charger js/commandPalette.js`);
+  }
+});
+
+// ============================================================================
+// 13. ASSISTANT CHAT IA EN STREAMING (/api/ai/assistant + TIROIR + RBAC)
+// ============================================================================
+test('Assistant Chat IA : endpoint /api/ai/assistant, validation, RBAC portail et intégration 4 vues', async t => {
+  const geminiClient = require('../geminiClient.js');
+  assert.equal(typeof geminiClient.streamAssistantChat, 'function', 'geminiClient doit exporter streamAssistantChat');
+
+  const sb = makeSandbox(t);
+  const srv = await sb.start({ GEMINI_API_KEY: '' });
+
+  // 1) Message vide -> 400
+  const emptyRes = await fetch(`${srv.origin}/api/ai/assistant`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project: 'projet-a', messages: [] })
+  });
+  assert.equal(emptyRes.status, 400, 'Message vide doit retourner 400');
+
+  // 2) Slug malveillant -> 400
+  const badSlugRes = await fetch(`${srv.origin}/api/ai/assistant`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project: '../../etc/passwd', messages: [{ role: 'user', text: 'Bonjour' }] })
+  });
+  assert.equal(badSlugRes.status, 400, 'Slug traversal doit retourner 400');
+
+  // 3) Image invalide -> 400
+  const badImgRes = await fetch(`${srv.origin}/api/ai/assistant`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project: 'projet-a', messages: [{ role: 'user', text: 'Analyse' }], imageDataUrl: 'javascript:alert(1)' })
+  });
+  assert.equal(badImgRes.status, 400, 'ImageDataUrl non conforme doit retourner 400');
+
+  // 4) Sans GEMINI_API_KEY -> 401 explicite (aucune réponse factice)
+  const noKeyRes = await fetch(`${srv.origin}/api/ai/assistant`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project: 'projet-a', messages: [{ role: 'user', text: 'Quelle est la surface ?' }] })
+  });
+  assert.equal(noKeyRes.status, 401, 'Sans GEMINI_API_KEY le serveur doit renvoyer 401');
+
+  // 5) Contrôle d’accès Portail privé : un client invité sur projet-a ne peut pas interroger projet-b
+  const portalSrv = await sb.start({ PRIVATE_PORTAL: '1', PORTAL_PASSWORD: 'secret-test-password', PORTAL_INSECURE_LOCAL: '1', GEMINI_API_KEY: '' });
+  const loginRes = await fetch(`${portalSrv.origin}/api/portal/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin },
+    body: JSON.stringify({ password: 'secret-test-password' })
+  });
+  assert.equal(loginRes.status, 200);
+  const archCookie = loginRes.headers.get('set-cookie').split(';')[0];
+
+  const invRes = await fetch(`${portalSrv.origin}/api/portal/invitations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin, Cookie: archCookie },
+    body: JSON.stringify({ project: 'projet-a', role: 'read', validHours: 24, label: 'Client IA' })
+  });
+  const { token } = await invRes.json();
+  const redeem = await fetch(`${portalSrv.origin}/api/portal/accept`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin },
+    body: JSON.stringify({ token })
+  });
+  const clientCookie = redeem.headers.get('set-cookie').split(';')[0];
+
+  const crossProjectRes = await fetch(`${portalSrv.origin}/api/ai/assistant`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin, Cookie: clientCookie },
+    body: JSON.stringify({ project: 'autre-projet', messages: [{ role: 'user', text: 'Infos ?' }] })
+  });
+  assert.equal(crossProjectRes.status, 403, 'Un invité portail ne doit pas interroger un autre projet');
+
+  // 6) Validation /api/ai/assistant-tts (texte vide -> 400, sans clé -> 401)
+  const ttsEmpty = await fetch(`${srv.origin}/api/ai/assistant-tts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: '   ' })
+  });
+  assert.equal(ttsEmpty.status, 400, 'TTS texte vide doit retourner 400');
+
+  const ttsNoKey = await fetch(`${srv.origin}/api/ai/assistant-tts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: 'Présentation de la villa.' })
+  });
+  assert.equal(ttsNoKey.status, 401, 'TTS sans GEMINI_API_KEY doit retourner 401');
+
+  // 7) Sécurité DOM client, mode flottant déplaçable, actions agent, voix, import & export livrable
+  const aiJs = fs.readFileSync(path.join(ROOT, 'js', 'aiAssistant.js'), 'utf8');
+  const aiCss = fs.readFileSync(path.join(ROOT, 'css', 'aiAssistant.css'), 'utf8');
+  const cmdJs = fs.readFileSync(path.join(ROOT, 'js', 'commandPalette.js'), 'utf8');
+  assert.ok(!aiJs.includes('innerHTML'), 'js/aiAssistant.js ne doit jamais utiliser innerHTML');
+  assert.match(aiJs, /__archicamAssistant/, 'js/aiAssistant.js doit exposer window.__archicamAssistant');
+  assert.match(aiJs, /AGENT_ACTIONS/, 'js/aiAssistant.js doit définir la liste blanche AGENT_ACTIONS');
+  assert.match(aiJs, /bindDragging/, 'js/aiAssistant.js doit gérer le déplacement flottant');
+  assert.match(aiJs, /exportMessageDeliverable/, 'js/aiAssistant.js doit permettre l’export livrable .md');
+  assert.match(aiJs, /setupVoiceInput/, 'js/aiAssistant.js doit intégrer la dictée vocale');
+  assert.match(aiJs, /loadDroppedOrPickedImage/, 'js/aiAssistant.js doit gérer le glisser-déposer et l’import d’images');
+  assert.match(aiCss, /\.ai-chat-fab/, 'css/aiAssistant.css doit définir la bulle flottante .ai-chat-fab');
+  assert.match(aiCss, /\.ai-chat-drawer\.is-floating/, 'css/aiAssistant.css doit définir le mode flottant');
+  assert.match(aiCss, /\.ai-chat-drawer\.is-docked/, 'css/aiAssistant.css doit définir le mode ancré');
+  assert.match(cmdJs, /__archicamAssistant/, 'commandPalette.js doit relier l’Assistant IA');
+
+  for (const page of ['studio.html', 'accueil.html', 'editor.html', 'index.html']) {
+    const html = fs.readFileSync(path.join(ROOT, page), 'utf8');
+    assert.ok(html.includes('css/aiAssistant.css'), `${page} doit charger css/aiAssistant.css`);
+    assert.ok(html.includes('js/aiAssistant.js'), `${page} doit charger js/aiAssistant.js`);
+  }
+});
+
+// ============================================================================
+// 14. SÉCURISATION DES GÉNÉRATEURS DE DOCUMENTS PAR L’ASSISTANT (PORTE E, CARTOUCHE, RBAC)
+// ============================================================================
+test('Document safety endpoint : résout uniquement ce que le dispositif autorise, applique Porte E sans contournement, n’invente aucun champ légal et bloque les clients portail', async (t) => {
+  const sb = makeSandbox(t);
+  // Configure un profil cabinet réel dans la sandbox
+  fs.mkdirSync(path.join(sb.root, '.cabinet'), { recursive: true });
+  fs.writeFileSync(path.join(sb.root, '.cabinet', 'profile.json'), JSON.stringify({
+    name: 'Atelier Mbarga Architecture',
+    architect: 'Claire Mbarga, DPLG'
+  }, null, 2));
+
+  // Prépare un projet avec champs cartouche incomplets, tiret fictif, clientVisible=true sans client,
+  // et un rendu IA non conforme encore exposé dans catalogue/cahier
+  const projPath = path.join(sb.root, 'projects', 'projet-a', 'project.json');
+  const proj = JSON.parse(fs.readFileSync(projPath, 'utf8'));
+  proj.meta = {
+    name: 'Projet Sécurité Test',
+    slug: 'projet-a',
+    client: '',
+    clientVisible: true,
+    location: '—',
+    phase: '',
+    revision: '-',
+    issueDate: ''
+  };
+  fs.writeFileSync(projPath, JSON.stringify(proj, null, 2));
+
+  const genDir = path.join(sb.root, 'projects', 'projet-a', 'generated');
+  fs.mkdirSync(genDir, { recursive: true });
+  const manifestPath = path.join(genDir, 'manifest.json');
+  fs.writeFileSync(manifestPath, JSON.stringify({
+    version: 1,
+    items: [
+      {
+        id: 'photor-drift-01',
+        type: 'image',
+        label: 'Séjour IA non fidèle',
+        file: 'projects/projet-a/generated/images/photor-drift-01.png',
+        ai: true,
+        model: 'google/gemini-3.1-flash-image',
+        catalog: true,
+        book: true,
+        published: true,
+        fidelity: { version: 2, verdict: 'drift', score: 0.42 }
+      },
+      {
+        id: 'photor-ok-02',
+        type: 'image',
+        label: 'Façade IA vérifiée',
+        file: 'projects/projet-a/generated/images/photor-ok-02.png',
+        ai: true,
+        model: 'google/gemini-3.1-flash-image',
+        catalog: true,
+        book: true,
+        published: true,
+        fidelity: { version: 2, verdict: 'faithful', score: 0.96 }
+      }
+    ]
+  }, null, 2));
+
+  const srv = await sb.start();
+
+  // 1) Résolution de sécurité automatique via POST /api/projects/projet-a/document-safety
+  const res = await fetch(`${srv.origin}/api/projects/projet-a/document-safety`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'resolve' })
+  });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.ok, true);
+
+  // Vérifie synchronisation réelle du profil cabinet + assainissement des tirets + confidentialité client
+  assert.equal(data.meta.agency, 'Atelier Mbarga Architecture');
+  assert.equal(data.meta.architect, 'Claire Mbarga, DPLG');
+  assert.equal(data.meta.clientVisible, false, 'clientVisible doit être désactivé si aucun client');
+  // Vérifie qu’AUCUN champ administratif/légal n’a été inventé (Règle 1 PdfIdentity)
+  assert.equal(data.meta.client, '', 'Ne jamais inventer le maître d’ouvrage');
+  assert.equal(data.meta.location, '', 'Les tirets fictifs doivent être nettoyés, jamais remplacés par un lieu inventé');
+  assert.equal(data.meta.phase, '', 'Ne jamais inventer la phase en mode auto');
+  assert.equal(data.meta.revision, '', 'Ne jamais inventer un indice A en mode auto');
+  assert.equal(data.meta.issueDate, '', 'Ne jamais inventer une date d’émission en mode auto');
+  assert.ok(data.missingCartouche.includes("Maître d'ouvrage"));
+  assert.ok(data.missingCartouche.includes('Localisation'));
+
+  // Vérifie quarantaine Porte E sur le rendu IA non fidèle, sans contournement ni suppression du rendu fidèle
+  assert.deepEqual(data.porteE.quarantinedNow, ['Séjour IA non fidèle']);
+  assert.equal(data.porteE.eligibleAi, 1);
+  assert.equal(data.porteE.blockedAi, 1);
+
+  const savedManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const driftItem = savedManifest.items.find(i => i.id === 'photor-drift-01');
+  const okItem = savedManifest.items.find(i => i.id === 'photor-ok-02');
+  assert.equal(driftItem.catalog, false, 'Rendu IA non conforme retiré du catalogue');
+  assert.equal(driftItem.book, false, 'Rendu IA non conforme retiré du cahier');
+  assert.equal(driftItem.published, false, 'Rendu IA non conforme retiré de la publication');
+  assert.equal(driftItem.fidelityOverride, undefined, 'Porte E ne doit JAMAIS forger de fidelityOverride');
+  assert.equal(okItem.catalog, true, 'Rendu IA fidèle préservé dans le catalogue');
+  assert.equal(okItem.book, true, 'Rendu IA fidèle préservé dans le cahier');
+
+  // 2) RBAC Portail privé : un client invité reçoit 403 sur /api/projects/projet-a/document-safety
+  const portalSrv = await sb.start({ PRIVATE_PORTAL: '1', PORTAL_PASSWORD: 'secret-doc-password', PORTAL_INSECURE_LOCAL: '1' });
+  const loginRes = await fetch(`${portalSrv.origin}/api/portal/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin },
+    body: JSON.stringify({ password: 'secret-doc-password' })
+  });
+  const archCookie = loginRes.headers.get('set-cookie').split(';')[0];
+  const invRes = await fetch(`${portalSrv.origin}/api/portal/invitations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin, Cookie: archCookie },
+    body: JSON.stringify({ project: 'projet-a', role: 'comment', validHours: 24, label: 'Client Test' })
+  });
+  const { token } = await invRes.json();
+  const redeem = await fetch(`${portalSrv.origin}/api/portal/accept`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin },
+    body: JSON.stringify({ token })
+  });
+  const clientCookie = redeem.headers.get('set-cookie').split(';')[0];
+
+  const clientTry = await fetch(`${portalSrv.origin}/api/projects/projet-a/document-safety`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin, Cookie: clientCookie },
+    body: JSON.stringify({ mode: 'resolve' })
+  });
+  assert.equal(clientTry.status, 403, 'Un invité portail ne doit pas pouvoir muter les documents');
+
+  const archTry = await fetch(`${portalSrv.origin}/api/projects/projet-a/document-safety`, {
+    method: 'GET',
+    headers: { Origin: portalSrv.origin, Cookie: archCookie }
+  });
+  assert.equal(archTry.status, 200, 'L’architecte connecté peut auditer la sécurité documentaire');
+
+  // 2b) Mises à jour explicites du cartouche (commande explicite set_cartouche)
+  const explicitRes = await fetch(`${srv.origin}/api/projects/projet-a/document-safety`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      mode: 'resolve',
+      metaUpdates: { phase: 'APD', revision: 'B', issueDate: '2026-11-27', clientVisible: false }
+    })
+  });
+  assert.equal(explicitRes.status, 200);
+  const explicitData = await explicitRes.json();
+  assert.equal(explicitData.meta.phase, 'APD');
+  assert.equal(explicitData.meta.revision, 'B');
+  assert.equal(explicitData.meta.issueDate, '2026-11-27');
+  assert.equal(explicitData.meta.clientVisible, false);
+
+  // 3) Vérification côté client js/aiAssistant.js : logo ArchiCam AI, actions 4 catégories en liste blanche + zéro innerHTML
+  const aiJs = fs.readFileSync(path.join(ROOT, 'js', 'aiAssistant.js'), 'utf8');
+  assert.ok(fs.existsSync(path.join(ROOT, 'assets', 'archicam-ai-logo.svg')), 'assets/archicam-ai-logo.svg doit exister');
+  assert.ok(aiJs.includes('assets/archicam-ai-logo.svg'), 'js/aiAssistant.js doit afficher le logo ArchiCam AI');
+  assert.ok(!aiJs.includes('innerHTML'), 'js/aiAssistant.js ne doit jamais utiliser innerHTML');
+  assert.match(aiJs, /runAction:/, 'window.__archicamAssistant doit exposer runAction');
+  assert.match(aiJs, /listActions:/, 'window.__archicamAssistant doit exposer listActions');
+  for (const act of [
+    'resolve_document_safety', 'set_cartouche', 'generate_aps', 'generate_apd', 'generate_catalog',
+    'generate_tech_drawings', 'generate_estimate', 'export_ifc', 'export_gbxml', 'run_compliance',
+    'run_bioclimatic', 'run_structural', 'compose_planbook', 'print_planbook', 'export_json',
+    'open_project_info', 'open_deliverables', 'open_revisions', 'save_revision', 'compare_versions',
+    'open_variants', 'generate_variants', 'open_annotations', 'open_cabinet', 'set_ambiance',
+    'set_finish', 'set_solar_hour', 'toggle_solar_play', 'toggle_night', 'toggle_section_3d',
+    'toggle_explode_3d', 'toggle_timelapse_4d', 'toggle_clearances', 'toggle_plan_compare',
+    'toggle_present_mode', 'open_gallery', 'open_sublimate', 'export_video', 'export_ai_sequence',
+    'set_floor', 'select_tool', 'editor_undo', 'editor_redo', 'load_template',
+    'open_ai_read', 'open_vector_pdf', 'open_plan_cleanup'
+  ]) {
+    assert.ok(aiJs.includes(`${act}:`), `AGENT_ACTIONS doit contenir ${act}`);
+  }
+});
+
+// ============================================================================
+// 15. CONCEPTION GÉNÉRATIVE SANS PLAN, PATCH NATUREL, AUTO-FIX PMR/RE2020,
+//     LIVE SYNC, INJECTION ÉDITORIALE & VARIANTES A/B CHIFFRÉES + RBAC PORTAIL
+// ============================================================================
+test('Conception générative IA : Brief -> Plan 2D/3D, Patch naturel, Auto-fix PMR/RE2020, Éditorial, Variantes A/B et verrou RBAC Portail', async (t) => {
+  const box = makeSandbox(t);
+  const srv = await box.start();
+
+  // 1) Brief texte -> Plan 2D + 3D complet + sauvegarde en nouveau dossier
+  const genRes = await fetch(`${srv.origin}/api/ai/generate-plan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      brief: 'Villa plain-pied 140 m² à Douala, 3 chambres, séjour-cuisine, bureau et véranda',
+      saveAsNew: true
+    })
+  });
+  assert.equal(genRes.status, 200);
+  const genData = await genRes.json();
+  assert.equal(genData.ok, true);
+  assert.ok(genData.savedSlug, 'Doit sauvegarder le nouveau projet quand saveAsNew=true');
+  assert.ok(Array.isArray(genData.project.walls) && genData.project.walls.length >= 6);
+  assert.ok(Array.isArray(genData.project.rooms) && genData.project.rooms.length >= 5);
+  const genDoors = genData.project.walls.flatMap(w => (w.openings || []).filter(o => o.type === 'door'));
+  const genWins = genData.project.walls.flatMap(w => (w.openings || []).filter(o => o.type === 'window' || o.type === 'bay'));
+  assert.ok(genDoors.length >= 3 && genDoors.every(d => d.w >= 0.9), 'Toutes les portes générées doivent être PMR >= 0.90 m');
+  assert.ok(genWins.length >= 3, 'Le plan généré doit comporter des fenêtres extérieures');
+  assert.ok(fs.existsSync(path.join(box.root, 'projects', genData.savedSlug, 'project.json')));
+
+  // 2) Modification du plan en langage naturel
+  const patchRes = await fetch(`${srv.origin}/api/ai/plan-patch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      project: genData.project,
+      instruction: 'Passe la hauteur sous plafond à 3,10 m, ajoute une pergola de 4 x 3 m, agrandis les fenêtres de 25 % et renomme le séjour en Grand Salon'
+    })
+  });
+  assert.equal(patchRes.status, 200);
+  const patchData = await patchRes.json();
+  assert.equal(patchData.ok, true);
+  assert.equal(patchData.noOp, false);
+  assert.equal(patchData.patchedProject.config.wallHeight, 3.1);
+  assert.ok((patchData.patchedProject.canopies || []).length >= 1, 'La pergola doit être ajoutée');
+  assert.ok(patchData.patchedProject.rooms.some(r => r.name === 'Grand Salon'), 'La pièce séjour doit être renommée en Grand Salon');
+
+  // 3) Auto-fix PMR & RE2020 sur un dossier volontairement non conforme
+  const projAFile = path.join(box.root, 'projects', 'projet-a', 'project.json');
+  const badProj = JSON.parse(fs.readFileSync(projAFile, 'utf8'));
+  badProj.config = { ...(badProj.config || {}), wallHeight: 2.05 };
+  badProj.meta = { ...(badProj.meta || {}), client: 'Famille Kamga', phase: 'APD', revision: 'B', issueDate: '2026-11-27' };
+  badProj.walls[0].openings = [{ type: 'door', at: 2.0, w: 0.72, h: 2.04, level: 0 }];
+  badProj.walls[1].openings = [{ type: 'window', at: 2.0, w: 0.6, h: 0.8, sill: 1.0, level: 0 }];
+  fs.writeFileSync(projAFile, JSON.stringify(badProj, null, 2));
+
+  const fixRes = await fetch(`${srv.origin}/api/projects/projet-a/compliance-autofix`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apply: true })
+  });
+  assert.equal(fixRes.status, 200);
+  const fixData = await fixRes.json();
+  assert.equal(fixData.ok, true);
+  assert.equal(fixData.persisted, true);
+  assert.ok(fixData.fixedCount >= 2, 'Doit corriger HSP, porte étroite et/ou ratio vitrage');
+  assert.ok(fixData.after.wallHeight >= 2.5, 'HSP doit être relevée à >= 2.50 m');
+  assert.equal(fixData.after.narrowDoors, 0, 'Aucune porte ne doit rester < 0.90 m');
+  assert.ok(fixData.after.glazingRatioPct >= 16.7, 'Le ratio vitrage RE2020 doit atteindre >= 16.7 %');
+
+  // 4) Rédaction & injection éditoriale (sans toucher aux champs légaux du cartouche)
+  const edPrev = await fetch(`${srv.origin}/api/projects/projet-a/editorial-brief`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'preview' })
+  });
+  assert.equal(edPrev.status, 200);
+  const edPrevData = await edPrev.json();
+  assert.equal(edPrevData.ok, true);
+  assert.equal(edPrevData.applied, false);
+  assert.ok(edPrevData.draft.subtitle && edPrevData.draft.parti && edPrevData.draft.description);
+
+  const edApply = await fetch(`${srv.origin}/api/projects/projet-a/editorial-brief`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'apply', draft: edPrevData.draft })
+  });
+  assert.equal(edApply.status, 200);
+  const savedAfterEd = JSON.parse(fs.readFileSync(projAFile, 'utf8'));
+  assert.equal(savedAfterEd.meta.subtitle, edPrevData.draft.subtitle);
+  assert.equal(savedAfterEd.meta.parti, edPrevData.draft.parti);
+  assert.equal(savedAfterEd.meta.description, edPrevData.draft.description);
+  assert.equal(savedAfterEd.meta.client, 'Famille Kamga', 'Le maître d’ouvrage ne doit jamais être altéré');
+  assert.equal(savedAfterEd.meta.phase, 'APD', 'La phase légale ne doit jamais être altérée');
+  assert.equal(savedAfterEd.meta.revision, 'B', 'L’indice légal ne doit jamais être altéré');
+
+  // 5) Création automatique des Variantes A / B chiffrées
+  const varRes = await fetch(`${srv.origin}/api/projects/projet-a/generate-ab-variants`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
+  });
+  assert.equal(varRes.status, 200);
+  const varData = await varRes.json();
+  assert.equal(varData.ok, true);
+  assert.equal(varData.variantA.slot, 'A');
+  assert.equal(varData.variantB.slot, 'B');
+  assert.ok(varData.variantB.metrics.budgetFCFA > varData.variantA.metrics.budgetFCFA);
+  const listVarRes = await fetch(`${srv.origin}/api/projects/projet-a/variants`);
+  const listVarData = await listVarRes.json();
+  assert.ok(listVarData.variants && listVarData.variants.A && listVarData.variants.B, 'Les variantes A et B doivent être stockées dans variantsStore');
+
+  // 6) RBAC Portail privé : un client invité reçoit 403 sur les 5 nouveaux endpoints
+  const portalSrv = await box.start({ PRIVATE_PORTAL: '1', PORTAL_PASSWORD: 'secret-test-password', PORTAL_INSECURE_LOCAL: '1' });
+  const loginRes = await fetch(`${portalSrv.origin}/api/portal/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin },
+    body: JSON.stringify({ password: 'secret-test-password' })
+  });
+  const archCookie = loginRes.headers.get('set-cookie').split(';')[0];
+  const invRes = await fetch(`${portalSrv.origin}/api/portal/invitations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin, Cookie: archCookie },
+    body: JSON.stringify({ project: 'projet-a', role: 'comment', validHours: 4, label: 'Client Test IA' })
+  });
+  const { token } = await invRes.json();
+  const redeemRes = await fetch(`${portalSrv.origin}/api/portal/accept`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin },
+    body: JSON.stringify({ token })
+  });
+  const clientCookie = redeemRes.headers.get('set-cookie').split(';')[0];
+
+  for (const [ep, payload] of [
+    ['/api/ai/generate-plan', { brief: 'Villa 120 m2' }],
+    ['/api/ai/plan-patch', { slug: 'projet-a', instruction: 'Hauteur 3m' }],
+    ['/api/projects/projet-a/compliance-autofix', { apply: false }],
+    ['/api/projects/projet-a/editorial-brief', { mode: 'preview' }],
+    ['/api/projects/projet-a/generate-ab-variants', {}]
+  ]) {
+    const r = await fetch(`${portalSrv.origin}${ep}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: portalSrv.origin, Cookie: clientCookie },
+      body: JSON.stringify(payload)
+    });
+    assert.equal(r.status, 403, `Un invité portail doit être bloqué (403) sur ${ep}`);
+  }
+
+  // 6b) Validation cartouche explicite (jalon étape 5 de la chaîne complète) : accepte client/localisation réels, rejette les placeholders
+  const explicitCartoucheRes = await fetch(`${srv.origin}/api/projects/projet-a/document-safety`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      mode: 'resolve',
+      metaUpdates: { client: 'M. & Mme Ndongo', location: 'Douala — Bonapriso', phase: 'APS', revision: 'A', issueDate: '2026-11-27', clientVisible: true }
+    })
+  });
+  assert.equal(explicitCartoucheRes.status, 200);
+  const explicitCartouche = await explicitCartoucheRes.json();
+  assert.equal(explicitCartouche.meta.client, 'M. & Mme Ndongo');
+  assert.equal(explicitCartouche.meta.location, 'Douala — Bonapriso');
+  assert.equal(explicitCartouche.meta.phase, 'APS');
+  assert.equal(explicitCartouche.meta.revision, 'A');
+  assert.equal(explicitCartouche.meta.clientVisible, true);
+
+  // 7) Vérification Live Sync, Orchestrateur Chaîne complète & nouvelles actions côté client js/aiAssistant.js
+  const aiJs = fs.readFileSync(path.join(ROOT, 'js', 'aiAssistant.js'), 'utf8');
+  const premJs = fs.readFileSync(path.join(ROOT, 'js', 'editorPremium.js'), 'utf8');
+  assert.ok(!aiJs.includes('innerHTML'), 'js/aiAssistant.js ne doit jamais utiliser innerHTML');
+  assert.ok(aiJs.includes('ctx.liveProject'), 'js/aiAssistant.js doit envoyer liveProject pour le Live Sync');
+  assert.ok(aiJs.includes('applyProjectToEditorWithUndo'), 'js/aiAssistant.js doit préserver Ctrl+Z lors du chargement de plan');
+  assert.ok(aiJs.includes('openStudioPipelineCard'), 'js/aiAssistant.js doit exposer l’orchestrateur de chaîne complète');
+  assert.ok(aiJs.includes('EditorPremiumAPI.generateAPS'), 'La chaîne complète doit piloter l’APS Auto PDF');
+  assert.ok(aiJs.includes('XlsxExport.downloadXlsx'), 'La chaîne complète doit piloter le Devis & Métré FCFA (.xlsx)');
+  assert.ok(aiJs.includes('PlanBook.exportBook'), 'La chaîne complète doit piloter le Cahier de plans A3 PDF');
+  assert.ok(aiJs.includes('EditorPremiumAPI.exportCatalog'), 'La chaîne complète doit piloter le Catalogue Premium PDF');
+  assert.ok(premJs.includes('window.EditorPremiumAPI'), 'js/editorPremium.js doit exposer window.EditorPremiumAPI');
+  for (const act of [
+    'run_studio_pipeline', 'generate_plan_brief', 'confirm_load_generated_plan', 'apply_plan_patch', 'confirm_apply_plan_patch',
+    'autofix_compliance', 'confirm_apply_compliance_fix', 'inject_editorial_brief',
+    'confirm_inject_editorial_brief', 'create_ab_variants'
+  ]) {
+    assert.ok(aiJs.includes(`${act}:`), `AGENT_ACTIONS doit contenir ${act}`);
+  }
+});
+
 
 
 

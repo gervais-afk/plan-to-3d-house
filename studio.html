@@ -10,9 +10,14 @@
   <title>ArchiCam Studio</title>
   <link rel="icon" type="image/svg+xml" href="assets/archicam-icon.svg">
   <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/motion.css">
+  <link rel="stylesheet" href="css/ihm.css">
+  <link rel="stylesheet" href="css/aiAssistant.css">
   <link rel="preload" as="image" href="assets/studio/plan-villa-a-rdc.jpg">
   <link rel="stylesheet" href="css/studio.css">
   <script src="js/woodGrain.js" defer></script>
+  <script src="js/commandPalette.js" defer></script>
+  <script src="js/aiAssistant.js" defer></script>
   <script src="js/studio.js" defer></script>
 </head>
 <body class="studio">
@@ -20,32 +25,37 @@
 
   <!-- Fil de bois généré (js/woodGrain.js) -->
   <div class="studio-wood" id="studio-wood" aria-hidden="true"></div>
-  <!-- Feuille d'atelier : cadre, repères de coupe -->
+  <!-- Feuille d'atelier : cadre et repères de coupe -->
   <div class="studio-sheet" aria-hidden="true">
     <span class="mark mark-tl"></span><span class="mark mark-tr"></span>
     <span class="mark mark-bl"></span><span class="mark mark-br"></span>
   </div>
 
+  <!-- En-tête 3 zones : Identité | Navigation calme | Action rapide ⌘K -->
   <header class="studio-head">
     <a class="studio-brand" href="./" aria-label="ArchiCam Studio">
       <img src="assets/archicam-icon.svg" alt="" width="34" height="34">
-      <span class="studio-wordmark">Archicam<span class="studio-dot" aria-hidden="true"></span><small>Studio</small></span>
+      <span class="studio-wordmark">ArchiCam <small>Studio</small></span>
     </a>
-    <nav class="studio-top-links" aria-label="Accès cabinet">
+    <nav class="studio-top-links" aria-label="Accès atelier">
       <button type="button" class="studio-top-link" id="btn-studio-cabinet" aria-haspopup="dialog" aria-controls="studio-cabinet-dlg">Mon cabinet</button>
       <a class="studio-top-link" href="portal.html">Portail client</a>
-      <span class="studio-motto">Atelier numérique d’architecture</span>
+      <button type="button" class="studio-top-link" id="btn-studio-index-nav" aria-haspopup="dialog" aria-controls="studio-index">Index des dossiers</button>
     </nav>
+    <div class="studio-head-actions">
+      <button type="button" class="ihm-cmd-trigger" data-cmd-trigger="1" aria-label="Rechercher un dossier ou une action">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="16.65" y1="16.65" x2="21" y2="21"></line></svg>
+        <span>Rechercher</span>
+        <kbd class="ihm-kbd">⌘K</kbd>
+      </button>
+    </div>
   </header>
 
   <main class="studio-main">
     <section class="studio-hero" aria-labelledby="studio-title">
-      <p class="studio-kicker"><span aria-hidden="true"></span>Le cockpit architectural immersif</p>
+      <p class="studio-kicker"><span aria-hidden="true"></span>Atelier numérique d’architecture</p>
       <h1 id="studio-title">Du trait<br><em>à l’espace.</em></h1>
-      <p class="studio-lead">Plans cotés, maquette 3D, ambiances et dossiers d’agence&nbsp;: chaque projet de l’atelier se dessine, se visite et se décide ici.</p>
-      <ul class="studio-crafts" aria-label="Savoir-faire de l’atelier">
-        <li>Plans cotés</li><li>Maquette 3D</li><li>Ambiances IA</li><li>Dossiers A3</li><li>Films HD</li>
-      </ul>
+      <p class="studio-lead">Plans cotés, maquette 3D temps réel, ambiances IA et dossiers A3&nbsp;: chaque projet de l’atelier se dessine, se visite et se décide dans un seul espace.</p>
     </section>
 
     <!-- Tirages encadrés : plans ultra-réalistes fidèles, planches complètes et aperçu film HD -->
@@ -66,17 +76,19 @@
         </div>
         <span class="print-progress-track" aria-hidden="true"><span class="print-progress" id="print-progress"></span></span>
       </div>
+
       <figcaption class="print-caption">
         <span class="print-ref" id="print-ref">PL. 01</span>
         <span class="print-title" id="print-title" aria-live="polite">Plan RDC · Villa à galeries</span>
         <span class="print-controls" role="group" aria-label="Navigation des tirages">
-          <button type="button" id="print-prev" aria-label="Tirage précédent">←</button>
+          <button type="button" id="print-prev" aria-label="Tirage précédent" title="Planche précédente (←)">←</button>
           <span class="print-counter" id="print-counter">01 / 07</span>
-          <button type="button" id="print-next" aria-label="Tirage suivant">→</button>
-          <button type="button" id="print-toggle" aria-pressed="false" aria-label="Mettre en pause le défilement" title="Pause / Lecture">❚❚</button>
-          <button type="button" id="print-expand" aria-label="Agrandir le tirage en plein écran" title="Voir en grand">⤢</button>
+          <button type="button" id="print-next" aria-label="Tirage suivant" title="Planche suivante (→)">→</button>
+          <button type="button" id="print-toggle" aria-pressed="false" aria-label="Mettre en pause le défilement" title="Pause / Lecture (Espace)">❚❚</button>
+          <button type="button" id="print-expand" aria-label="Agrandir le tirage en plein écran" title="Plein écran (F)">⤢</button>
         </span>
       </figcaption>
+
       <div class="print-plates" id="print-plates" role="group" aria-label="Sélection directe d’une planche">
         <button type="button" data-slide="0" aria-pressed="true">RDC I</button>
         <button type="button" data-slide="1" aria-pressed="false">R+1 I</button>
@@ -86,45 +98,69 @@
         <button type="button" data-slide="5" aria-pressed="false">RDC II</button>
         <button type="button" data-slide="6" aria-pressed="false">Planche II</button>
       </div>
+
       <div class="print-meta-row">
-        <p class="print-note">Planches d’origine et tirages ultra-réalistes fidèles aux plans · clic pour agrandir</p>
+        <p class="print-note">Tirages d’origine et rendus fidèles aux plans · survol pour loupe, clic pour agrandir</p>
         <a class="print-project-link" id="print-project-link" href="editor.html" hidden>Voir ce projet <span aria-hidden="true">↗</span></a>
       </div>
     </figure>
 
     <nav class="studio-doors" id="studio-doors" aria-label="Accès à l’atelier">
       <div class="studio-resume" id="studio-resume" hidden>
-        <div class="resume-info">
-          <span class="resume-kicker">Reprendre le dernier dossier</span>
-          <a class="resume-name" id="resume-link" href="#">—</a>
-          <span class="resume-meta" id="resume-meta"></span>
+        <div class="resume-main">
+          <span class="resume-thumb" id="resume-thumb" aria-hidden="true"></span>
+          <div class="resume-info">
+            <span class="resume-kicker">Dernier dossier actif</span>
+            <a class="resume-name" id="resume-link" href="#">—</a>
+            <span class="resume-meta" id="resume-meta"></span>
+          </div>
         </div>
         <div class="resume-actions">
-          <a id="resume-edit" href="#">Éditeur 2D</a>
-          <a id="resume-visit" href="#">Visite 3D</a>
-          <a id="resume-meeting" href="#">Réunion client</a>
+          <a id="resume-edit" class="resume-btn-primary" href="#">Éditeur 2D</a>
+          <a id="resume-visit" class="resume-btn-secondary" href="#">Visite 3D</a>
+          <a id="resume-meeting" class="resume-btn-secondary" href="#">Réunion client</a>
         </div>
       </div>
-      <button type="button" class="studio-door" id="door-open" aria-haspopup="dialog" aria-controls="studio-index">
-        <span class="door-num">01</span>
-        <span class="door-title">Ouvrir un projet</span>
-        <span class="door-desc">Reprendre un dossier de l’atelier</span>
-        <span class="door-arrow" aria-hidden="true">→</span>
-      </button>
-      <a class="studio-door" href="editor.html">
-        <span class="door-num">02</span>
-        <span class="door-title">Nouveau projet</span>
-        <span class="door-desc">Importer un plan ou le dessiner</span>
-        <span class="door-arrow" aria-hidden="true">↗</span>
-      </a>
+
+      <div class="studio-door-list">
+        <button type="button" class="studio-door" id="door-open" aria-haspopup="dialog" aria-controls="studio-index">
+          <span class="door-num">01</span>
+          <span class="door-body">
+            <span class="door-title">Ouvrir un projet</span>
+            <span class="door-desc">Reprendre un dossier enregistré de l’atelier</span>
+          </span>
+          <span class="door-right">
+            <kbd class="ihm-kbd door-kbd" aria-hidden="true">O</kbd>
+            <span class="door-arrow" aria-hidden="true">→</span>
+          </span>
+        </button>
+
+        <a class="studio-door" href="editor.html">
+          <span class="door-num">02</span>
+          <span class="door-body">
+            <span class="door-title">Nouveau projet</span>
+            <span class="door-desc">Importer un plan PDF / image ou dessiner sur mesure</span>
+          </span>
+          <span class="door-right">
+            <kbd class="ihm-kbd door-kbd" aria-hidden="true">N</kbd>
+            <span class="door-arrow" aria-hidden="true">↗</span>
+          </span>
+        </a>
+      </div>
     </nav>
   </main>
 
   <footer class="studio-foot">
+    <p class="studio-shortcuts-hint" aria-label="Raccourcis clavier disponibles">
+      <span><kbd class="ihm-kbd">←</kbd><kbd class="ihm-kbd">→</kbd> Planches</span>
+      <span><kbd class="ihm-kbd">⌘K</kbd> Palette</span>
+      <span><kbd class="ihm-kbd">⌘J</kbd> Assistant IA</span>
+      <button type="button" class="studio-help-link" id="btn-studio-shortcuts"><kbd class="ihm-kbd">?</kbd> Raccourcis</button>
+    </p>
     <dl class="studio-cartouche" aria-label="Cartouche">
-      <div><dt>Planche</dt><dd>00</dd></div>
+      <div><dt>Planche</dt><dd class="cartouche-mono">00</dd></div>
       <div><dt>Objet</dt><dd id="studio-cabinet-cartouche">Entrée de l’atelier</dd></div>
-      <div><dt>Édition</dt><dd id="studio-year">MMXXVI</dd></div>
+      <div><dt>Édition</dt><dd class="cartouche-mono" id="studio-year">MMXXVI</dd></div>
     </dl>
   </footer>
 

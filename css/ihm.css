@@ -1,0 +1,364 @@
+/*
+ * ARCHICAM STUDIO — COUCHE IHM UNIVERSELLE (css/ihm.css)
+ * Palette de commandes (⌘K / Ctrl+K), guide raccourcis (?), touches <kbd>,
+ * cohérence tactile et transitions GPU partagées par toutes les vues de l'app.
+ */
+
+/* ---------- Touches clavier <kbd> architecturales ---------- */
+.ihm-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.45em;
+  height: 1.55em;
+  padding: 0 5px;
+  border: 1px solid var(--rule, #cdcec1);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--surface, #FCFBF8);
+  color: var(--ink-2, #46504A);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* ---------- Bouton déclencheur ⌘K unifié (injecté ou natif dans les barres) ---------- */
+.ihm-cmd-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--rule, #cdcec1);
+  border-radius: 7px;
+  background: var(--surface, #FCFBF8);
+  color: var(--ink-2, #46504A);
+  font-family: var(--sans, Manrope, system-ui, sans-serif);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: border-color var(--dur-2, 180ms) var(--ease-out),
+              color var(--dur-2, 180ms) var(--ease-out),
+              background-color var(--dur-2, 180ms) var(--ease-out),
+              transform var(--dur-1, 110ms) var(--ease-out);
+}
+.ihm-cmd-trigger:hover,
+.ihm-cmd-trigger:focus-visible {
+  border-color: var(--accent, #B38646);
+  color: var(--ink, #161C19);
+  background: var(--paper, #F7F5F0);
+}
+.ihm-cmd-trigger:active { transform: scale(0.98); }
+.ihm-cmd-trigger svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+
+/* Variante compacte dans les barres sombres (éditeur / cockpit 3D) */
+.ihm-cmd-trigger--compact {
+  height: 30px;
+  padding: 0 8px 0 9px;
+  font-size: 11.5px;
+  border-radius: 6px;
+}
+
+/* Bouton flottant discret si aucune barre hôte n'est présente */
+.ihm-cmd-fab {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 60;
+  box-shadow: var(--shadow-lift, 0 12px 28px -12px rgba(22, 28, 25, 0.2));
+}
+
+/* ---------- Palette de commandes (⌘K / Ctrl+K) ---------- */
+.ihm-palette {
+  width: min(620px, calc(100vw - 24px));
+  max-width: 620px;
+  max-height: min(76vh, 640px);
+  margin: min(11vh, 96px) auto auto;
+  padding: 0;
+  border: 1px solid rgba(179, 134, 70, 0.42);
+  border-radius: 12px;
+  background: var(--surface, #FCFBF8);
+  color: var(--ink, #161C19);
+  box-shadow: 0 32px 84px -24px rgba(16, 22, 18, 0.46), 0 4px 14px rgba(16, 22, 18, 0.12);
+  overflow: hidden;
+  font-family: var(--sans, Manrope, system-ui, sans-serif);
+}
+.ihm-palette[open] {
+  display: flex;
+  flex-direction: column;
+  animation: ihm-pop var(--dur-2, 180ms) var(--ease-out) both;
+}
+.ihm-palette::backdrop {
+  background: rgba(16, 22, 18, 0.48);
+  backdrop-filter: blur(5px);
+  animation: ihm-fade var(--dur-2, 180ms) var(--ease-out) both;
+}
+@keyframes ihm-pop {
+  from { opacity: 0; transform: translateY(-8px) scale(0.985); }
+}
+@keyframes ihm-fade {
+  from { opacity: 0; }
+}
+
+.ihm-palette-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--rule-soft, #e0dfd3);
+  background: var(--surface, #FCFBF8);
+}
+.ihm-palette-icon {
+  width: 17px;
+  height: 17px;
+  stroke: var(--accent-ink, #7a5a20);
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+.ihm-palette-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink, #161C19);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  outline: none;
+}
+.ihm-palette-input::placeholder { color: var(--muted, #5f6a63); }
+.ihm-palette-esc {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ihm-palette-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  overscroll-behavior: contain;
+}
+.ihm-palette-group {
+  margin: 10px 8px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted, #5f6a63);
+  letter-spacing: 0.04em;
+}
+.ihm-palette-group:first-child { margin-top: 2px; }
+
+.ihm-palette-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink, #161C19);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-1, 110ms) var(--ease-out),
+              border-color var(--dur-1, 110ms) var(--ease-out);
+}
+.ihm-palette-item:hover,
+.ihm-palette-item[aria-selected="true"] {
+  background: var(--paper-2, #EEEAE2);
+  border-color: rgba(179, 134, 70, 0.32);
+}
+.ihm-palette-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--rule-soft, #e0dfd3);
+  background: var(--paper, #F7F5F0);
+  color: var(--accent-ink, #7a5a20);
+  display: grid;
+  place-items: center;
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  font-weight: 700;
+  overflow: hidden;
+  flex: none;
+}
+.ihm-palette-badge img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.ihm-palette-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.ihm-palette-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink, #161C19);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ihm-palette-sub {
+  font-size: 11.5px;
+  color: var(--muted, #5f6a63);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ihm-palette-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted, #5f6a63);
+  white-space: nowrap;
+}
+.ihm-palette-empty {
+  padding: 28px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted, #5f6a63);
+}
+
+.ihm-palette-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--rule-soft, #e0dfd3);
+  background: var(--paper, #F7F5F0);
+  font-size: 11px;
+  color: var(--muted, #5f6a63);
+}
+.ihm-palette-hints {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ihm-palette-hints span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ---------- Guide des raccourcis clavier (?) ---------- */
+.ihm-shortcuts-dlg {
+  width: min(540px, calc(100vw - 24px));
+  max-width: 540px;
+  padding: 24px 26px;
+  border: 1px solid rgba(179, 134, 70, 0.42);
+  border-radius: 12px;
+  background: var(--surface, #FCFBF8);
+  color: var(--ink, #161C19);
+  box-shadow: 0 32px 84px -24px rgba(16, 22, 18, 0.44);
+  font-family: var(--sans, Manrope, system-ui, sans-serif);
+}
+.ihm-shortcuts-dlg::backdrop {
+  background: rgba(16, 22, 18, 0.45);
+  backdrop-filter: blur(4px);
+}
+.ihm-shortcuts-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rule-soft, #e0dfd3);
+}
+.ihm-shortcuts-head h2 {
+  margin: 0;
+  font-family: var(--serif, Georgia, serif);
+  font-size: 1.55rem;
+  font-weight: 500;
+}
+.ihm-shortcuts-head p {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--muted, #5f6a63);
+}
+.ihm-shortcuts-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--rule, #cdcec1);
+  border-radius: 50%;
+  background: none;
+  color: var(--ink, #161C19);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ihm-shortcuts-close:hover { border-color: var(--accent, #B38646); color: var(--accent-ink, #7a5a20); }
+.ihm-shortcuts-grid {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.ihm-shortcuts-grid li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--rule-soft, #e0dfd3);
+  font-size: 13px;
+}
+.ihm-shortcuts-grid li:last-child { border-bottom: 0; }
+.ihm-shortcuts-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ---------- Mode sombre automatique pour les pages auto ---------- */
+@media (prefers-color-scheme: dark) {
+  :root[data-scheme="auto"] .ihm-palette,
+  :root[data-scheme="auto"] .ihm-shortcuts-dlg {
+    background: #1b221d;
+    color: #eef0e8;
+    border-color: rgba(216, 199, 160, 0.28);
+  }
+  :root[data-scheme="auto"] .ihm-palette-head { background: #1b221d; }
+  :root[data-scheme="auto"] .ihm-palette-foot { background: #141a16; }
+  :root[data-scheme="auto"] .ihm-palette-item:hover,
+  :root[data-scheme="auto"] .ihm-palette-item[aria-selected="true"] { background: #26312a; }
+  :root[data-scheme="auto"] .ihm-palette-badge { background: #141a16; color: #dcc28c; }
+  :root[data-scheme="auto"] .ihm-kbd { background: #141a16; color: #c9d0c5; border-color: #34403a; }
+  :root[data-scheme="auto"] .ihm-cmd-trigger { background: #1f2822; color: #eef0e8; border-color: #34403a; }
+}
+
+@media (max-width: 600px) {
+  .ihm-cmd-trigger .ihm-kbd { display: none; }
+  .ihm-palette-foot { display: none; }
+}

@@ -410,6 +410,11 @@
   // DÉMARRAGE
   // =====================================================================
 
+  window.EditorPremiumAPI = {
+    generateAPS: handleGenerateAPS,
+    exportCatalog: exportPremiumPDF
+  };
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

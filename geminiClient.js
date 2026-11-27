@@ -140,6 +140,71 @@ async function generateSpeechWav({ text, voiceName = 'Charon', style = 'Voix d�
   return { wavBuffer, voiceName: safeVoice, model: TTS_MODEL };
 }
 
+async function streamAssistantChat({ messages = [], systemInstruction = '', imageDataUrl = '', onChunk = null, rootDir = __dirname }) {
+  const ai = await getClient(rootDir);
+  const sanitized = (Array.isArray(messages) ? messages : [])
+    .slice(-24)
+    .map(m => ({
+      role: m && m.role === 'model' ? 'model' : 'user',
+      text: String(m && (m.text ?? m.content) || '').trim().slice(0, 4000)
+    }))
+    .filter(m => m.text.length > 0);
+
+  if (!sanitized.length) {
+    const err = new Error('Message utilisateur requis.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const contents = sanitized.map(m => ({
+    role: m.role,
+    parts: [{ text: m.text }]
+  }));
+
+  if (imageDataUrl) {
+    const match = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/i.exec(String(imageDataUrl).trim());
+    if (match) {
+      let targetIdx = -1;
+      for (let i = contents.length - 1; i >= 0; i--) {
+        if (contents[i].role === 'user') { targetIdx = i; break; }
+      }
+      if (targetIdx >= 0) {
+        contents[targetIdx].parts.unshift({
+          inlineData: {
+            mimeType: match[1].toLowerCase(),
+            data: match[2]
+          }
+        });
+      }
+    }
+  }
+
+  const config = {};
+  if (systemInstruction) config.systemInstruction = String(systemInstruction).slice(0, 12000);
+
+  const stream = await ai.models.generateContentStream({
+    model: TEXT_MODEL,
+    contents,
+    ...(Object.keys(config).length ? { config } : {})
+  });
+
+  let fullText = '';
+  for await (const chunk of stream) {
+    const piece = chunk && typeof chunk.text === 'string' ? chunk.text : '';
+    if (piece) {
+      fullText += piece;
+      if (typeof onChunk === 'function') onChunk(piece);
+    }
+  }
+
+  if (!fullText.trim()) {
+    const err = new Error('Réponse vide retournée par Gemini.');
+    err.statusCode = 502;
+    throw err;
+  }
+  return { text: fullText, model: TEXT_MODEL };
+}
+
 module.exports = {
   TEXT_MODEL,
   TTS_MODEL,
@@ -147,5 +212,6 @@ module.exports = {
   resolveGeminiKey,
   isConfigured,
   generateText,
-  generateSpeechWav
+  generateSpeechWav,
+  streamAssistantChat
 };
