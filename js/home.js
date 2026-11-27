@@ -168,13 +168,29 @@ window.ProjectCoverReady = (() => {
     else startCoverAutoplay();
   }
 
-  /** Détecte génériquement les plans ultra-réalistes, les coupes/toitures existantes du projet et la planche complète (sans cas particulier par slug). */
+  /** Nomme le type de planche d'après son intitulé, sans cas particulier par slug. */
+  function plateKind(title) {
+    const label = String(title || '');
+    if (/\btoiture\b/i.test(label)) return 'Plan de toiture';
+    if (/\bcoupe\b/i.test(label)) return 'Coupe 2D';
+    if (/\bfa[çc]ade\b/i.test(label)) return 'Façade';
+    if (/\bmasse\b/i.test(label)) return 'Plan de masse';
+    if (/\b(étage|etage|R\+\d)\b/i.test(label)) return 'Plan d’étage';
+    if (/\b(rez[- ]de[- ]chaussée|rdc)\b/i.test(label)) return 'Plan RDC';
+    if (/\b(fondation|coffrage|structure)\b/i.test(label)) return 'Plan technique';
+    return 'Planche du dossier';
+  }
+
+  /**
+   * Détecte génériquement les planches réellement présentes dans le dossier du projet
+   * (`edition.sheets`) et la planche complète de synthèse. Aucun nom de fichier n'est codé
+   * en dur : une planche absente est simplement ignorée (vérification HEAD ci-dessous),
+   * pour ne jamais afficher une couverture cassée.
+   */
   async function loadShowcasePlates(slug, projectRecord, signal) {
     if (!slug || !slugPattern.test(slug)) return [];
-    const existingTechSheets = (projectRecord?.edition?.sheets || [])
-      .filter(sheet => /\b(coupe|toiture)\b/i.test(String(sheet?.title || '')))
+    const existingSheets = (projectRecord?.edition?.sheets || [])
       .map(sheet => {
-        const isRoof = /\btoiture\b/i.test(String(sheet.title || ''));
         const previewPath = typeof sheet.preview === 'string' ? sheet.preview : '';
         const prefix = `projects/${slug}/planches/`;
         // Priorise la planche originale haute définition (planches/edition-art/<fichier>) quand elle existe
@@ -184,17 +200,15 @@ window.ProjectCoverReady = (() => {
         return {
           file: originalHiRes || sheet.art || previewPath,
           fallback: previewPath || sheet.art || '',
-          label: `${sheet.title} — planche d’origine`,
-          kind: isRoof ? 'Plan de toiture' : 'Coupe 2D',
+          label: `${sheet.title || 'Planche'} — planche d’origine`,
+          kind: plateKind(sheet.title),
           fit: 'contain'
         };
       })
       .filter(item => item.file);
 
     const candidates = [
-      { file: `projects/${slug}/planches/edition-art/plan-rdc-ultrareal.jpg`, label: 'Plan RDC ultra-réaliste (fidèle au plan source)', kind: 'Plan 2D ultra-réaliste', fit: 'contain' },
-      { file: `projects/${slug}/planches/edition-art/plan-etage-ultrareal.jpg`, label: 'Plan R+1 ultra-réaliste (fidèle au plan source)', kind: 'Plan 2D ultra-réaliste', fit: 'contain' },
-      ...existingTechSheets,
+      ...existingSheets,
       { file: `projects/${slug}/planches/edition-art/planche-complete.jpg`, label: 'Planche complète — vues, plan et matériaux', kind: 'Planche complète', fit: 'contain' }
     ];
     const checks = await Promise.all(candidates.map(async item => {

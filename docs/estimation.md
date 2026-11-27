@@ -1,6 +1,27 @@
 # Estimation et avant-métré
 
-Estimation indicative en FCFA (`js/costEstimate.js`) et lot béton armé / HA. Le panneau **Estimation FCFA** de l'éditeur et l'APS automatique utilisent ce même module.
+Estimation indicative en FCFA (`js/costEstimate.js`) et lot béton armé / HA. Le panneau **Estimation FCFA** de l'éditeur, l'APS automatique et le devis PDF utilisent ce même module.
+
+## Devis estimatif PDF (`js/devisPdf.js`)
+
+Complément « papier » du panneau Estimation et du classeur Excel :
+
+- **bouton** `Devis estimatif PDF` dans la fenêtre *Estimation FCFA* de l'éditeur ;
+- **chaîne complète** du copilote (livrable *Devis & Métré*, produit en PDF cartouché **et** en `.xlsx`).
+
+Document A4 relié, produit localement (jsPDF local, aucun envoi du projet) :
+
+1. **Page de garde** — cartouche du dossier (maître d'ouvrage, localisation, agence, phase, indice, date), synthèse des surfaces, standing retenu, enveloppe travaux en fourchette (bas – haut, mi-point, ordre de grandeur au m²), total par lot ;
+2. **Bordereau quantitatif estimatif** — un poste par ligne (désignation, quantité, unité, prix unitaire, montant), prix non sourcés signalés par un astérisque, total des postes ;
+3. **Annexes et enveloppe globale**, puis **conditions et réserves** (TTC/HT, fourchette indicative, hors foncier et honoraires, quantités géométriques, caractère non contractuel) et bloc **Bon pour accord** (maître d'ouvrage / architecte).
+
+Règles identiques à l'APS et au catalogue : **aucune mention légale n'est inventée**. Un champ non renseigné est masqué du cartouche et signalé en bas de page. Les montants restent une **fourchette d'avant-projet**, jamais un engagement de prix.
+
+```js
+// Navigateur (jsPDF chargé à la demande) ou tests Node (JsPDF injecté)
+await DevisPdf.exportPDF(project, estimate, { cabinet, save: false });
+DevisPdf.buildModel(project, estimate, { cabinet }); // modèle testable sans PDF
+```
 
 ## Avant-métré Béton armé & HA
 

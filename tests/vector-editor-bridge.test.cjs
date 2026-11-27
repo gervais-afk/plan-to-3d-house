@@ -62,7 +62,7 @@ test('EditorAI.vectorToProposal : convertit une extraction vectorielle PDF en pr
   assert.equal(wallsOnlySession.canApply(), true, 'une extraction vectorielle murs seuls reste applicable après relecture');
 });
 
-test('Accueil studio.html & planches : 7 tirages (dont Coupe B–B et Toiture d’origine) présents sur disque et dans les deux projets', () => {
+test('Accueil studio.html & planches : tirages du studio et planches réelles des projets, sans référence fantôme', () => {
   const studioFiles = [
     'assets/studio/plan-villa-a-rdc.jpg',
     'assets/studio/plan-villa-a-etage.jpg',
@@ -80,21 +80,35 @@ test('Accueil studio.html & planches : 7 tirages (dont Coupe B–B et Toiture d�
   assert.match(studioHtml, /Coupe B–B · Planche d’origine/);
   assert.match(studioHtml, /Plan de toiture · Planche d’origine/);
 
+  // Planches réellement versionnées pour les couvertures des projets de démonstration.
   const projectPlates = [
-    'projects/residence-verandas/planches/edition-art/plan-rdc-ultrareal.jpg',
-    'projects/residence-verandas/planches/edition-art/plan-etage-ultrareal.jpg',
     'projects/residence-verandas/planches/edition-art/063240.webp',
     'projects/residence-verandas/planches/edition-art/063308.webp',
     'projects/residence-verandas/planches/edition-art/planche-complete.jpg',
-    'projects/villa-serena/planches/edition-art/plan-rdc-ultrareal.jpg',
     'projects/villa-serena/planches/edition-art/planche-complete.jpg'
   ];
   for (const rel of projectPlates) {
     assert.ok(fs.existsSync(path.join(ROOT, rel)), `${rel} existe pour la couverture du projet`);
   }
+
   const homeCode = fs.readFileSync(path.join(ROOT, 'js/home.js'), 'utf8');
   assert.ok(!homeCode.includes('coupe-2d-ia.jpg') && !homeCode.includes('toiture-ia.jpg'), 'aucune référence aux anciennes coupes/toitures IA dans home.js');
-  assert.match(homeCode, /edition\?\.sheets/, 'home.js récupère génériquement les coupes et toitures existantes depuis edition.sheets');
+  assert.match(homeCode, /edition\?\.sheets/, 'home.js récupère génériquement les planches existantes depuis edition.sheets');
+  // Plus aucune planche fantôme codée en dur : une couverture ne doit jamais pointer un fichier absent du dépôt.
+  assert.ok(!/plan-(rdc|etage)-ultrareal/.test(homeCode), 'home.js ne doit plus coder en dur des planches inexistantes');
+  assert.ok(homeCode.includes('function plateKind'), 'le type de planche doit être déduit de son intitulé, sans cas particulier par slug');
+  assert.ok(homeCode.includes('planche-complete.jpg'), 'la planche complète de synthèse reste proposée quand elle existe');
+
+  // Intégrité : chaque planche déclarée par un projet de démonstration existe au moins sous une de ses formes.
+  for (const slug of ['residence-verandas', 'villa-serena']) {
+    const record = JSON.parse(fs.readFileSync(path.join(ROOT, 'projects', slug, 'project.json'), 'utf8'));
+    for (const sheet of record.edition?.sheets || []) {
+      const candidates = [sheet.art, sheet.preview].filter(rel => typeof rel === 'string' && rel.startsWith('projects/'));
+      assert.ok(candidates.length > 0, `${slug} · ${sheet.title} doit référencer une planche`);
+      assert.ok(candidates.some(rel => fs.existsSync(path.join(ROOT, rel))),
+        `${slug} · ${sheet.title} : aucune planche du dossier n’existe sur disque`);
+    }
+  }
 });
 
 test('Extraction 2D Three.js sans hallucination : filtrage par niveau et zéro plaque de cuisson codée en dur', () => {

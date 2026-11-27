@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-11-24T09:26:49.608Z",
+  "timestamp": "2026-11-27T16:42:32.217Z",
   "branch": "arena/1d9c67e2-plan-to-3d-house",
   "results": {
-    "passed": 87,
+    "passed": 82,
     "failed": 0,
     "warnings": 0,
-    "total": 87,
+    "total": 82,
     "successRate": 100
   },
   "details": [
@@ -55,19 +55,19 @@
     },
     {
       "status": "PASS",
-      "message": "js/clientBrochurePremium.js (471 lignes)"
+      "message": "js/clientBrochurePremium.js (652 lignes)"
     },
     {
       "status": "PASS",
-      "message": "js/aiEnhance.js (239 lignes)"
+      "message": "js/aiEnhance.js (393 lignes)"
     },
     {
       "status": "PASS",
-      "message": "js/apsGenerator.js (598 lignes)"
+      "message": "js/apsGenerator.js (688 lignes)"
     },
     {
       "status": "PASS",
-      "message": "js/editorPremium.js (388 lignes)"
+      "message": "js/editorPremium.js (498 lignes)"
     },
     {
       "status": "PASS",
@@ -75,63 +75,51 @@
     },
     {
       "status": "PASS",
-      "message": "API_DOCUMENTATION.md (465 lignes)"
+      "message": "README.md (63 lignes)"
     },
     {
       "status": "PASS",
-      "message": "GUIDE_DESIGN_PDF.md (651 lignes)"
+      "message": "DESIGN.md (71 lignes)"
     },
     {
       "status": "PASS",
-      "message": "PDF_MODULE_README.md (582 lignes)"
+      "message": "docs/architecture.md (67 lignes)"
     },
     {
       "status": "PASS",
-      "message": "GUIDE_COUVERTURE_PREMIUM.md (491 lignes)"
+      "message": "docs/editeur.md (91 lignes)"
     },
     {
       "status": "PASS",
-      "message": "INTEGRATION_PREMIUM.md (606 lignes)"
+      "message": "docs/visite-3d.md (93 lignes)"
     },
     {
       "status": "PASS",
-      "message": "INTEGRATION_COMPLETE.md (373 lignes)"
+      "message": "docs/estimation.md (76 lignes)"
     },
     {
       "status": "PASS",
-      "message": "RECAPITULATIF_PDF_WAOUH.md (631 lignes)"
+      "message": "docs/portail-prive.md (47 lignes)"
     },
     {
       "status": "PASS",
-      "message": "APS_PLAN_TO_3D_HOUSE.md (667 lignes)"
+      "message": "docs/api-modules.md (465 lignes)"
     },
     {
       "status": "PASS",
-      "message": "GUIDE_DOCUMENTS_MANQUANTS.md (369 lignes)"
+      "message": "docs/verification.md (40 lignes)"
     },
     {
       "status": "PASS",
-      "message": "RECAPITULATIF_APS_COMPLET.md (436 lignes)"
+      "message": "docs/reprise-assistant.md (54 lignes)"
     },
     {
       "status": "PASS",
-      "message": "PROMPT_ASSISTANT_LOCAL.md (739 lignes)"
+      "message": "editor.html (775 lignes)"
     },
     {
       "status": "PASS",
-      "message": "PROMPT_GITHUB_CLONE.md (475 lignes)"
-    },
-    {
-      "status": "PASS",
-      "message": "PROMPT_VERIFICATION_COMPLETE.md (804 lignes)"
-    },
-    {
-      "status": "PASS",
-      "message": "editor.html (360 lignes)"
-    },
-    {
-      "status": "PASS",
-      "message": "index.html (375 lignes)"
+      "message": "index.html (551 lignes)"
     },
     {
       "status": "PASS",
@@ -195,11 +183,15 @@
     },
     {
       "status": "PASS",
+      "message": "DevisPdf chargé - exportPDF, buildModel"
+    },
+    {
+      "status": "PASS",
       "message": "AIEnhance - Sublimation via le relais OpenRouter (api/ai/images)"
     },
     {
       "status": "PASS",
-      "message": "Tous les tests passent (427/431)"
+      "message": "Tous les tests passent (600/604)"
     },
     {
       "status": "PASS",
@@ -247,59 +239,47 @@
     },
     {
       "status": "PASS",
-      "message": "Documentation API - 465 lignes (min: 400)"
+      "message": "README.md - 11 lien(s) interne(s) valides"
     },
     {
       "status": "PASS",
-      "message": "Guide design PDF - 651 lignes (min: 500)"
+      "message": "docs/INSTALLATION-CABINET.md - 0 lien(s) interne(s) valides"
     },
     {
       "status": "PASS",
-      "message": "Documentation PDF - 582 lignes (min: 400)"
+      "message": "docs/api-modules.md - 0 lien(s) interne(s) valides"
     },
     {
       "status": "PASS",
-      "message": "Guide couverture - 491 lignes (min: 400)"
+      "message": "docs/architecture.md - 5 lien(s) interne(s) valides"
     },
     {
       "status": "PASS",
-      "message": "Guide intégration - 606 lignes (min: 400)"
+      "message": "docs/editeur.md - 2 lien(s) interne(s) valides"
     },
     {
       "status": "PASS",
-      "message": "Récapitulatif intégration - 373 lignes (min: 300)"
+      "message": "docs/estimation.md - 0 lien(s) interne(s) valides"
     },
     {
       "status": "PASS",
-      "message": "Récapitulatif PDF - 631 lignes (min: 400)"
+      "message": "docs/portail-prive.md - 0 lien(s) interne(s) valides"
     },
     {
       "status": "PASS",
-      "message": "APS du projet - 667 lignes (min: 500)"
+      "message": "docs/reprise-assistant.md - 6 lien(s) interne(s) valides"
     },
     {
       "status": "PASS",
-      "message": "Guide documents manquants - 369 lignes (min: 250)"
+      "message": "docs/verification.md - 0 lien(s) interne(s) valides"
     },
     {
       "status": "PASS",
-      "message": "Récapitulatif APS - 436 lignes (min: 400)"
+      "message": "docs/visite-3d.md - 0 lien(s) interne(s) valides"
     },
     {
       "status": "PASS",
-      "message": "Prompt assistant local - 739 lignes (min: 600)"
-    },
-    {
-      "status": "PASS",
-      "message": "Prompt GitHub clone - 475 lignes (min: 400)"
-    },
-    {
-      "status": "PASS",
-      "message": "Prompt vérification - 804 lignes (min: 400)"
-    },
-    {
-      "status": "PASS",
-      "message": "Style \"modern\" (Moderne) appliqué par ClientBrochurePremium"
+      "message": "Style \"agence\" (Agence) appliqué par ClientBrochurePremium"
     },
     {
       "status": "PASS",
@@ -347,7 +327,7 @@
     },
     {
       "status": "PASS",
-      "message": "Catalogue premium « Moderne » généré sans studio 3D (2 pages)"
+      "message": "Catalogue premium « Agence » généré sans studio 3D (2 pages)"
     },
     {
       "status": "PASS",

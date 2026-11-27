@@ -771,7 +771,9 @@
       aps: opts.outputs?.aps !== false,
       estimate: opts.outputs?.estimate !== false,
       planbook: opts.outputs?.planbook !== false,
-      catalog: opts.outputs?.catalog !== false
+      catalog: opts.outputs?.catalog !== false,
+      // Le dossier APD / Permis reste décoché par défaut : il suppose toutes les pièces PC-01 → PC-08 réunies.
+      apd: opts.outputs?.apd === true
     };
 
     // Si hors éditeur 2D/3D : bascule directement vers l'onglet Conception avec reprise automatique
@@ -805,7 +807,7 @@
     title.textContent = 'Chaîne complète — Conception → Dossier';
     const sub = document.createElement('span');
     sub.className = 'ai-pipeline-sub';
-    sub.textContent = 'Trace dans l’éditeur, meuble, sécurise puis génère APS, Devis, Cahier A3 et Catalogue.';
+    sub.textContent = 'Trace dans l’éditeur, meuble, sécurise puis génère APS, Devis (PDF + Excel), Cahier A3, Catalogue et Dossier APD.';
     titleWrap.append(title, sub);
     const undoBadge = document.createElement('span');
     undoBadge.className = 'ai-pipeline-badge';
@@ -822,9 +824,10 @@
     outputsRow.className = 'ai-pipeline-outputs';
     const outputDefs = [
       { key: 'aps', label: 'APS Auto PDF' },
-      { key: 'estimate', label: 'Devis & Métré (.xlsx)' },
+      { key: 'estimate', label: 'Devis & Métré (PDF + .xlsx)' },
       { key: 'planbook', label: 'Cahier A3 PDF' },
-      { key: 'catalog', label: 'Catalogue PDF' }
+      { key: 'catalog', label: 'Catalogue PDF' },
+      { key: 'apd', label: 'Dossier APD / Permis PDF' }
     ];
     const outputChecks = {};
     for (const def of outputDefs) {
@@ -867,7 +870,7 @@
       { id: 'polish', label: '3. Conformité PMR/RE2020 & notice' },
       { id: 'save', label: '4. Enregistrement dossier & révision' },
       { id: 'safety', label: '5. Sécurité Porte E & jalon cartouche' },
-      { id: 'deliverables', label: '6. Production APS · Devis · Cahier · Catalogue' }
+      { id: 'deliverables', label: '6. Production APS · Devis · Cahier · Catalogue · APD' }
     ];
     const stepList = document.createElement('ol');
     stepList.className = 'ai-pipeline-steps';
@@ -989,7 +992,8 @@
         aps: outputChecks.aps.checked,
         estimate: outputChecks.estimate.checked,
         planbook: outputChecks.planbook.checked,
-        catalog: outputChecks.catalog.checked
+        catalog: outputChecks.catalog.checked,
+        apd: outputChecks.apd.checked
       };
       const chosenList = Object.entries(selected).filter(([, v]) => v).map(([k]) => k);
       if (!chosenList.length) {
@@ -1049,8 +1053,16 @@
             document.getElementById('btn-estimate')?.click();
             produced.push('Fenêtre Devis & Métré');
           }
+
+          // Devis estimatif PDF (BQE cartouché), même estimation que le classeur.
+          const premium = window.EditorPremiumAPI;
+          if (premium && typeof premium.exportDevisPdf === 'function') {
+            const ok = await premium.exportDevisPdf();
+            if (ok === false) errors.push('Devis PDF : composition refusée');
+            else produced.push('Devis estimatif PDF');
+          }
         } catch (err) {
-          errors.push(`Devis (.xlsx) : ${err.message || 'échec'}`);
+          errors.push(`Devis & Métré : ${err.message || 'échec'}`);
         }
         await sleepMs(450);
       }
@@ -1093,6 +1105,27 @@
           }
         } catch (err) {
           errors.push(`Catalogue PDF : ${err.message || 'échec'}`);
+        }
+        await sleepMs(450);
+      }
+
+      // 5) Dossier APD / Permis de construire (pièces PC-01 → PC-08 reliées)
+      if (selected.apd && !cancelled) {
+        setStep('deliverables', 'running', 'Assemblage du Dossier APD / Permis de construire…');
+        try {
+          const premium = window.EditorPremiumAPI;
+          if (premium && typeof premium.exportApdDossier === 'function') {
+            const ok = await premium.exportApdDossier();
+            if (ok === false) throw new Error('pièces réglementaires incomplètes pour l’export');
+            produced.push('Dossier APD / Permis PDF');
+          } else if (document.getElementById('btn-apd-dossier')) {
+            document.getElementById('btn-apd-dossier').click();
+            produced.push('Dossier APD / Permis (fenêtre)');
+          } else {
+            throw new Error('module APD indisponible dans l’éditeur');
+          }
+        } catch (err) {
+          errors.push(`Dossier APD : ${err.message || 'échec'}`);
         }
       }
 
@@ -2279,7 +2312,7 @@
         const heroPipeBtn = document.createElement('button');
         heroPipeBtn.type = 'button';
         heroPipeBtn.className = 'ai-chat-pipeline-cta';
-        heroPipeBtn.textContent = '🚀 Chaîne complète : Conception → Meublage → APS · Devis · Cahier A3 · Catalogue';
+        heroPipeBtn.textContent = '🚀 Chaîne complète : Conception → Meublage → APS · Devis · Cahier A3 · Catalogue · APD';
         heroPipeBtn.title = 'Conçoit dans l’éditeur 2D/3D, meuble, sécurise puis génère le dossier complet';
         heroPipeBtn.addEventListener('click', () => {
           const typed = (textareaEl?.value || '').trim();

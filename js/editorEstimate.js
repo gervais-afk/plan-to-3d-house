@@ -123,6 +123,21 @@
     E.toast('Bordereau d’achats téléchargé (CSV)');
   }
 
+  async function downloadDevisPdf() {
+    const lib = (typeof window !== 'undefined' && window.DevisPdf) || null;
+    if (!lib || typeof lib.exportPDF !== 'function') { E.toast('Module Devis PDF indisponible.', true); return; }
+    const snap = { ...project(), meta: E.S.p.meta || {}, estimate: E.S.p.estimate };
+    const result = C.estimate(snap, E.S.p.estimate);
+    let cabinet = null;
+    try { cabinet = await fetch('api/cabinet/profile', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)); } catch { /* profil facultatif */ }
+    try {
+      const out = await lib.exportPDF(snap, result, { cabinet });
+      E.toast(`Devis estimatif PDF téléchargé (${out.pages} page${out.pages > 1 ? 's' : ''})`);
+    } catch (err) {
+      E.toast(err.message || 'Export du devis PDF impossible.', true);
+    }
+  }
+
   async function downloadXLSX() {
     if (typeof XlsxExport === 'undefined') { E.toast('Module Excel indisponible.', true); return; }
     const snap = { ...project(), meta: E.S.p.meta || {}, estimate: E.S.p.estimate };
@@ -136,6 +151,7 @@
   $('est-reset').onclick = () => { E.commit(); E.S.p.estimate = C.settings({}); E.refreshPanel(); fill(current()); render(); E.toast('Valeurs par défaut rétablies'); };
   $('est-csv').onclick = downloadCSV;
   if ($('est-xlsx')) $('est-xlsx').onclick = () => { void downloadXLSX(); };
+  if ($('est-devis-pdf')) $('est-devis-pdf').onclick = () => { void downloadDevisPdf(); };
   $('est-close').onclick = () => dialog.close();
   $('btn-estimate').onclick = () => { fill(current()); render(); dialog.showModal(); };
 })();

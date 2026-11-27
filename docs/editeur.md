@@ -40,7 +40,7 @@ Le copilote (`js/aiAssistant.js`, carte *Chaîne complète*, raccourci ⌘J / Ct
 3. **Conformité & notice** : `/compliance-autofix` (portes ≥ 0,90 m, HSP, vitrage 1/6) et `/editorial-brief` (sous-titre, parti architectural, description).
 4. **Enregistrement** : `/api/save-project` puis création d'une **révision datée** (`/revisions`).
 5. **Jalon cartouche** : `/document-safety` vérifie le profil cabinet et le verrou **Porte E**. Si le cartouche est incomplet (maître d'ouvrage, localisation, agence, phase, indice, date), un mini-formulaire s'ouvre dans le chat : l'architecte confirme, rien n'est inventé.
-6. **Livrables** : chaque case cochée est produite et son statut réel est reporté dans la carte — **APS Auto PDF**, **Devis & Métré FCFA (.xlsx)**, **Cahier de plans A3 PDF** (page estimation incluse) et **Catalogue Premium PDF**.
+6. **Livrables** : chaque case cochée est produite et son statut réel est reporté dans la carte — **APS Auto PDF**, **Devis & Métré FCFA** (devis estimatif PDF cartouché **et** classeur `.xlsx`), **Cahier de plans A3 PDF** (page estimation incluse), **Catalogue Premium PDF** et **Dossier APD / Permis PDF** (décoché par défaut : il suppose les pièces PC-01 → PC-08 réunies).
 
 À tout moment : **■ Stopper** interrompt la chaîne, **↩ Annuler (Ctrl+Z)** restaure le plan tel qu'il était avant le lancement. L'ensemble est réservé à l'architecte : un invité du portail reçoit un **403** sur les routes de conception, de sécurisation et d'export.
 

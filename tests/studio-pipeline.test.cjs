@@ -110,11 +110,15 @@ test('Chaîne complète : carte 6 étapes, 4 livrables cochables (APS, Devis, Ca
     assert.ok(aiJs.includes(`id: '${step}'`), `L’étape ${step} doit être déclarée dans la carte`);
   }
 
-  // Les 4 livrables demandés doivent être pilotés par la chaîne
+  // Les 5 livrables demandés doivent être pilotés par la chaîne
   assert.ok(aiJs.includes("label: 'APS Auto PDF'"), 'L’APS Auto PDF doit être proposé');
-  assert.ok(aiJs.includes("label: 'Devis & Métré (.xlsx)'"), 'Le Devis & Métré FCFA (.xlsx) doit être proposé');
+  assert.ok(aiJs.includes("label: 'Devis & Métré (PDF + .xlsx)'"), 'Le Devis FCFA (PDF cartouché + classeur) doit être proposé');
   assert.ok(aiJs.includes("label: 'Cahier A3 PDF'"), 'Le Cahier de plans A3 doit être proposé');
   assert.ok(aiJs.includes("label: 'Catalogue PDF'"), 'Le Catalogue Premium doit être proposé');
+  assert.ok(aiJs.includes("label: 'Dossier APD / Permis PDF'"), 'Le Dossier APD / Permis doit être proposé');
+  assert.ok(aiJs.includes('exportDevisPdf'), 'La chaîne doit déclencher le devis estimatif PDF');
+  assert.ok(aiJs.includes('exportApdDossier'), 'La chaîne doit déclencher le dossier APD / Permis');
+  assert.ok(/apd: opts\.outputs\?\.apd === true/.test(aiJs), 'Le dossier APD doit être décoché par défaut (pièces PC à réunir)');
 
   // Annulation en un clic (restauration du plan précédent) et arrêt de la chaîne
   assert.ok(aiJs.includes('undoSnapshotBeforeRun'), 'La chaîne doit mémoriser l’état avant exécution');
@@ -247,7 +251,88 @@ test('Chaîne complète (serveur) : save-project → compliance-autofix → edit
 });
 
 // ============================================================================
-// 4. LE DEVIS FCFA ALIMENTE LA CHAÎNE (CALCUL LOCAL + EXPORT .XLSX)
+// 4. DEVIS ESTIMATIF PDF (BQE CART OUCHÉ) — MODÈLE ET MISE EN PAGE
+// ============================================================================
+test('Devis PDF : cartouche légal sans invention, lots, postes et fourchette FCFA', () => {
+  const DevisPdf = require('../js/devisPdf.js');
+  const CostEstimate = require('../js/costEstimate.js');
+
+  const estimate = CostEstimate.estimate(PIPELINE_PROJECT, PIPELINE_PROJECT.estimate);
+  const bare = DevisPdf.buildModel(PIPELINE_PROJECT, estimate, {});
+
+  // Aucune mention légale inventée : le cartouche vide est signalé, pas rempli.
+  assert.deepEqual(bare.cartouche.filter(item => item.value), [], 'Aucune mention légale ne doit être inventée');
+  assert.ok(bare.missing.includes("Maître d'ouvrage") && bare.missing.includes('Localisation'), 'Les mentions absentes doivent être listées');
+  assert.equal(bare.name, PIPELINE_PROJECT.meta.name);
+  assert.equal(bare.lots.length, estimate.lots.length, 'Chaque lot de CostEstimate doit apparaître');
+  assert.equal(bare.materials.length, estimate.materials.length, 'Chaque poste chiffré doit apparaître');
+  assert.equal(Math.round(bare.totals.low), Math.round(estimate.total.low));
+  assert.equal(Math.round(bare.totals.high), Math.round(estimate.total.high));
+  assert.ok(bare.totals.high > bare.totals.low, 'La fourchette doit rester une fourchette');
+  assert.ok(bare.conditions.some(c => /devis contractuel/i.test(c)), 'Les réserves doivent nier tout engagement contractuel');
+
+  const filled = DevisPdf.buildModel(
+    { ...PIPELINE_PROJECT, meta: { ...PIPELINE_PROJECT.meta, client: 'M. & Mme Ndongo', location: 'Douala — Bonapriso', phase: 'APS', revision: 'A', issueDate: '2026-11-27' } },
+    estimate,
+    { cabinet: { name: 'Atelier Ndongo', agency: 'Atelier Ndongo & Associés', defaultArchitect: 'J. Ndongo' } }
+  );
+  const get = label => filled.cartouche.find(item => item.label === label)?.value;
+  assert.equal(get("Maître d'ouvrage"), 'M. & Mme Ndongo');
+  assert.equal(get('Localisation'), 'Douala — Bonapriso');
+  assert.equal(get('Phase'), 'APS');
+  assert.equal(get("Date d'émission"), '27/11/2026', 'La date doit être rendue au format français');
+  assert.deepEqual(filled.missing, [], 'Aucune mention ne doit manquer une fois le cartouche validé');
+});
+
+test('Devis PDF : document A4 multi-pages, texte réel (titre, lots, montants, réserves, signatures)', async () => {
+  const { jsPDF } = require('../assets/vendor/jspdf-4.2.1.umd.min.js');
+  const DevisPdf = require('../js/devisPdf.js');
+
+  const written = [];
+  class SpyPDF extends jsPDF {
+    constructor(...args) {
+      super(...args);
+      const original = this.text.bind(this);
+      this.text = (value, ...rest) => {
+        written.push(...(Array.isArray(value) ? value : [value]));
+        return original(value, ...rest);
+      };
+    }
+  }
+
+  const project = {
+    ...PIPELINE_PROJECT,
+    meta: { ...PIPELINE_PROJECT.meta, client: 'M. & Mme Ndongo', location: 'Douala — Bonapriso', phase: 'APS', revision: 'A', issueDate: '2026-11-27' }
+  };
+  const out = await DevisPdf.exportPDF(project, null, {
+    JsPDF: SpyPDF,
+    save: false,
+    cabinet: { name: 'Atelier Ndongo', agency: 'Atelier Ndongo & Associés', defaultArchitect: 'J. Ndongo' }
+  });
+
+  assert.ok(out.pages >= 2, 'Le devis doit être un document relié de plusieurs pages A4');
+  assert.equal(out.filename, 'chaine-complete-devis-estimatif.pdf', 'Le fichier doit être nommé d’après le dossier');
+  assert.ok(out.doc.output('arraybuffer').byteLength > 3000, 'Le PDF doit contenir un vrai rendu');
+
+  const all = written.join('\n');
+  assert.match(all, /DEVIS ESTIMATIF/);
+  assert.match(all, /Bordereau quantitatif estimatif/);
+  assert.match(all, new RegExp(PIPELINE_PROJECT.meta.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(all, /M\. & Mme Ndongo/);
+  assert.match(all, /Douala/);
+  assert.match(all, /FCFA/);
+  assert.match(all, /BON POUR ACCORD/);
+  assert.match(all, /devis contractuel/i, 'La réserve « non contractuel » doit être imprimée');
+  const norm = value => String(value).replace(/[\s\u00A0\u202F]/g, '');
+  const printed = written.map(norm);
+  for (const lot of out.model.lots) {
+    assert.ok(printed.some(line => line.includes(norm(DevisPdf.money(lot.high)))), `Le montant haut du lot ${lot.label} doit être imprimé`);
+  }
+  assert.ok(written.some(line => /Page 1 \/ \d+/.test(String(line))), 'La pagination doit être imprimée');
+});
+
+// ============================================================================
+// 5. LE DEVIS FCFA ALIMENTE LA CHAÎNE (CALCUL LOCAL + EXPORT .XLSX)
 // ============================================================================
 test('Devis FCFA de la chaîne : enveloppe chiffrée calculée et classeur .xlsx signé du slug', () => {
   const CostEstimate = require('../js/costEstimate.js');

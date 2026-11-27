@@ -166,7 +166,8 @@ function verifyModules() {
     { name: 'CodeCompliance', file: './js/codeCompliance.js', functions: ['generateComplianceReport', 'checkPLU', 'checkRE2020'] },
     { name: 'ArchitectCopilot', file: './js/architectCopilot.js', functions: ['generateSuggestions', 'calculateMetrics'] },
     { name: 'ClientBrochurePremium', file: './js/clientBrochurePremium.js', functions: ['exportPDF', 'setStyle', 'getStyle'] },
-    { name: 'APSGenerator', file: './js/apsGenerator.js', functions: ['generateAPS', 'buildContent'] }
+    { name: 'APSGenerator', file: './js/apsGenerator.js', functions: ['generateAPS', 'buildContent'] },
+    { name: 'DevisPdf', file: './js/devisPdf.js', functions: ['exportPDF', 'buildModel'] }
   ];
 
   // Modules spéciaux qui nécessitent un environnement navigateur
@@ -311,13 +312,18 @@ function verifyStyles() {
   section('6. VÉRIFICATION DES STYLES PDF');
 
   // Le style doit être réellement appliqué par le module du catalogue, pas seulement cité.
-  const styles = ['modern', 'luxury', 'industrial'];
   let ok = true;
   try {
     const Premium = require('./js/clientBrochurePremium.js');
+    // Identifiants lus depuis le module : plus aucune liste de styles en dur à maintenir ici.
+    const styles = Object.keys(Premium.STYLES || {});
+    if (styles.length < 2) {
+      fail('Aucun catalogue de styles exploitable exposé par ClientBrochurePremium');
+      return false;
+    }
     const primaries = new Set();
     styles.forEach(style => {
-      const palette = Premium.STYLES?.[style];
+      const palette = Premium.STYLES[style];
       if (palette && Premium.setStyle(style) === style && Premium.getStyle() === style) {
         primaries.add(palette.primary);
         pass(`Style "${style}" (${palette.label}) appliqué par ClientBrochurePremium`);
@@ -330,7 +336,7 @@ function verifyStyles() {
       fail('Les styles partagent la même couleur principale');
       ok = false;
     }
-    Premium.setStyle('modern');
+    Premium.setStyle(styles[0]);
   } catch (error) {
     fail(`Styles PDF - ${error.message}`);
     ok = false;
@@ -429,7 +435,8 @@ async function verifyGeneratedPDFs() {
       pass('APS sans contenu sur le logiciel');
     }
 
-    for (const style of ['modern', 'luxury', 'industrial']) {
+    const styleKeys = Object.keys(Premium.STYLES || {});
+    for (const style of styleKeys) {
       const cat = recorder();
       const doc = await Premium.exportPDF(project, null, null, () => {}, { JsPDF: cat.Recorder, save: false, style });
       const label = Premium.STYLES[style].label;
@@ -440,7 +447,7 @@ async function verifyGeneratedPDFs() {
         ok = false;
       }
     }
-    Premium.setStyle('modern');
+    if (styleKeys.length) Premium.setStyle(styleKeys[0]);
   } catch (error) {
     fail(`Génération des PDF - ${error.message}`);
     ok = false;
