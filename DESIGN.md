@@ -24,7 +24,7 @@ Réglages, sur l'échelle 1 à 10 du skill Taste :
   - `--accent-ink` pour un texte d'accent sur fond clair (contraste AA).
 - **Fonds sombres** (galerie, visionneuse, couverture) : `--night`, `--night-2`, `--night-3`. Le texte posé dessus utilise `--on-night*`.
 - **États** : `--success`, `--warning`, `--danger`. Jamais de texte gris sur fond coloré.
-- **Mode sombre** : les pages publiques (accueil, portail) déclarent `<html data-scheme="auto">` et suivent le système. La visite et l'éditeur restent clairs, la 3D fournissant déjà la profondeur.
+- **Mode sombre** : les pages publiques (accueil, portail) déclarent `<html data-scheme="auto">` et suivent le système. La visite et l'éditeur restent clairs, la 3D fournissant déjà la profondeur. Corollaire : aucune feuille de l'éditeur (`editor.css`, `editorAdvanced.css`, `editorPremium.css`) ne contient de bloc `prefers-color-scheme: dark` isolé, qui rendrait le texte clair sur le papier clair.
 
 ## Typographie
 - **Titres** : `--serif` (Source Serif 4). Texte et interface : `--sans` (Manrope). Les deux sont servis en local (`assets/fonts`), sans Google Fonts : l'app fonctionne hors ligne.
@@ -53,6 +53,35 @@ Réglages, sur l'échelle 1 à 10 du skill Taste :
   - le passage de l'accueil à la maquette.
 - **On n'anime pas** la lecture : les textes longs et les tableaux restent immobiles.
 - **`prefers-reduced-motion`** coupe animations et transitions partout ; c'est géré dans `tokens.css`.
+
+## Finitions : [`css/polish.css`](css/polish.css)
+Dernière feuille chargée sur **toutes** les vues (accueil, cockpit 3D, atelier, éditeur, portail).
+Elle ne touche ni la direction ni la structure : elle règle l'exécution pour que chaque écran se comporte pareil.
+
+- **Aucune couleur en dur** : uniquement `var(--…)` et `color-mix()` depuis `tokens.css`.
+- **Focus** : anneau double (filet `--focus` + halo `--ring`), variante `--focus-on-night` sur les fonds sombres.
+- **Boutons** : enfoncement de 120 ms, ombre de contact au survol, `:disabled` neutralisé ; variantes `.btn`, `.btn--primary`, `.btn--quiet`, `.btn--danger`, `.btn--sm`, `.btn--block` pour les pages de contenu.
+- **Champs** : filet `--rule`, fond `--surface`, survol sable, cases et curseurs à `accent-color: var(--accent)`.
+- **Surfaces** : le verre (flou) reste réservé à ce qui flotte au-dessus de la 3D ; les cartes claires prennent `--shadow-1`, le survol `--shadow-lift`.
+- **Fiche projet** : dans `.sheet-subnav`, la navigation reste éditoriale (filet sous le libellé) mais les **actions** deviennent des puces à filet, poussées à droite.
+- **Données** : en-têtes de tableaux en capitales espacées, chiffres tabulaires, survol de ligne tiède.
+- **Chargement** : `.skeleton` anime une bande claire (1,4 s) plutôt qu'une case grise figée.
+- **États vides** : `.empty-state` / `[data-empty]` disent ce qui manque et proposent l'action suivante.
+- **Mouvement réduit** : la couche se coupe entièrement sous `prefers-reduced-motion`.
+
+## Jetons étendus
+| Jeton | Usage |
+|---|---|
+| `--surface-2`, `--surface-3` | papier étagé (champs au repos, cartes secondaires, panneaux) |
+| `--glass`, `--overlay`, `--ring` | chrome translucide, fond de boîte de dialogue, halo de focus |
+| `--shadow-3` | superposition pleine page (échelle `--shadow-1` → `-3`) |
+| `--radius-xs`, `--radius-xl` | puces internes et grands panneaux |
+| `--text-3xl`, `--leading-*` | titre d'ouverture et interlignes éditoriaux |
+| `--space-7/12/14`, `--header-h`, `--measure` | rythme large, hauteur de barre, longueur de lecture |
+| `--border`, `--text-primary`, `--text-secondary`, `--accent-hover`, `--surface-*-dark` | **pont** : noms historiques encore lus par `editorAdvanced.css` et `editorPremium.css`. Ils pointent vers la palette, ce qui supprime les replis gris. |
+
+## Charte vivante
+[`design.html`](design.html) affiche le système en une page (couleur, typographie, espace, élévation, composants, états), avec la vraie feuille de styles et le vrai thème système. Son style vit dans [`css/designSystem.css`](css/designSystem.css), lui aussi sans couleur en dur. Elle est accessible depuis l'atelier (*Système visuel*) et volontairement absente du portail client.
 
 ## Accessibilité et interface
 - **Focus** visible partout : contour `--focus`, ou `--focus-on-night` sur fond sombre.

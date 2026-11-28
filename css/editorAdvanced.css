@@ -18,10 +18,10 @@
 }
 
 .ed-advanced-card {
-  background: var(--surface-2, #f4f4f4);
-  border: 1px solid var(--border, #ddd);
-  border-radius: 0.75rem;
-  padding: 1rem;
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -31,29 +31,29 @@
   margin: 0;
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--text-primary, #1a1a1a);
+  color: var(--ink);
 }
 
 .ed-advanced-card p {
   margin: 0;
   font-size: 0.85rem;
-  color: var(--text-secondary, #666);
+  color: var(--ink-2);
 }
 
 .ed-advanced-card button {
-  background: var(--accent, #2c5f2d);
+  background: var(--ink);
   color: white;
   border: none;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-sm);
   padding: 0.5rem 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   cursor: pointer;
-  transition: background 0.2s, opacity 0.2s;
+  transition: background-color var(--dur-2) var(--ease-out), opacity var(--dur-2) var(--ease-out);
   margin-top: 0.25rem;
 }
 
 .ed-advanced-card button:hover:not(:disabled) {
-  background: var(--accent-hover, #1e4620);
+  background: var(--accent-ink);
 }
 
 .ed-advanced-card button:disabled {
@@ -63,9 +63,9 @@
 
 .ed-advanced-result {
   display: none;
-  background: var(--surface-3, #fff);
-  border: 1px solid var(--border, #ddd);
-  border-radius: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
   padding: 0.75rem;
   font-size: 0.8rem;
   max-height: 200px;
@@ -77,31 +77,31 @@
   margin: 0;
   white-space: pre-wrap;
   word-wrap: break-word;
-  font-family: monospace;
-  font-size: 0.75rem;
+  font-family: var(--mono);
+  font-size: var(--text-xs);
 }
 
 .ed-advanced-success {
-  color: #1a5c1a;
+  color: var(--success);
   line-height: 1.5;
 }
 
 .ed-advanced-error {
-  color: #8b1a1a;
+  color: var(--danger);
   line-height: 1.5;
 }
 
 .ed-advanced-warning {
-  color: #8b6914;
+  color: var(--warning);
   line-height: 1.5;
 }
 
 /* Bouton Outils avancés dans la barre d'actions */
 #btn-advanced {
-  background: linear-gradient(135deg, #2c5f2d 0%, #4a8f4b 100%);
-  color: white;
-  border: none;
-  border-radius: 0.5rem;
+  background: var(--ink);
+  color: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-sm);
   padding: 0.5rem 0.75rem;
   font-size: 0.85rem;
   cursor: pointer;
@@ -113,7 +113,7 @@
 
 #btn-advanced:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(44, 95, 45, 0.3);
+  box-shadow: var(--shadow-1);
 }
 
 #btn-advanced svg {
@@ -129,38 +129,5 @@
   
   .ed-dialog-wide {
     max-width: 95vw;
-  }
-}
-
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-  .ed-advanced-card {
-    background: var(--surface-2-dark, #2a2a2a);
-    border-color: var(--border-dark, #444);
-  }
-  
-  .ed-advanced-card h4 {
-    color: var(--text-primary-dark, #f0f0f0);
-  }
-  
-  .ed-advanced-card p {
-    color: var(--text-secondary-dark, #aaa);
-  }
-  
-  .ed-advanced-result {
-    background: var(--surface-3-dark, #1a1a1a);
-    border-color: var(--border-dark, #444);
-  }
-  
-  .ed-advanced-success {
-    color: #4caf50;
-  }
-  
-  .ed-advanced-error {
-    color: #ef5350;
-  }
-  
-  .ed-advanced-warning {
-    color: #ffa726;
   }
 }

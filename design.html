@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="fr" data-scheme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#F7F5F0" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161C19" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Système visuel d'ArchiCam Studio : couleur, typographie, espace, composants et états d'interaction, sur une seule page.">
+  <title>Système visuel — ArchiCam Studio</title>
+  <link rel="icon" type="image/svg+xml" href="assets/archicam-icon.svg">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/motion.css">
+  <link rel="stylesheet" href="css/ihm.css">
+  <link rel="stylesheet" href="css/polish.css">
+  <link rel="stylesheet" href="css/designSystem.css">
+</head>
+<body class="ds-page">
+  <div class="ds-shell">
+    <header class="ds-head">
+      <div>
+        <a class="ds-brand" href="studio.html">
+          <img src="assets/archicam-icon.svg" alt="" width="34" height="34">
+          <span>ArchiCam Studio</span>
+        </a>
+        <h1>Système visuel<br><em>de l’atelier.</em></h1>
+        <p class="ds-lead">Papier chaud, encre verte, un seul accent sable. Cette page est la charte vivante : ce que vous voyez ici est exactement ce que produisent les écrans et les dossiers PDF de l’atelier.</p>
+      </div>
+      <div class="ds-head-actions">
+        <a class="btn" href="studio.html">Retour à l’atelier</a>
+        <a class="btn btn--primary" href="accueil.html">Voir un projet</a>
+      </div>
+    </header>
+
+    <div class="ds-body">
+      <nav class="ds-nav" aria-label="Sommaire du système">
+        <a href="#couleur"><span>01</span> Couleur</a>
+        <a href="#typographie"><span>02</span> Typographie</a>
+        <a href="#espace"><span>03</span> Espace &amp; élévation</a>
+        <a href="#composants"><span>04</span> Composants</a>
+        <a href="#etats"><span>05</span> États &amp; retours</a>
+        <a href="#regles"><span>06</span> Règles d’usage</a>
+      </nav>
+
+      <main class="ds-content">
+        <!-- 01 ------------------------------------------------ -->
+        <section class="ds-section" id="couleur" aria-labelledby="couleur-title">
+          <header>
+            <p class="eyebrow-label">01</p>
+            <h2 id="couleur-title">Couleur</h2>
+            <p>Neutres teintés de vert, jamais de gris pur. L’accent sable signale l’action et le repère, pas la décoration.</p>
+          </header>
+
+          <div class="ds-block">
+            <div class="ds-swatches">
+              <div class="ds-swatch"><div class="ds-swatch-chip" style="background: var(--paper);"></div><div class="ds-swatch-body"><strong>Papier</strong><span>--paper</span></div></div>
+              <div class="ds-swatch"><div class="ds-swatch-chip" style="background: var(--surface);"></div><div class="ds-swatch-body"><strong>Surface</strong><span>--surface</span></div></div>
+              <div class="ds-swatch"><div class="ds-swatch-chip" style="background: var(--surface-2);"></div><div class="ds-swatch-body"><strong>Surface 2</strong><span>--surface-2</span></div></div>
+              <div class="ds-swatch"><div class="ds-swatch-chip" style="background: var(--surface-3);"></div><div class="ds-swatch-body"><strong>Surface 3</strong><span>--surface-3</span></div></div>
+              <div class="ds-swatch"><div class="ds-swatch-chip" style="background: var(--ink);"></div><div class="ds-swatch-body"><strong>Encre</strong><span>--ink</span></div></div>
+              <div class="ds-swatch"><div class="ds-swatch-chip" style="background: var(--ink-2);"></div><div class="ds-swatch-body"><strong>Encre 2</strong><span>--ink-2</span></div></div>
+              <div class="ds-swatch"><div class="ds-swatch-chip" style="background: var(--accent);"></div><div class="ds-swatch-body"><strong>Accent</strong><span>--accent</span></div></div>
+              <div class="ds-swatch"><div class="ds-swatch-chip" style="background: var(--accent-soft);"></div><div class="ds-swatch-body"><strong>Accent doux</strong><span>--accent-soft</span></div></div>
+              <div class="ds-swatch"><div class="ds-swatch-chip" style="background: var(--accent-wash);"></div><div class="ds-swatch-body"><strong>Lavé</strong><span>--accent-wash</span></div></div>
+              <div class="ds-swatch"><div class="ds-swatch-chip" style="background: var(--success);"></div><div class="ds-swatch-body"><strong>Succès</strong><span>--success</span></div></div>
+              <div class="ds-swatch"><div class="ds-swatch-chip" style="background: var(--warning);"></div><div class="ds-swatch-body"><strong>Vigilance</strong><span>--warning</span></div></div>
+              <div class="ds-swatch"><div class="ds-swatch-chip" style="background: var(--danger);"></div><div class="ds-swatch-body"><strong>Alerte</strong><span>--danger</span></div></div>
+              <div class="ds-swatch"><div class="ds-swatch-chip" style="background: var(--night);"></div><div class="ds-swatch-body"><strong>Nuit</strong><span>--night</span></div></div>
+              <div class="ds-swatch"><div class="ds-swatch-chip" style="background: var(--night-3);"></div><div class="ds-swatch-body"><strong>Nuit 3</strong><span>--night-3</span></div></div>
+            </div>
+            <p class="ds-note">Les surfaces laissent voir le papier ; le verre (flou) ne s’emploie que par-dessus la 3D ou une image, jamais sur un fond uni. Basculez le thème de votre système : cette page suit, comme l’accueil et le portail.</p>
+          </div>
+        </section>
+
+        <!-- 02 ------------------------------------------------ -->
+        <section class="ds-section" id="typographie" aria-labelledby="type-title">
+          <header>
+            <p class="eyebrow-label">02</p>
+            <h2 id="type-title">Typographie</h2>
+            <p>Source Serif 4 pour l’éditorial, Manrope pour l’interface. Servies en local : l’atelier fonctionne hors ligne.</p>
+          </header>
+
+          <div class="ds-block">
+            <div class="ds-type-row"><span>--text-3xl</span><span class="ds-display">Du trait à l’espace.</span></div>
+            <div class="ds-type-row"><span>--text-2xl</span><span class="ds-serif">Une villa, trois niveaux, un jardin.</span></div>
+            <div class="ds-type-row"><span>--text-xl</span><span class="ds-serif" style="font-size: var(--text-xl);">Séjour traversant, 42,60 m²</span></div>
+            <div class="ds-type-row"><span>--text-lg</span><span style="font-size: var(--text-lg);">Le volume se lit depuis le porche couvert.</span></div>
+            <div class="ds-type-row"><span>--text-md</span><span style="font-size: var(--text-md);">Texte courant des panneaux, formulaires et notes de dossier.</span></div>
+            <div class="ds-type-row"><span>--text-sm</span><span style="font-size: var(--text-sm); color: var(--ink-2);">Légendes, aides à la saisie, statuts secondaires.</span></div>
+            <div class="ds-type-row"><span>--text-xs</span><span class="eyebrow-label" style="margin: 0;">Étiquette en capitales espacées</span></div>
+            <div class="ds-type-row"><span>Chiffres</span><span class="ds-numbers">1 240 m² · 36 861 984 FCFA · 0,90 m · R+1</span></div>
+            <p class="ds-note">Les valeurs comparables passent toujours par <code>font-variant-numeric: tabular-nums</code> : cotes, surfaces, prix, quantités.</p>
+          </div>
+        </section>
+
+        <!-- 03 ------------------------------------------------ -->
+        <section class="ds-section" id="espace" aria-labelledby="espace-title">
+          <header>
+            <p class="eyebrow-label">03</p>
+            <h2 id="espace-title">Espace &amp; élévation</h2>
+            <p>Une grille de 4 px, trois rayons, trois ombres. Rien d’autre.</p>
+          </header>
+
+          <div class="ds-block">
+            <div class="ds-spacing">
+              <div class="ds-spacing-row"><span>--space-2</span><span class="ds-spacing-bar" style="width: 8px;"></span><span>8 px</span></div>
+              <div class="ds-spacing-row"><span>--space-4</span><span class="ds-spacing-bar" style="width: 16px;"></span><span>16 px</span></div>
+              <div class="ds-spacing-row"><span>--space-6</span><span class="ds-spacing-bar" style="width: 24px;"></span><span>24 px</span></div>
+              <div class="ds-spacing-row"><span>--space-8</span><span class="ds-spacing-bar" style="width: 32px;"></span><span>32 px</span></div>
+              <div class="ds-spacing-row"><span>--space-10</span><span class="ds-spacing-bar" style="width: 40px;"></span><span>40 px</span></div>
+              <div class="ds-spacing-row"><span>--space-14</span><span class="ds-spacing-bar" style="width: 56px;"></span><span>56 px</span></div>
+            </div>
+          </div>
+
+          <div class="ds-block">
+            <div class="ds-grid-cards">
+              <div class="ds-elev" style="box-shadow: var(--shadow-1);"><span class="ds-token">--shadow-1</span><span>Repos d’une carte ou d’un panneau.</span></div>
+              <div class="ds-elev" style="box-shadow: var(--shadow-lift);"><span class="ds-token">--shadow-lift</span><span>Survol d’une vignette interactive.</span></div>
+              <div class="ds-elev" style="box-shadow: var(--shadow-2);"><span class="ds-token">--shadow-2</span><span>Fenêtre et boîte de dialogue.</span></div>
+              <div class="ds-elev" style="box-shadow: var(--shadow-3);"><span class="ds-token">--shadow-3</span><span>Superposition pleine page.</span></div>
+            </div>
+            <div class="ds-grid-cards">
+              <div class="ds-elev" style="gap: 8px;"><span class="ds-token">--radius-sm</span><div class="ds-radius" style="border-radius: var(--radius-sm);"></div></div>
+              <div class="ds-elev" style="gap: 8px;"><span class="ds-token">--radius-md</span><div class="ds-radius" style="border-radius: var(--radius-md);"></div></div>
+              <div class="ds-elev" style="gap: 8px;"><span class="ds-token">--radius-lg</span><div class="ds-radius" style="border-radius: var(--radius-lg);"></div></div>
+              <div class="ds-elev" style="gap: 8px;"><span class="ds-token">--radius-xl</span><div class="ds-radius" style="border-radius: var(--radius-xl);"></div></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 04 ------------------------------------------------ -->
+        <section class="ds-section" id="composants" aria-labelledby="comp-title">
+          <header>
+            <p class="eyebrow-label">04</p>
+            <h2 id="comp-title">Composants</h2>
+            <p>Les mêmes pièces dans l’éditeur, le cockpit 3D, la fiche projet et le portail client.</p>
+          </header>
+
+          <div class="ds-block">
+            <p class="eyebrow-label">Boutons</p>
+            <div class="ds-row">
+              <button type="button" class="btn btn--primary">Produire les livrables</button>
+              <button type="button" class="btn">Enregistrer le dossier</button>
+              <button type="button" class="btn btn--quiet">Annuler</button>
+              <button type="button" class="btn btn--danger">Supprimer</button>
+              <button type="button" class="btn btn--sm">Compact</button>
+              <button type="button" class="btn" disabled>Indisponible</button>
+            </div>
+            <p class="ds-note">État pressé : léger enfoncement de 120 ms. Survol : translation d’un pixel et ombre de contact. Jamais de rebond.</p>
+          </div>
+
+          <div class="ds-block">
+            <p class="eyebrow-label">Champs</p>
+            <div class="ds-fields">
+              <label class="ds-field">Maître d’ouvrage<input type="text" value="M. &amp; Mme Ndongo"></label>
+              <label class="ds-field">Phase
+                <select>
+                  <option>APS — Avant-projet sommaire</option>
+                  <option>APD — Avant-projet définitif</option>
+                  <option>PC — Permis de construire</option>
+                </select>
+              </label>
+              <label class="ds-field">Date d’émission<input type="date" value="2026-11-27"></label>
+              <label class="ds-field">Référence<input type="text" value="AC-26-014" readonly></label>
+            </div>
+            <div class="ds-row">
+              <label class="ds-row" style="gap: 8px; font-size: var(--text-sm);"><input type="checkbox" checked> Partager l’enveloppe budgétaire</label>
+              <label class="ds-row" style="gap: 8px; font-size: var(--text-sm);"><input type="checkbox"> Afficher le maître d’ouvrage</label>
+            </div>
+          </div>
+
+          <div class="ds-block">
+            <p class="eyebrow-label">Étiquettes et touches</p>
+            <div class="ds-row">
+              <span class="pill pill--accent">En attente de validation</span>
+              <span class="pill">Version V2</span>
+              <span class="pill pill--night">Aperçu nuit</span>
+              <span class="mode-badge">Visite 3D</span>
+              <kbd class="ihm-kbd">⌘K</kbd>
+              <kbd class="ihm-kbd">Ctrl</kbd><kbd class="ihm-kbd">Z</kbd>
+            </div>
+          </div>
+
+          <div class="ds-block">
+            <p class="eyebrow-label">Carte et données</p>
+            <div class="card stack" style="max-width: 420px;">
+              <p class="eyebrow-label" style="margin: 0;">Lot 02 · Gros œuvre</p>
+              <strong style="font: 550 var(--text-xl)/1.2 var(--serif);">9 480 000 FCFA</strong>
+              <span class="ds-numbers" style="color: var(--ink-2); font-size: var(--text-sm);">Fourchette 8 760 000 – 10 240 000 · 41 % de l’enveloppe</span>
+              <a href="#composants">Voir le bordereau</a>
+            </div>
+
+            <div class="ds-table-wrap">
+              <table class="ds-table">
+                <thead><tr><th scope="col">Feuille</th><th scope="col">Objet</th><th scope="col">Échelle</th><th scope="col">Surface</th></tr></thead>
+                <tbody>
+                  <tr><td>A-01</td><td>Plan du rez-de-chaussée</td><td>1/50</td><td class="ds-numbers">128,40 m²</td></tr>
+                  <tr><td>A-02</td><td>Plan de l’étage</td><td>1/50</td><td class="ds-numbers">86,20 m²</td></tr>
+                  <tr><td>C-01</td><td>Coupe transversale B–B</td><td>1/50</td><td class="ds-numbers">—</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 05 ------------------------------------------------ -->
+        <section class="ds-section" id="etats" aria-labelledby="etats-title">
+          <header>
+            <p class="eyebrow-label">05</p>
+            <h2 id="etats-title">États &amp; retours</h2>
+            <p>Le focus se voit, l’attente se montre, le vide s’explique.</p>
+          </header>
+
+          <div class="ds-block">
+            <p class="eyebrow-label">Focus visible</p>
+            <div class="ds-row">
+              <a href="#etats">Un lien de dossier</a>
+              <button type="button" class="btn">Parcourir au clavier</button>
+              <input type="text" value="Champ actif" style="max-width: 200px;" aria-label="Exemple de champ">
+            </div>
+            <p class="ds-note">Anneau double : filet net plus halo sable. Identique sur papier et sur nuit, jamais supprimé au profit d’un simple changement de couleur.</p>
+          </div>
+
+          <div class="ds-block">
+            <p class="eyebrow-label">Chargement</p>
+            <div class="ds-skeleton-demo" aria-busy="true" aria-live="polite">
+              <span class="skeleton"></span>
+              <span class="skeleton"></span>
+              <span class="skeleton"></span>
+            </div>
+            <p class="ds-note">Un squelette stable pendant l’attente d’un rendu ou d’une planche — jamais une case grise figée.</p>
+          </div>
+
+          <div class="ds-block">
+            <p class="eyebrow-label">État vide et dialogue</p>
+            <div class="empty-state">
+              <strong>Aucun livrable produit pour ce dossier.</strong>
+              <span>Lancez la chaîne complète depuis l’assistant : cartouche, Porte E, puis APS, devis et cahier de plans.</span>
+              <button type="button" class="btn btn--sm" data-ds-dialog>Voir le jalon cartouche</button>
+            </div>
+            <p class="ds-note">L’état vide dit ce qui manque et propose l’action suivante, en une phrase.</p>
+          </div>
+        </section>
+
+        <!-- 06 ------------------------------------------------ -->
+        <section class="ds-section" id="regles" aria-labelledby="regles-title">
+          <header>
+            <p class="eyebrow-label">06</p>
+            <h2 id="regles-title">Règles d’usage</h2>
+            <p>Ce qui garde l’ensemble calme et lisible, écran après écran.</p>
+          </header>
+
+          <div class="ds-block">
+            <ul class="measure" style="display: grid; gap: 10px; padding-left: 1.1rem; color: var(--ink-2);">
+              <li>Une seule action principale par écran ; les autres sont discrètes.</li>
+              <li>Un seul accent sable : repère, sélection, action. Le reste est encre et papier.</li>
+              <li>Pas de carte dans une carte ; pas de verre sur un fond uni.</li>
+              <li>Un chiffre comparable est toujours en chiffres tabulaires.</li>
+              <li>Cibles tactiles de 44 px minimum ; focus visible partout.</li>
+              <li>Mouvement inférieur ou égal à 200 ms, sans rebond, coupé par la préférence système.</li>
+              <li>Aucun emoji dans l’interface ; l’icône accompagne un libellé, elle ne le remplace pas.</li>
+            </ul>
+            <p class="ds-note">La référence complète — direction, palette, mouvement, PDF — vit dans <a href="DESIGN.md">DESIGN.md</a>, et les valeurs dans <a href="css/tokens.css">css/tokens.css</a>.</p>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="ds-foot">
+      <span>ArchiCam Studio — système visuel</span>
+      <span>Édition MMXXVI</span>
+    </footer>
+  </div>
+
+  <dialog id="ds-dialog" aria-labelledby="ds-dialog-title">
+    <h2 id="ds-dialog-title" style="margin-top: 0; font: 550 var(--text-xl)/1.2 var(--serif);">Jalon cartouche</h2>
+    <p style="color: var(--ink-2);">Le mini-formulaire du chat demande confirmation avant d’imprimer une mention légale : rien n’est inventé.</p>
+    <div class="ds-row" style="justify-content: flex-end;">
+      <button type="button" class="btn btn--quiet" data-ds-close>Fermer</button>
+      <button type="button" class="btn btn--primary" data-ds-close>Confirmer</button>
+    </div>
+  </dialog>
+
+  <script>
+    (() => {
+      const dialog = document.getElementById('ds-dialog');
+      if (!dialog || typeof dialog.showModal !== 'function') return;
+      document.querySelectorAll('[data-ds-dialog]').forEach(btn => btn.addEventListener('click', () => dialog.showModal()));
+      document.querySelectorAll('[data-ds-close]').forEach(btn => btn.addEventListener('click', () => dialog.close()));
+    })();
+  </script>
+</body>
+</html>
