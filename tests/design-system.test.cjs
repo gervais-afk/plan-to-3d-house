@@ -247,3 +247,89 @@ test('Tablette (601–860 px) : dock sur deux lignes, raccourcis tactiles, pas d
   assert.match(tablet, /\.tour-dock\.guided-controls:not\(\.dock-free\)/, 'le dock libre garde sa disposition');
   assert.match(tablet, /max-width: 660px/, 'largeur maximale du dock tablette');
 });
+
+// ============================================================================
+// 10. BANC D'ESSAI ET CONTRASTE RÉEL DE LA PALETTE
+// ============================================================================
+test('Banc d’essai : cadre à largeur choisie et contrastes WCAG calculés', () => {
+  const Contrast = require('../js/contrast.js');
+
+  // Module de calcul : valeurs de référence connues.
+  assert.deepEqual(Contrast.parseColor('#F7F5F0'), [247, 245, 240]);
+  assert.deepEqual(Contrast.parseColor('#abc'), [170, 187, 204]);
+  assert.deepEqual(Contrast.parseColor('rgb(22, 28, 25)'), [22, 28, 25]);
+  assert.equal(Contrast.parseColor('var(--ink)'), null, 'une indirection de jeton n’est pas une couleur');
+  assert.equal(Contrast.ratio([0, 0, 0], [255, 255, 255]).toFixed(2), '21.00', 'noir sur blanc = 21:1');
+  assert.equal(Contrast.ratio([255, 255, 255], [0, 0, 0]).toFixed(2), '21.00', 'le ratio est insensible à l’ordre');
+  assert.equal(Contrast.verdict(7).code, 'AAA');
+  assert.equal(Contrast.verdict(4.6).code, 'AA');
+  assert.equal(Contrast.verdict(3.2).code, 'AA grand texte');
+  assert.equal(Contrast.verdict(3.2, true).code, 'AA', 'un grand texte se contente de 3:1');
+  assert.equal(Contrast.verdict(2.1).code, 'Échec');
+
+  // La palette réelle tient les seuils annoncés dans DESIGN.md, en clair comme en sombre.
+  const tokens = read('css/tokens.css');
+  const darkBlock = /@media \(prefers-color-scheme: dark\)[\s\S]*?:root\[data-scheme="auto"\] \{([\s\S]*?)\n  \}/.exec(tokens)?.[1] || '';
+  const hex = (block, name) => Contrast.parseColor(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`).exec(block)?.[1] || '');
+  /** Couleur claire, ou surcharge sombre si elle existe. */
+  const inScheme = (name, dark) => (dark ? hex(darkBlock, name) || hex(tokens, name) : hex(tokens, name));
+
+  const lightPairs = [
+    ['ink', 'paper', 7, false],
+    ['ink-2', 'paper', 4.5, false],
+    ['muted', 'paper', 4.5, false],
+    ['accent-ink', 'paper', 4.5, false],
+    ['accent-ink', 'accent-wash', 4.5, false],
+    ['paper', 'ink', 7, false],
+    ['danger', 'paper', 4.5, false],
+    ['success', 'paper', 4.5, false],
+    ['warning', 'paper', 4.5, false],
+    // Surfaces étagées : un texte secondaire doit rester lisible sur la surface la plus claire.
+    ['ink-2', 'surface', 4.5, false],
+    ['muted', 'surface', 4.5, false]
+  ];
+  const darkPairs = [
+    ['ink', 'paper', 7, false],
+    ['ink-2', 'paper', 4.5, false],
+    ['muted', 'paper', 4.5, false],
+    ['accent-ink', 'paper', 4.5, false],
+    ['accent-ink', 'accent-wash', 4.5, false],
+    ['on-night', 'night', 7, false],
+    ['on-night-2', 'night', 4.5, false],
+    ['on-night-muted', 'night', 4.5, false],
+    ['accent-soft', 'night', 3, true],
+    ['danger', 'paper', 4.5, false],
+    ['success', 'paper', 4.5, false],
+    ['warning', 'paper', 4.5, false]
+  ];
+
+  for (const [scheme, pairs] of [['clair', lightPairs], ['sombre', darkPairs]]) {
+    for (const [fg, bg, min, large] of pairs) {
+      const value = Contrast.ratio(inScheme(fg, scheme === 'sombre'), inScheme(bg, scheme === 'sombre'));
+      assert.ok(value >= min, `${scheme} · ${fg} sur ${bg} : ${value.toFixed(2)} < ${min}`);
+      assert.notEqual(Contrast.verdict(value, large).code, 'Échec', `${scheme} · ${fg} sur ${bg} en échec`);
+    }
+  }
+
+  // Les états sont explicitement éclaircis, faute de quoi le verdict d’alerte serait illisible.
+  assert.ok(darkBlock, 'le mode sombre doit être isolable pour l’audit');
+  for (const [name, value] of [['success', '#7fc096'], ['warning', '#e0a45e'], ['danger', '#ef9a8e']]) {
+    assert.match(darkBlock, new RegExp(`--${name}: ${value}`), `état ${name} éclairci en mode sombre`);
+    assert.ok(Contrast.ratio(Contrast.parseColor(value), Contrast.parseColor('#1f2822')) >= 4.5, `${name} lisible sur la surface sombre`);
+  }
+
+  // La page elle-même.
+  const html = read('qa.html');
+  assert.match(html, /js\/contrast\.js[\s\S]{0,80}js\/qa\.js/, 'le module de contraste précède le banc');
+  assert.match(html, /<iframe id="qa-frame" title="[^"]+"/, 'le cadre porte un titre accessible');
+  for (const width of ['375', '430', '768', '834', '1024', '1280']) {
+    assert.ok(html.includes(`data-width="${width}"`), `préréglage de largeur manquant : ${width}`);
+  }
+  assert.match(html, /id="qa-contrast-body"/, 'le tableau d’audit a son corps de lignes');
+  assert.doesNotMatch(read('css/qa.css'), /#[0-9a-fA-F]{3,8}\b/, 'qa.css sans couleur en dur');
+
+  // Réservé à l'atelier : ni invité, ni page publique du portail.
+  const portal = read('privatePortal.js');
+  assert.doesNotMatch(portal, /'qa\.html'/, 'le banc d’essai n’est pas servi aux invités');
+  assert.match(read('design.html'), /href="qa\.html"/, 'la charte mène au banc d’essai');
+});

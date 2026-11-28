@@ -23,7 +23,7 @@ Réglages, sur l'échelle 1 à 10 du skill Taste :
   - `--accent-soft` (sable) pour un bouton plein sur fond sombre.
   - `--accent-ink` pour un texte d'accent sur fond clair (contraste AA).
 - **Fonds sombres** (galerie, visionneuse, couverture) : `--night`, `--night-2`, `--night-3`. Le texte posé dessus utilise `--on-night*`.
-- **États** : `--success`, `--warning`, `--danger`. Jamais de texte gris sur fond coloré.
+- **États** : `--success`, `--warning`, `--danger`. Jamais de texte gris sur fond coloré. Chaque état tient **4,5:1 sur le papier clair** (`--warning` a été assombri à `#9c5a15` pour cela) et les trois sont **éclaircis en mode sombre** (`#7fc096`, `#e0a45e`, `#ef9a8e`) : sans cette surcharge, un verdict d'alerte devenait illisible sur le papier sombre.
 - **Mode sombre** : les pages publiques (accueil, portail) déclarent `<html data-scheme="auto">` et suivent le système. La visite et l'éditeur restent clairs, la 3D fournissant déjà la profondeur. Corollaire : aucune feuille de l'éditeur (`editor.css`, `editorAdvanced.css`, `editorPremium.css`) ne contient de bloc `prefers-color-scheme: dark` isolé, qui rendrait le texte clair sur le papier clair.
 
 ## Typographie
@@ -84,6 +84,16 @@ Elle ne touche ni la direction ni la structure : elle règle l'exécution pour q
 | `--text-3xl`, `--leading-*` | titre d'ouverture et interlignes éditoriaux |
 | `--space-7/12/14`, `--header-h`, `--measure` | rythme large, hauteur de barre, longueur de lecture |
 | `--border`, `--text-primary`, `--text-secondary`, `--accent-hover`, `--surface-*-dark` | **pont** : noms historiques encore lus par `editorAdvanced.css` et `editorPremium.css`. Ils pointent vers la palette, ce qui supprime les replis gris. |
+
+## Banc d'essai : [`qa.html`](qa.html)
+Outil interne (jamais servi à un invité) pour juger une vue à la largeur voulue, faute de captures d'écran :
+- la vraie page est chargée dans un **cadre à 375, 430, 768, 834, 1024 ou 1280 px**, hauteur réglable et zoom 100/75/50 % ;
+- le réglage vit dans l'URL (`qa.html?view=cockpit&project=villa-serena&w=768`) : il se partage tel quel ;
+- un **audit de contraste** calcule en direct les ratios des couples texte/fond depuis `tokens.css`, avec verdict AA/AAA.
+
+Le calcul vit dans [`js/contrast.js`](js/contrast.js) (parse couleur, luminance relative, ratio, verdict), ce qui permet aux tests de vérifier la palette réelle :
+`ink/paper` 15,87:1, `muted/paper` 5,17:1, `accent-ink/paper` 5,82:1, `warning/paper` 4,96:1, `on-night/night` 15,36:1.
+Une couleur de la palette qui passerait sous le seuil fait échouer la suite : la charte ne peut pas dériver en silence.
 
 ## Charte vivante
 [`design.html`](design.html) affiche le système en une page (couleur, typographie, espace, élévation, composants, états), avec la vraie feuille de styles et le vrai thème système. Son style vit dans [`css/designSystem.css`](css/designSystem.css), lui aussi sans couleur en dur. Elle est accessible depuis l'atelier (*Système visuel*) et volontairement absente du portail client.

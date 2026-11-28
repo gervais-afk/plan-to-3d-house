@@ -49,7 +49,7 @@
   --accent-wash: #f1e8d4;
   /* États */
   --success: #3f7a52;
-  --warning: #a8641c;
+  --warning: #9c5a15;   /* ambre assombri : 4,96:1 sur papier (AA texte courant) */
   --danger: #a33a2c;
   --focus: #8a6524;
   --focus-on-night: #e4cf9a;
@@ -159,6 +159,10 @@
     --rule: #34403a;
     --rule-soft: #2a342e;
     --hairline: rgba(238, 240, 232, 0.11);
+    /* États éclaircis pour rester lisibles sur le papier sombre. */
+    --success: #7fc096;
+    --warning: #e0a45e;
+    --danger: #ef9a8e;
     --ink: #eef0e8;
     --ink-2: #c9d0c5;
     --muted: #a3ad9f;

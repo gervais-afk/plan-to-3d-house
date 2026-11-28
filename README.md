@@ -36,6 +36,7 @@ Projets d'exemple : `villa-serena` (plain-pied, plan de l'ingénieur Dollar), `r
 | [docs/reprise-assistant.md](docs/reprise-assistant.md) | Règles pour un assistant IA qui reprend le projet |
 | [DESIGN.md](DESIGN.md) | Charte graphique |
 | [design.html](design.html) | Charte vivante : palette, typographie, composants, états, composition du dossier (`css/polish.css`, `css/designSystem.css`) |
+| [qa.html](qa.html) | Banc d’essai : une vue à 375 / 768 / 834 / 1024 px dans un cadre, audit de contraste des jetons (`js/contrast.js`) |
 
 Les anciens prompts, récapitulatifs et audits sont dans [docs/archive/](docs/archive/) (non tenus à jour).
 
