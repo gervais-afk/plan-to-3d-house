@@ -309,6 +309,8 @@
         else if (/^\d{4}-\d{2}-\d{2}$/.test(v)) out.issueDate = v;
       } else if (k === 'clientVisible' && (v === 'true' || v === 'false')) {
         out.clientVisible = v === 'true';
+      } else if (k === 'budgetShared' && (v === 'true' || v === 'false')) {
+        out.budgetShared = v === 'true';
       }
     }
     return out;
@@ -729,6 +731,30 @@
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  // Les modules d'export (costEstimate.js, xlsxExport.js, planBook.js) déclarent leur API en `const`
+  // de portée globale : la liaison est lexicale et ne crée aucune propriété sur `window`.
+  // On résout donc d'abord l'identifiant global, puis, à défaut, la propriété de `window`.
+  const GLOBAL_LIB_RESOLVERS = {
+    CostEstimate: () => (typeof CostEstimate !== 'undefined' ? CostEstimate : null),
+    XlsxExport: () => (typeof XlsxExport !== 'undefined' ? XlsxExport : null),
+    PlanBook: () => (typeof PlanBook !== 'undefined' ? PlanBook : null)
+  };
+
+  function resolveGlobalLib(name) {
+    const resolver = GLOBAL_LIB_RESOLVERS[name];
+    if (resolver) {
+      try {
+        const lexical = resolver();
+        if (lexical) return lexical;
+      } catch { /* liaison globale non déclarée sur cette page */ }
+    }
+    try {
+      return (typeof window !== 'undefined' && window[name]) || null;
+    } catch {
+      return null;
+    }
+  }
+
   function makePipelineSlug(project, fallbackSlug) {
     const raw = String(fallbackSlug || project?.meta?.slug || project?.meta?.name || 'projet-atelier')
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -747,7 +773,9 @@
       aps: opts.outputs?.aps !== false,
       estimate: opts.outputs?.estimate !== false,
       planbook: opts.outputs?.planbook !== false,
-      catalog: opts.outputs?.catalog !== false
+      catalog: opts.outputs?.catalog !== false,
+      // Le dossier APD / Permis reste décoché par défaut : il suppose toutes les pièces PC-01 → PC-08 réunies.
+      apd: opts.outputs?.apd === true
     };
 
     // Si hors éditeur 2D/3D : bascule directement vers l'onglet Conception avec reprise automatique
@@ -781,7 +809,7 @@
     title.textContent = 'Chaîne complète — Conception → Dossier';
     const sub = document.createElement('span');
     sub.className = 'ai-pipeline-sub';
-    sub.textContent = 'Trace dans l’éditeur, meuble, sécurise puis génère APS, Devis, Cahier A3 et Catalogue.';
+    sub.textContent = 'Trace dans l’éditeur, meuble, sécurise puis génère APS, Devis (PDF + Excel), Cahier A3, Catalogue et Dossier APD.';
     titleWrap.append(title, sub);
     const undoBadge = document.createElement('span');
     undoBadge.className = 'ai-pipeline-badge';
@@ -798,9 +826,10 @@
     outputsRow.className = 'ai-pipeline-outputs';
     const outputDefs = [
       { key: 'aps', label: 'APS Auto PDF' },
-      { key: 'estimate', label: 'Devis & Métré (.xlsx)' },
+      { key: 'estimate', label: 'Devis & Métré (PDF + .xlsx)' },
       { key: 'planbook', label: 'Cahier A3 PDF' },
-      { key: 'catalog', label: 'Catalogue PDF' }
+      { key: 'catalog', label: 'Catalogue PDF' },
+      { key: 'apd', label: 'Dossier APD / Permis PDF' }
     ];
     const outputChecks = {};
     for (const def of outputDefs) {
@@ -843,7 +872,7 @@
       { id: 'polish', label: '3. Conformité PMR/RE2020 & notice' },
       { id: 'save', label: '4. Enregistrement dossier & révision' },
       { id: 'safety', label: '5. Sécurité Porte E & jalon cartouche' },
-      { id: 'deliverables', label: '6. Production APS · Devis · Cahier · Catalogue' }
+      { id: 'deliverables', label: '6. Production APS · Devis · Cahier · Catalogue · APD' }
     ];
     const stepList = document.createElement('ol');
     stepList.className = 'ai-pipeline-steps';
@@ -965,7 +994,8 @@
         aps: outputChecks.aps.checked,
         estimate: outputChecks.estimate.checked,
         planbook: outputChecks.planbook.checked,
-        catalog: outputChecks.catalog.checked
+        catalog: outputChecks.catalog.checked,
+        apd: outputChecks.apd.checked
       };
       const chosenList = Object.entries(selected).filter(([, v]) => v).map(([k]) => k);
       if (!chosenList.length) {
@@ -987,12 +1017,17 @@
       if (selected.aps && !cancelled) {
         setStep('deliverables', 'running', 'Génération de l’APS Auto PDF…');
         try {
-          if (window.EditorPremiumAPI && typeof window.EditorPremiumAPI.generateAPS === 'function') {
-            await window.EditorPremiumAPI.generateAPS();
+          const premium = window.EditorPremiumAPI;
+          if (premium && typeof premium.generateAPS === 'function') {
+            // generateAPS renvoie false si le PDF n'a pas pu être composé (plan vide, module absent).
+            const ok = await premium.generateAPS();
+            if (ok === false) throw new Error('composition impossible (plan vide ou module APS absent)');
+            produced.push('APS Auto PDF');
+          } else if (document.getElementById('btn-aps')) {
+            document.getElementById('btn-aps').click();
             produced.push('APS Auto PDF');
           } else {
-            document.getElementById('btn-aps')?.click();
-            produced.push('APS Auto PDF');
+            throw new Error('module APS indisponible dans l’éditeur');
           }
         } catch (err) {
           errors.push(`APS PDF : ${err.message || 'échec'}`);
@@ -1005,21 +1040,31 @@
       if (selected.estimate && !cancelled) {
         setStep('deliverables', 'running', 'Calcul du devis FCFA et export Excel (.xlsx)…');
         try {
-          if (snap && typeof window.CostEstimate !== 'undefined' && typeof window.XlsxExport !== 'undefined') {
-            const est = window.CostEstimate.estimate(snap, snap.estimate);
+          const CostEstimateLib = resolveGlobalLib('CostEstimate');
+          const XlsxExportLib = resolveGlobalLib('XlsxExport');
+          if (snap && CostEstimateLib && XlsxExportLib) {
+            const est = CostEstimateLib.estimate(snap, snap.estimate);
             if (est?.total) {
               const low = Math.round(est.total.low || 0).toLocaleString('fr-FR');
               const high = Math.round(est.total.high || 0).toLocaleString('fr-FR');
               estimateSummaryText = `Enveloppe travaux : ${low} – ${high} FCFA`;
             }
-            await window.XlsxExport.downloadXlsx(snap, est, { slug: pipelineSlug });
+            await XlsxExportLib.downloadXlsx(snap, est, { slug: pipelineSlug });
             produced.push('Devis & Métré (.xlsx)');
           } else {
             document.getElementById('btn-estimate')?.click();
             produced.push('Fenêtre Devis & Métré');
           }
+
+          // Devis estimatif PDF (BQE cartouché), même estimation que le classeur.
+          const premium = window.EditorPremiumAPI;
+          if (premium && typeof premium.exportDevisPdf === 'function') {
+            const ok = await premium.exportDevisPdf();
+            if (ok === false) errors.push('Devis PDF : composition refusée');
+            else produced.push('Devis estimatif PDF');
+          }
         } catch (err) {
-          errors.push(`Devis (.xlsx) : ${err.message || 'échec'}`);
+          errors.push(`Devis & Métré : ${err.message || 'échec'}`);
         }
         await sleepMs(450);
       }
@@ -1028,8 +1073,9 @@
       if (selected.planbook && !cancelled) {
         setStep('deliverables', 'running', 'Composition du Cahier de plans A3 PDF…');
         try {
-          if (snap && typeof window.PlanBook !== 'undefined' && typeof window.PlanBook.exportBook === 'function') {
-            await window.PlanBook.exportBook({
+          const PlanBookLib = resolveGlobalLib('PlanBook');
+          if (snap && PlanBookLib && typeof PlanBookLib.exportBook === 'function') {
+            await PlanBookLib.exportBook({
               data: snap,
               studio: window.studio || window.RENDER_STUDIO || null,
               includeEstimate: true
@@ -1048,15 +1094,40 @@
       if (selected.catalog && !cancelled) {
         setStep('deliverables', 'running', 'Export du Catalogue Premium PDF…');
         try {
-          if (window.EditorPremiumAPI && typeof window.EditorPremiumAPI.exportCatalog === 'function') {
-            await window.EditorPremiumAPI.exportCatalog();
+          const premium = window.EditorPremiumAPI;
+          if (premium && typeof premium.exportCatalog === 'function') {
+            const ok = await premium.exportCatalog();
+            if (ok === false) throw new Error('composition impossible (plan vide ou module catalogue absent)');
+            produced.push('Catalogue Premium PDF');
+          } else if (document.getElementById('btn-export-premium')) {
+            document.getElementById('btn-export-premium').click();
             produced.push('Catalogue Premium PDF');
           } else {
-            document.getElementById('btn-export-premium')?.click();
-            produced.push('Catalogue Premium PDF');
+            throw new Error('module catalogue indisponible dans l’éditeur');
           }
         } catch (err) {
           errors.push(`Catalogue PDF : ${err.message || 'échec'}`);
+        }
+        await sleepMs(450);
+      }
+
+      // 5) Dossier APD / Permis de construire (pièces PC-01 → PC-08 reliées)
+      if (selected.apd && !cancelled) {
+        setStep('deliverables', 'running', 'Assemblage du Dossier APD / Permis de construire…');
+        try {
+          const premium = window.EditorPremiumAPI;
+          if (premium && typeof premium.exportApdDossier === 'function') {
+            const ok = await premium.exportApdDossier();
+            if (ok === false) throw new Error('pièces réglementaires incomplètes pour l’export');
+            produced.push('Dossier APD / Permis PDF');
+          } else if (document.getElementById('btn-apd-dossier')) {
+            document.getElementById('btn-apd-dossier').click();
+            produced.push('Dossier APD / Permis (fenêtre)');
+          } else {
+            throw new Error('module APD indisponible dans l’éditeur');
+          }
+        } catch (err) {
+          errors.push(`Dossier APD : ${err.message || 'échec'}`);
         }
       }
 
@@ -1160,6 +1231,16 @@
       dateWrap.append(dateIn, todayBtn);
       addField('Date d’émission', dateWrap);
 
+      const budgetLbl = document.createElement('label');
+      budgetLbl.className = 'ai-pipeline-check ai-pipeline-check--full';
+      const budgetCb = document.createElement('input');
+      budgetCb.type = 'checkbox';
+      budgetCb.checked = curMeta.budgetShared === true;
+      const budgetTxt = document.createElement('span');
+      budgetTxt.textContent = 'Partager l’enveloppe budgétaire (devis PDF) avec le client invité';
+      budgetLbl.append(budgetCb, budgetTxt);
+      form.append(budgetLbl);
+
       const visLbl = document.createElement('label');
       visLbl.className = 'ai-pipeline-check ai-pipeline-check--full';
       const visCb = document.createElement('input');
@@ -1194,7 +1275,7 @@
         confirmBtn.disabled = true;
         confirmBtn.textContent = 'Validation…';
         try {
-          const metaUpdates = { clientVisible: visCb.checked };
+          const metaUpdates = { clientVisible: visCb.checked, budgetShared: budgetCb.checked };
           if (clientIn.value.trim()) metaUpdates.client = clientIn.value.trim();
           if (locIn.value.trim()) metaUpdates.location = locIn.value.trim();
           if (phaseSel.value) metaUpdates.phase = phaseSel.value;
@@ -2243,7 +2324,7 @@
         const heroPipeBtn = document.createElement('button');
         heroPipeBtn.type = 'button';
         heroPipeBtn.className = 'ai-chat-pipeline-cta';
-        heroPipeBtn.textContent = '🚀 Chaîne complète : Conception → Meublage → APS · Devis · Cahier A3 · Catalogue';
+        heroPipeBtn.textContent = '🚀 Chaîne complète : Conception → Meublage → APS · Devis · Cahier A3 · Catalogue · APD';
         heroPipeBtn.title = 'Conçoit dans l’éditeur 2D/3D, meuble, sécurise puis génère le dossier complet';
         heroPipeBtn.addEventListener('click', () => {
           const typed = (textareaEl?.value || '').trim();

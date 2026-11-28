@@ -1,6 +1,38 @@
 # Estimation et avant-métré
 
-Estimation indicative en FCFA (`js/costEstimate.js`) et lot béton armé / HA. Le panneau **Estimation FCFA** de l'éditeur et l'APS automatique utilisent ce même module.
+Estimation indicative en FCFA (`js/costEstimate.js`) et lot béton armé / HA. Le panneau **Estimation FCFA** de l'éditeur, l'APS automatique et le devis PDF utilisent ce même module.
+
+## Devis estimatif PDF (`js/devisPdf.js`)
+
+Complément « papier » du panneau Estimation et du classeur Excel :
+
+- **bouton** `Devis estimatif PDF` dans la fenêtre *Estimation FCFA* de l'éditeur ;
+- **cockpit 3D** (`index.html`) : *Outils → Estimation & devis → Télécharger le devis estimatif · PDF*, à côté du BQE Excel ;
+- **livret de réunion** (`js/meetingMode.js`) : chapitre *Estimation* et chapitre *Validation* ;
+- **fiche projet / portail client** (`accueil.html`) : bouton `Devis estimatif (PDF)`, module autorisé aux invités **si le partage du budget est activé** (voir plus bas) ;
+- **chaîne complète** du copilote (livrable *Devis & Métré*, produit en PDF cartouché **et** en `.xlsx`).
+
+Document A4 relié, produit localement (jsPDF local, aucun envoi du projet) :
+
+1. **Page de garde** — cartouche du dossier (maître d'ouvrage, localisation, agence, phase, indice, date), synthèse des surfaces, standing retenu, enveloppe travaux en fourchette (bas – haut, mi-point, ordre de grandeur au m²), total par lot ;
+2. **Bordereau quantitatif estimatif** — un poste par ligne (désignation, quantité, unité, prix unitaire, montant), prix non sourcés signalés par un astérisque, total des postes ;
+3. **Annexes et enveloppe globale**, puis **conditions et réserves** (TTC/HT, fourchette indicative, hors foncier et honoraires, quantités géométriques, caractère non contractuel) et bloc **Bon pour accord** (maître d'ouvrage / architecte).
+
+Règles identiques à l'APS et au catalogue : **aucune mention légale n'est inventée**. Un champ non renseigné est masqué du cartouche et signalé en bas de page. Les montants restent une **fourchette d'avant-projet**, jamais un engagement de prix.
+
+### Diffusion à l'invité : `meta.budgetShared`
+
+L'enveloppe chiffrée reste une donnée d'agence. Le serveur ne l'envoie au client invité que si `meta.budgetShared === true` — booléen **explicite, `false` par défaut, jamais déduit** d'un rôle ni d'un montant :
+
+- l'architecte l'active dans *Projet* de l'éditeur (`js/editor.js`) ou dans le mini-formulaire du jalon cartouche (`js/aiAssistant.js`) ; `/api/save-project` refuse toute autre valeur que `true`/`false` (`projectProblem`) ;
+- le routage statique (`serve.js`) supprime `project.estimate` du `project.json` servi à quiconque n'est pas architecte sans partage ; l'empreinte `X-Project-Model-Hash` continue de porter sur le fichier complet ;
+- sans partage, l'invité ne voit ni le panneau *Estimation* du cockpit 3D (`atlas-bqe`, `atlas-bqe-xlsx`, `atlas-bqe-pdf`), ni l'export devis de la fiche projet, ni les CTA du livret de réunion : le message « L'enveloppe budgétaire n'est pas partagée sur ce dossier. » remplace les montants. `CostEstimate` reste capable de recalculer une fourchette à partir de la géométrie (l'architecte peut donc rebasculer le partage à tout moment, d'une réunion à un envoi).
+
+```js
+// Navigateur (jsPDF chargé à la demande) ou tests Node (JsPDF injecté)
+await DevisPdf.exportPDF(project, estimate, { cabinet, save: false });
+DevisPdf.buildModel(project, estimate, { cabinet }); // modèle testable sans PDF
+```
 
 ## Avant-métré Béton armé & HA
 

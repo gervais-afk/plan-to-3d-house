@@ -888,11 +888,11 @@ body.fps-active .crosshair {
 .rg-fidelity-cell.is-worst,
 .rg-fidelity-cell.is-both {
   border: 2.5px solid #dc2626;
-  background: rgba(220, 38, 38, 0.16);
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
 }
 .rg-fidelity-cell.is-added {
   border: 2.5px dashed #d97706;
-  background: rgba(217, 119, 6, 0.16);
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
 }
 .rg-fidelity-cell-label {
   background: rgba(17, 24, 39, 0.88);
@@ -927,7 +927,7 @@ body.fps-active .crosshair {
 .gate-override-error {
   margin: 0;
   min-height: 1.2em;
-  color: #b91c1c;
+  color: var(--danger);
   font-size: 0.82rem;
   font-weight: 600;
 }
@@ -1001,21 +1001,21 @@ body.fps-active .crosshair {
 .dlv-summary { margin: 4px 0 10px; font-size: 0.92rem; }
 .dlv-steps { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
 .dlv-step { padding: 10px 12px; border: 1px solid var(--rule, #d6d3cb); border-radius: 8px; background: var(--surface, #faf8f4); }
-.dlv-step.is-done { border-color: rgba(21,128,61,0.35); background: rgba(21,128,61,0.04); }
-.dlv-step.is-partial { border-color: rgba(217,119,6,0.38); background: rgba(217,119,6,0.04); }
+.dlv-step.is-done { border-color: color-mix(in srgb, var(--success) 35%, transparent); background: color-mix(in srgb, var(--success) 4%, transparent); }
+.dlv-step.is-partial { border-color: color-mix(in srgb, var(--warning) 38%, transparent); background: color-mix(in srgb, var(--warning) 4%, transparent); }
 .dlv-step.is-todo { border-color: var(--rule, #d6d3cb); }
 .dlv-step-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 700; font-size: 0.86rem; }
 .dlv-badge { padding: 2px 6px; border: 1px solid transparent; border-radius: 3px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
-.dlv-badge.is-done { border-color: rgba(21,128,61,0.28); background: rgba(21,128,61,0.1); color: #15803d; }
-.dlv-badge.is-partial { border-color: rgba(217,119,6,0.3); background: rgba(217,119,6,0.1); color: #b45309; }
-.dlv-badge.is-todo { border-color: rgba(107,114,128,0.25); background: rgba(107,114,128,0.08); color: #4b5563; }
-.dlv-step-summary { margin: 4px 0 0; font-size: 0.8rem; color: var(--muted, #4b5563); }
-.dlv-missing { margin: 5px 0 0; padding-left: 16px; font-size: 0.78rem; color: #b45309; }
+.dlv-badge.is-done { border-color: color-mix(in srgb, var(--success) 28%, transparent); background: color-mix(in srgb, var(--success) 10%, transparent); color: var(--success); }
+.dlv-badge.is-partial { border-color: color-mix(in srgb, var(--warning) 30%, transparent); background: color-mix(in srgb, var(--warning) 10%, transparent); color: var(--warning); }
+.dlv-badge.is-todo { border-color: color-mix(in srgb, var(--muted) 25%, transparent); background: color-mix(in srgb, var(--muted) 8%, transparent); color: var(--ink-2); }
+.dlv-step-summary { margin: 4px 0 0; font-size: 0.8rem; color: var(--muted, var(--ink-2)); }
+.dlv-missing { margin: 5px 0 0; padding-left: 16px; font-size: 0.78rem; color: var(--warning); }
 .dlv-docs-title { margin: 12px 0 8px; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.06em; }
 .dlv-docs-grid { display: grid; gap: 8px; }
-.dlv-doc-card { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid var(--rule, #d6d3cb); border-radius: 8px; background: #fff; }
+.dlv-doc-card { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid var(--rule, #d6d3cb); border-radius: 8px; background: var(--surface); }
 .dlv-doc-card strong { display: block; font-size: 0.84rem; }
-.dlv-doc-card small { display: block; font-size: 0.76rem; color: var(--muted, #4b5563); margin-top: 2px; }
+.dlv-doc-card small { display: block; font-size: 0.76rem; color: var(--muted, var(--ink-2)); margin-top: 2px; }
 
 /* Filtres rapides de la galerie de rendus (filets architecturaux, zéro pastille) */
 .rg-filters {

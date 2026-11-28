@@ -25,6 +25,7 @@
   <link rel="stylesheet" href="css/aiStudioSuite.css">
   <link rel="stylesheet" href="css/ihm.css">
   <link rel="stylesheet" href="css/aiAssistant.css">
+  <link rel="stylesheet" href="css/polish.css">
   <script src="js/portal-context.js" defer></script>
   <script src="js/commandPalette.js" defer></script>
   <script src="js/aiAssistant.js" defer></script>
@@ -85,15 +86,23 @@
       </div>
       <nav id="viewer-commands" class="technical-stamp interactive" aria-label="Commandes de la visite" hidden>
         <div class="btn-row viewer-primary">
-          <span id="mode-badge" class="mode-badge">Visite guidée</span>
-          <button id="btn-renders" type="button" class="btn-toggle btn-small" aria-haspopup="dialog"><svg class="i" aria-hidden="true"><use href="#i-gallery"></use></svg> Galerie</button>
-          <button id="btn-ai-studio" type="button" class="btn-toggle btn-small" aria-haspopup="dialog" title="Insertion terrain, retouche ciblée, vidéo Début→Fin, voix off IA, 360° et audit bioclimatique/CCTP">Studio IA</button>
-          <button id="btn-plan-compare" type="button" class="btn-toggle btn-small" aria-pressed="false">Comparer plan / 3D</button>
-          <button id="btn-clearance-guides" type="button" class="btn-toggle btn-small" aria-pressed="false" aria-describedby="clearance-note" title="Repères indicatifs — gabarits d’encombrement visuels et non normatifs">Gabarits indicatifs</button>
-          <span id="clearance-note" class="sr-only">Repères indicatifs : bandes théoriques de 90 centimètres autour de certains meubles et arcs simplifiés de portes. Ils ne valident pas la conformité des circulations.</span>
-          <button id="btn-deliverables" type="button" class="btn-toggle btn-small" aria-haspopup="dialog">Livrables</button>
-          <button id="btn-present" type="button" class="btn-toggle btn-small" aria-pressed="false" title="Plein écran sans outils ; flèches pour avancer, Échap pour quitter"><svg class="i" aria-hidden="true"><use href="#i-present"></use></svg> <span>Présenter</span></button>
-          <a id="portal-account" href="portal.html" class="btn-toggle btn-small" hidden>Espace privé</a>
+          <div class="tool-cluster tool-cluster--state" role="group" aria-label="Mode de visite">
+            <span id="mode-badge" class="mode-badge">Visite guidée</span>
+          </div>
+          <div class="tool-cluster" role="group" aria-label="Explorer la maquette">
+            <button id="btn-renders" type="button" class="btn-toggle btn-small" aria-haspopup="dialog"><svg class="i" aria-hidden="true"><use href="#i-gallery"></use></svg> Galerie</button>
+            <button id="btn-plan-compare" type="button" class="btn-toggle btn-small" aria-pressed="false">Comparer plan / 3D</button>
+            <button id="btn-clearance-guides" type="button" class="btn-toggle btn-small" aria-pressed="false" aria-describedby="clearance-note" title="Repères indicatifs — gabarits d’encombrement visuels et non normatifs">Gabarits indicatifs</button>
+            <span id="clearance-note" class="sr-only">Repères indicatifs : bandes théoriques de 90 centimètres autour de certains meubles et arcs simplifiés de portes. Ils ne valident pas la conformité des circulations.</span>
+          </div>
+          <div class="tool-cluster" role="group" aria-label="Produire les documents">
+            <button id="btn-ai-studio" type="button" class="btn-toggle btn-small" aria-haspopup="dialog" title="Insertion terrain, retouche ciblée, vidéo Début→Fin, voix off IA, 360° et audit bioclimatique/CCTP">Studio IA</button>
+            <button id="btn-deliverables" type="button" class="btn-toggle btn-small" aria-haspopup="dialog">Livrables</button>
+          </div>
+          <div class="tool-cluster tool-cluster--end" role="group" aria-label="Présenter et partager">
+            <button id="btn-present" type="button" class="btn-toggle btn-small" aria-pressed="false" title="Plein écran sans outils ; flèches pour avancer, Échap pour quitter"><svg class="i" aria-hidden="true"><use href="#i-present"></use></svg> <span>Présenter</span></button>
+            <a id="portal-account" href="portal.html" class="btn-toggle btn-small" hidden>Espace privé</a>
+          </div>
         </div>
         <div class="btn-row client-panel-tabs">
           <details id="client-tools" class="client-tools" name="viewer-panels">
@@ -307,7 +316,7 @@
           <button type="button" id="guided-next" class="btn-toggle dock-arrow" aria-label="Étape suivante">→</button>
         </div>
         <button type="button" id="guided-action" class="btn-toggle guided-next">Démarrer la visite</button>
-        <details id="cockpit-tools" hidden><summary>Atlas de visite</summary><div><button type="button" data-atlas="plans">Cahier de plans</button><button type="button" data-atlas="photos">Perspectives HD</button><button type="button" data-atlas="estimate">Estimation &amp; devis</button><button type="button" data-atlas="renders">Studio de rendus IA</button></div><section id="atlas-estimate" hidden aria-labelledby="atlas-estimate-title"><h3 id="atlas-estimate-title">Métré &amp; estimation indicative</h3><label>Standing <select id="atlas-standing"><option value="moyen">Moyen standing</option><option value="haut">Haut standing</option></select></label><div id="atlas-estimate-data" aria-live="polite"></div><button type="button" id="atlas-bqe">Télécharger le BQE · CSV</button><button type="button" id="atlas-bqe-xlsx">Télécharger le BQE · Excel (.xlsx)</button><small>Ordres de grandeur indicatifs au Cameroun, en FCFA ; prix à confirmer auprès des entreprises. Ce document n’est pas un devis contractuel.</small></section></details>
+        <details id="cockpit-tools" hidden><summary>Atlas de visite</summary><div><button type="button" data-atlas="plans">Cahier de plans</button><button type="button" data-atlas="photos">Perspectives HD</button><button type="button" data-atlas="estimate">Estimation &amp; devis</button><button type="button" data-atlas="renders">Studio de rendus IA</button></div><section id="atlas-estimate" hidden aria-labelledby="atlas-estimate-title"><h3 id="atlas-estimate-title">Métré &amp; estimation indicative</h3><label>Standing <select id="atlas-standing"><option value="moyen">Moyen standing</option><option value="haut">Haut standing</option></select></label><div id="atlas-estimate-data" aria-live="polite"></div><button type="button" id="atlas-bqe">Télécharger le BQE · CSV</button><button type="button" id="atlas-bqe-xlsx">Télécharger le BQE · Excel (.xlsx)</button><button type="button" id="atlas-bqe-pdf">Télécharger le devis estimatif · PDF</button><small>Ordres de grandeur indicatifs au Cameroun, en FCFA ; prix à confirmer auprès des entreprises. Ce document n’est pas un devis contractuel.</small></section></details>
         <div class="dock-shortcuts">
           <button type="button" class="btn-toggle" id="take-stairs" hidden>Prendre l’escalier</button>
           <select id="visit-level" class="btn-toggle" aria-label="Niveau de la maquette" hidden><option value="all">Vue d’ensemble</option><option value="0">Rez-de-chaussée</option><option value="1">Étage</option></select>

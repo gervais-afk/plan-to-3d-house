@@ -23,8 +23,8 @@ Réglages, sur l'échelle 1 à 10 du skill Taste :
   - `--accent-soft` (sable) pour un bouton plein sur fond sombre.
   - `--accent-ink` pour un texte d'accent sur fond clair (contraste AA).
 - **Fonds sombres** (galerie, visionneuse, couverture) : `--night`, `--night-2`, `--night-3`. Le texte posé dessus utilise `--on-night*`.
-- **États** : `--success`, `--warning`, `--danger`. Jamais de texte gris sur fond coloré.
-- **Mode sombre** : les pages publiques (accueil, portail) déclarent `<html data-scheme="auto">` et suivent le système. La visite et l'éditeur restent clairs, la 3D fournissant déjà la profondeur.
+- **États** : `--success`, `--warning`, `--danger`. Jamais de texte gris sur fond coloré. Chaque état tient **4,5:1 sur le papier clair** (`--warning` a été assombri à `#9c5a15` pour cela) et les trois sont **éclaircis en mode sombre** (`#7fc096`, `#e0a45e`, `#ef9a8e`) : sans cette surcharge, un verdict d'alerte devenait illisible sur le papier sombre.
+- **Mode sombre** : les pages publiques (accueil, portail) déclarent `<html data-scheme="auto">` et suivent le système. La visite et l'éditeur restent clairs, la 3D fournissant déjà la profondeur. Corollaire : aucune feuille de l'éditeur (`editor.css`, `editorAdvanced.css`, `editorPremium.css`) ne contient de bloc `prefers-color-scheme: dark` isolé, qui rendrait le texte clair sur le papier clair.
 
 ## Typographie
 - **Titres** : `--serif` (Source Serif 4). Texte et interface : `--sans` (Manrope). Les deux sont servis en local (`assets/fonts`), sans Google Fonts : l'app fonctionne hors ligne.
@@ -53,6 +53,51 @@ Réglages, sur l'échelle 1 à 10 du skill Taste :
   - le passage de l'accueil à la maquette.
 - **On n'anime pas** la lecture : les textes longs et les tableaux restent immobiles.
 - **`prefers-reduced-motion`** coupe animations et transitions partout ; c'est géré dans `tokens.css`.
+
+## Finitions : [`css/polish.css`](css/polish.css)
+Dernière feuille chargée sur **toutes** les vues (accueil, cockpit 3D, atelier, éditeur, portail).
+Elle ne touche ni la direction ni la structure : elle règle l'exécution pour que chaque écran se comporte pareil.
+
+- **Aucune couleur en dur** : uniquement `var(--…)` et `color-mix()` depuis `tokens.css`.
+- **Focus** : anneau double (filet `--focus` + halo `--ring`), variante `--focus-on-night` sur les fonds sombres.
+- **Boutons** : enfoncement de 120 ms, ombre de contact au survol, `:disabled` neutralisé ; variantes `.btn`, `.btn--primary`, `.btn--quiet`, `.btn--danger`, `.btn--sm`, `.btn--block` pour les pages de contenu.
+- **Champs** : filet `--rule`, fond `--surface`, survol sable, cases et curseurs à `accent-color: var(--accent)`.
+- **Surfaces** : le verre (flou) reste réservé à ce qui flotte au-dessus de la 3D ; les cartes claires prennent `--shadow-1`, le survol `--shadow-lift`.
+- **Fiche projet** : dans `.sheet-subnav`, la navigation reste éditoriale (filet sous le libellé) mais les **actions** deviennent des puces à filet, poussées à droite.
+- **Cockpit 3D** : les commandes de *Outils* sont groupées en quatre grappes (`.tool-cluster`, `role="group"` nommé) séparées par un filet — état, explorer, produire, présenter/partager. Le dock bas s'allège : filet au lieu d'ombre, raccourcis en style discret révélés au survol.
+- **Densité tablette (601–860 px)** : le dock du cockpit passe sur deux lignes (`'reading reading reading' / 'arrows action keys'`), les `<kbd>` disparaissent au profit du tactile, le radar et la carte de validation sont bornés en hauteur, et le dock libre (`dock-free`) n'est pas écrasé. Le choix est chiffré, pas esthétique : transport ≈ 490 px + raccourcis ≈ 185 px + lecture ≈ 215 px ≈ 795 px de dock, pour ≈ 724 px utiles dans un cadre de 768 px — une seule rangée couperait le nom de la pièce.
+- **Petits portables (861–1080 px)** : la rangée unique revient, touches retirées (≈ 755 px), et le dock s'élargit à 900 px. L'ancien plafond de 720 px était plus étroit que le dock de bureau (770 px) et rognait le nom de la pièce à 1024 px.
+- **Densité ≤ 430 px** : sous 430 px, le sous-menu du dossier défile horizontalement (puces comprises), les repères se resserrent, le livret de réunion réduit ses marges, empile ses actions en pleine largeur et laisse les tableaux défiler. On retire de la marge, jamais du contenu.
+- **Portail** : la connexion est une carte dédiée (accès réservé, aide en pied) et les invitations s'affichent en **tableau à quatre colonnes** (invité/dossier, accès, validité, état) au-dessus de 760 px, en cartes empilées en dessous.
+- **Composition du dossier** : chaque section de la fiche porte un **indice romain** (I à IV) et un filet de conduite jusqu'au titre ; les repères se lisent en deux familles — *Le dossier* (identité) puis *Les chiffres* (mesures) ; dans le journal des révisions, l'indice (V1, V2…) devient une figure serif et la note passe en serif. Ces règles valent aussi pour la charte, qui en montre les composants.
+- **Données** : en-têtes de tableaux en capitales espacées, chiffres tabulaires, survol de ligne tiède.
+- **Chargement** : `.skeleton` anime une bande claire (1,4 s) plutôt qu'une case grise figée.
+- **États vides** : `.empty-state` / `[data-empty]` disent ce qui manque et proposent l'action suivante.
+- **Mouvement réduit** : la couche se coupe entièrement sous `prefers-reduced-motion`.
+
+## Jetons étendus
+| Jeton | Usage |
+|---|---|
+| `--surface-2`, `--surface-3` | papier étagé (champs au repos, cartes secondaires, panneaux) |
+| `--glass`, `--overlay`, `--ring` | chrome translucide, fond de boîte de dialogue, halo de focus |
+| `--shadow-3` | superposition pleine page (échelle `--shadow-1` → `-3`) |
+| `--radius-xs`, `--radius-xl` | puces internes et grands panneaux |
+| `--text-3xl`, `--leading-*` | titre d'ouverture et interlignes éditoriaux |
+| `--space-7/12/14`, `--header-h`, `--measure` | rythme large, hauteur de barre, longueur de lecture |
+| `--border`, `--text-primary`, `--text-secondary`, `--accent-hover`, `--surface-*-dark` | **pont** : noms historiques encore lus par `editorAdvanced.css` et `editorPremium.css`. Ils pointent vers la palette, ce qui supprime les replis gris. |
+
+## Banc d'essai : [`qa.html`](qa.html)
+Outil interne (jamais servi à un invité) pour juger une vue à la largeur voulue, faute de captures d'écran :
+- la vraie page est chargée dans un **cadre à 375, 430, 768, 834, 1024 ou 1280 px**, hauteur réglable et zoom 100/75/50 % ;
+- le réglage vit dans l'URL (`qa.html?view=cockpit&project=villa-serena&w=768`) : il se partage tel quel ;
+- un **audit de contraste** calcule en direct les ratios des couples texte/fond depuis `tokens.css`, avec verdict AA/AAA.
+
+Le calcul vit dans [`js/contrast.js`](js/contrast.js) (parse couleur, luminance relative, ratio, verdict), ce qui permet aux tests de vérifier la palette réelle :
+`ink/paper` 15,87:1, `muted/paper` 5,17:1, `accent-ink/paper` 5,82:1, `warning/paper` 4,96:1, `on-night/night` 15,36:1.
+Une couleur de la palette qui passerait sous le seuil fait échouer la suite : la charte ne peut pas dériver en silence.
+
+## Charte vivante
+[`design.html`](design.html) affiche le système en une page (couleur, typographie, espace, élévation, composants, états), avec la vraie feuille de styles et le vrai thème système. Son style vit dans [`css/designSystem.css`](css/designSystem.css), lui aussi sans couleur en dur. Elle est accessible depuis l'atelier (*Système visuel*) et volontairement absente du portail client.
 
 ## Accessibilité et interface
 - **Focus** visible partout : contour `--focus`, ou `--focus-on-night` sur fond sombre.

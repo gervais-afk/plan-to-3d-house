@@ -224,13 +224,13 @@
   async function handleGenerateAPS() {
     if (typeof APSGenerator === 'undefined') {
       showToast('Module APSGenerator non chargé', 'error');
-      return;
+      return false;
     }
 
     const data = getProjectData();
     if (!data || !data.rooms?.length) {
       showToast('Dessinez au moins une pièce avant de générer l\'APS', 'error');
-      return;
+      return false;
     }
 
     try {
@@ -241,9 +241,78 @@
       showToast(missing.message
         ? `✅ APS généré — ${missing.message} (masqués du cartouche).`
         : '✅ APS généré avec succès !', 'success');
+      // `true` = PDF réellement composé : la chaîne complète s'appuie sur ce retour pour son rapport d'étape.
+      return true;
     } catch (error) {
       console.error('Erreur génération APS:', error);
       showToast('Erreur lors de la génération de l\'APS : ' + error.message, 'error');
+      return false;
+    }
+  }
+
+  /**
+   * Exporter le devis estimatif PDF (BQE en FCFA), complément du classeur .xlsx
+   */
+  async function exportDevisPdf() {
+    const DevisPdfLib = (typeof window !== 'undefined' && window.DevisPdf) || null;
+    if (!DevisPdfLib || typeof DevisPdfLib.exportPDF !== 'function') {
+      showToast('Module Devis PDF non chargé', 'error');
+      return false;
+    }
+
+    const data = getProjectData();
+    if (!data || !data.rooms?.length) {
+      showToast('Dessinez au moins une pièce avant de générer le devis', 'error');
+      return false;
+    }
+
+    try {
+      const cabinet = await loadCabinet();
+      const out = await DevisPdfLib.exportPDF(data, null, { cabinet });
+      showToast(`💰 Devis estimatif PDF exporté (${out.pages} page${out.pages > 1 ? 's' : ''}).`, 'success');
+      return true;
+    } catch (error) {
+      console.error('Erreur export devis PDF:', error);
+      showToast('Erreur lors de l’export du devis PDF : ' + error.message, 'error');
+      return false;
+    }
+  }
+
+  /**
+   * Exporter le dossier APD / Permis de construire (pièces PC-01 à PC-08 reliées en PDF)
+   */
+  async function exportApdDossier() {
+    if (typeof ApdDossier === 'undefined' || !ApdDossier || typeof ApdDossier.exportPDF !== 'function') {
+      showToast('Module Dossier APD non chargé', 'error');
+      return false;
+    }
+
+    const data = getProjectData();
+    if (!data || !data.rooms?.length) {
+      showToast('Dessinez au moins une pièce avant d’exporter le dossier APD / Permis', 'error');
+      return false;
+    }
+
+    try {
+      const slug = await savedSlug(data);
+      const [cabinet, media, planches] = await Promise.all([
+        loadCabinet(),
+        slug ? fetch(`api/gallery/media?project=${encodeURIComponent(slug)}`, { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null),
+        slug ? fetch(`api/projects/${encodeURIComponent(slug)}/planches`, { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null)
+      ]);
+      const planchesItems = Array.isArray(planches?.items) ? planches.items : [];
+      const evaluation = ApdDossier.evaluate({ project: data, cabinet, media, planches: planchesItems });
+      if (!evaluation.canExport) {
+        showToast('Dossier APD / Permis : le plan ne contient pas encore de pièce exploitable', 'error');
+        return false;
+      }
+      const out = await ApdDossier.exportPDF({ project: data, cabinet, media, planches: planchesItems, evaluation });
+      showToast(`📑 Dossier APD / Permis exporté (${out.pages} pages, complétude ${evaluation.completeness} %).`, 'success');
+      return true;
+    } catch (error) {
+      console.error('Erreur export dossier APD:', error);
+      showToast('Erreur lors de l’export APD : ' + error.message, 'error');
+      return false;
     }
   }
 
@@ -257,13 +326,13 @@
   async function exportPremiumPDF() {
     if (typeof ClientBrochurePremium === 'undefined') {
       showToast('Module ClientBrochurePremium non chargé', 'error');
-      return;
+      return false;
     }
 
     const data = getProjectData();
     if (!data || !data.rooms?.length) {
       showToast('Dessinez au moins une pièce avant de générer le catalogue', 'error');
-      return;
+      return false;
     }
 
     // Studio 3D facultatif : sans lui, le plan du rez-de-chaussée remplace les vues 3D.
@@ -290,10 +359,12 @@
       showToast(missing.message
         ? `🎨 Catalogue premium généré — ${missing.message} (masqués du cartouche).`
         : '🎨 Catalogue premium généré avec succès !', 'success');
-
+      // `true` = PDF réellement composé : la chaîne complète s'appuie sur ce retour pour son rapport d'étape.
+      return true;
     } catch (error) {
       console.error('Erreur export premium:', error);
       showToast('Erreur lors de l\'export : ' + error.message, 'error');
+      return false;
     }
   }
 
@@ -412,7 +483,9 @@
 
   window.EditorPremiumAPI = {
     generateAPS: handleGenerateAPS,
-    exportCatalog: exportPremiumPDF
+    exportCatalog: exportPremiumPDF,
+    exportDevisPdf,
+    exportApdDossier
   };
 
   if (document.readyState === 'loading') {

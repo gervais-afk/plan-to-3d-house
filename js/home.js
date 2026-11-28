@@ -168,13 +168,29 @@ window.ProjectCoverReady = (() => {
     else startCoverAutoplay();
   }
 
-  /** Détecte génériquement les plans ultra-réalistes, les coupes/toitures existantes du projet et la planche complète (sans cas particulier par slug). */
+  /** Nomme le type de planche d'après son intitulé, sans cas particulier par slug. */
+  function plateKind(title) {
+    const label = String(title || '');
+    if (/\btoiture\b/i.test(label)) return 'Plan de toiture';
+    if (/\bcoupe\b/i.test(label)) return 'Coupe 2D';
+    if (/\bfa[çc]ade\b/i.test(label)) return 'Façade';
+    if (/\bmasse\b/i.test(label)) return 'Plan de masse';
+    if (/\b(étage|etage|R\+\d)\b/i.test(label)) return 'Plan d’étage';
+    if (/\b(rez[- ]de[- ]chaussée|rdc)\b/i.test(label)) return 'Plan RDC';
+    if (/\b(fondation|coffrage|structure)\b/i.test(label)) return 'Plan technique';
+    return 'Planche du dossier';
+  }
+
+  /**
+   * Détecte génériquement les planches réellement présentes dans le dossier du projet
+   * (`edition.sheets`) et la planche complète de synthèse. Aucun nom de fichier n'est codé
+   * en dur : une planche absente est simplement ignorée (vérification HEAD ci-dessous),
+   * pour ne jamais afficher une couverture cassée.
+   */
   async function loadShowcasePlates(slug, projectRecord, signal) {
     if (!slug || !slugPattern.test(slug)) return [];
-    const existingTechSheets = (projectRecord?.edition?.sheets || [])
-      .filter(sheet => /\b(coupe|toiture)\b/i.test(String(sheet?.title || '')))
+    const existingSheets = (projectRecord?.edition?.sheets || [])
       .map(sheet => {
-        const isRoof = /\btoiture\b/i.test(String(sheet.title || ''));
         const previewPath = typeof sheet.preview === 'string' ? sheet.preview : '';
         const prefix = `projects/${slug}/planches/`;
         // Priorise la planche originale haute définition (planches/edition-art/<fichier>) quand elle existe
@@ -184,17 +200,15 @@ window.ProjectCoverReady = (() => {
         return {
           file: originalHiRes || sheet.art || previewPath,
           fallback: previewPath || sheet.art || '',
-          label: `${sheet.title} — planche d’origine`,
-          kind: isRoof ? 'Plan de toiture' : 'Coupe 2D',
+          label: `${sheet.title || 'Planche'} — planche d’origine`,
+          kind: plateKind(sheet.title),
           fit: 'contain'
         };
       })
       .filter(item => item.file);
 
     const candidates = [
-      { file: `projects/${slug}/planches/edition-art/plan-rdc-ultrareal.jpg`, label: 'Plan RDC ultra-réaliste (fidèle au plan source)', kind: 'Plan 2D ultra-réaliste', fit: 'contain' },
-      { file: `projects/${slug}/planches/edition-art/plan-etage-ultrareal.jpg`, label: 'Plan R+1 ultra-réaliste (fidèle au plan source)', kind: 'Plan 2D ultra-réaliste', fit: 'contain' },
-      ...existingTechSheets,
+      ...existingSheets,
       { file: `projects/${slug}/planches/edition-art/planche-complete.jpg`, label: 'Planche complète — vues, plan et matériaux', kind: 'Planche complète', fit: 'contain' }
     ];
     const checks = await Promise.all(candidates.map(async item => {
@@ -417,6 +431,13 @@ window.ProjectCoverReady = (() => {
   function projectSheet(project, data) {
     const section = el('project-sheet');
     const meta = project?.meta || {};
+    // Enveloppe budgétaire : le devis n'est proposé à l'invité que si le partage est explicitement activé
+    const devisBtn = el('sheet-export-devis');
+    if (devisBtn) {
+      const ctx = (typeof window !== 'undefined' && window.PORTAL_CONTEXT) || null;
+      const invited = Boolean(ctx && ctx.role && ctx.role !== 'architect');
+      devisBtn.hidden = invited && meta.budgetShared !== true;
+    }
     const concept = String(meta.concept || '').trim();
     const rooms = data?.rooms || [];
     const levels = new Set(rooms.map(r => r.level)).size;
@@ -439,27 +460,38 @@ window.ProjectCoverReady = (() => {
       const xs = ground.flatMap(w => [w.from[0], w.to[0]]), zs = ground.flatMap(w => [w.from[1], w.to[1]]);
       if (xs.length) footprint = `${number.format(Math.max(...xs) - Math.min(...xs))} × ${number.format(Math.max(...zs) - Math.min(...zs))} m`;
     } catch { /* emprise facultative */ }
-    const rows = [
-      ['Lieu', meta.location], ['Référence projet', meta.reference],
-      ['Maître d’ouvrage', meta.clientVisible === true ? meta.client : ''],
-      ['Architecte responsable', meta.architect || currentCabinet.architect], ['Phase', PHASES[meta.phase] || meta.phase],
-      ['Surface habitable', data?.totals?.habitable ? `${number.format(data.totals.habitable)} m²` : ''],
-      ['Espaces extérieurs couverts', annex ? `${number.format(annex)} m²` : ''],
-      ['Pièces de vie', String(habitableRooms.length || '')],
-      ['Chambres', bedrooms ? String(bedrooms) : ''],
-      ['Salles d’eau et WC', baths ? String(baths) : ''],
-      ['Niveaux', levelsLabel],
-      ['Emprise du bâti', footprint],
-      ['Hauteur sous plafond', data?.config?.wallHeight ? `${number.format(data.config.wallHeight)} m` : ''],
-      ['Mise à jour', Number.isFinite(updated) ? new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(updated) : '']
-    ].filter(([, value]) => value && String(value).trim());
+    // Deux familles de repères : ce qui identifie le dossier, puis ce qui le mesure.
+    const groups = [
+      ['Le dossier', [
+        ['Lieu', meta.location], ['Référence projet', meta.reference],
+        ['Maître d’ouvrage', meta.clientVisible === true ? meta.client : ''],
+        ['Architecte responsable', meta.architect || currentCabinet.architect], ['Phase', PHASES[meta.phase] || meta.phase],
+        ['Mise à jour', Number.isFinite(updated) ? new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(updated) : '']
+      ]],
+      ['Les chiffres', [
+        ['Surface habitable', data?.totals?.habitable ? `${number.format(data.totals.habitable)} m²` : ''],
+        ['Espaces extérieurs couverts', annex ? `${number.format(annex)} m²` : ''],
+        ['Pièces de vie', String(habitableRooms.length || '')],
+        ['Chambres', bedrooms ? String(bedrooms) : ''],
+        ['Salles d’eau et WC', baths ? String(baths) : ''],
+        ['Niveaux', levelsLabel],
+        ['Emprise du bâti', footprint],
+        ['Hauteur sous plafond', data?.config?.wallHeight ? `${number.format(data.config.wallHeight)} m` : '']
+      ]]
+    ].map(([title, rows]) => [title, rows.filter(([, value]) => value && String(value).trim())])
+      .filter(([, rows]) => rows.length);
     scheduleTable(rooms);
-    el('sheet-facts').replaceChildren(...rows.map(([label, value]) => {
-      const row = document.createElement('div');
-      const dt = document.createElement('dt'); dt.textContent = label;
-      const dd = document.createElement('dd'); dd.textContent = value;
-      row.append(dt, dd);
-      return row;
+    el('sheet-facts').replaceChildren(...groups.flatMap(([title, rows]) => {
+      const heading = document.createElement('dt');
+      heading.className = 'sheet-facts-title';
+      heading.textContent = title;
+      return [heading, ...rows.map(([label, value]) => {
+        const row = document.createElement('div');
+        const dt = document.createElement('dt'); dt.textContent = label;
+        const dd = document.createElement('dd'); dd.textContent = value;
+        row.append(dt, dd);
+        return row;
+      })];
     }));
     // Couverture : quatre chiffres clés de même rang (la surface n'est plus isolée dans une pastille).
     const highlights = [
@@ -1094,6 +1126,21 @@ window.ProjectCoverReady = (() => {
       slug: currentProject || select?.value || '',
       cabinet: currentCabinet
     });
+  });
+  el('sheet-export-devis')?.addEventListener('click', async () => {
+    const btn = el('sheet-export-devis');
+    const lib = (typeof window !== 'undefined' && window.DevisPdf) || null;
+    if (!lib || typeof lib.exportPDF !== 'function' || !loadedProjectRecord) return;
+    btn.disabled = true;
+    try {
+      const estimate = typeof CostEstimate !== 'undefined' ? CostEstimate.estimate(loadedProjectRecord, loadedProjectRecord.estimate) : null;
+      const out = await lib.exportPDF(loadedProjectRecord, estimate, { cabinet: currentCabinet });
+      status.textContent = `Devis estimatif téléchargé (${out.pages} page${out.pages > 1 ? 's' : ''}) — montants indicatifs, non contractuels.`;
+    } catch (err) {
+      status.textContent = `Export du devis impossible : ${err.message}`;
+    } finally {
+      btn.disabled = false;
+    }
   });
   el('sheet-export-apd')?.addEventListener('click', async () => {
     const btn = el('sheet-export-apd');

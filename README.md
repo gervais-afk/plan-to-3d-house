@@ -15,7 +15,7 @@ Par défaut, le serveur Node écoute uniquement sur la machine locale (`127.0.0.
 
 ## Parcours type
 
-1. **Éditeur** (`editor.html`) : importer le plan, calibrer l'échelle, tracer murs, ouvertures et pièces (RDC et étage), enregistrer.
+1. **Éditeur** (`editor.html`) : importer le plan, calibrer l'échelle, tracer murs, ouvertures et pièces (RDC et étage), enregistrer. Le copilote ⌘J/Ctrl+J propose une **chaîne complète** : brief → plan 2D/3D → meublage → conformité PMR/RE2020 → enregistrement + révision → jalon cartouche → **APS Auto PDF + Devis FCFA (PDF cartouché + .xlsx) + Cahier de plans A3 + Catalogue Premium + Dossier APD/Permis** (voir [docs/editeur.md](docs/editeur.md#-chaîne-complète--du-brief-au-dossier-livré)).
 2. **Visite 3D** (`index.html?project=<dossier>`) : vérifier la maquette, enregistrer des vues, tester finitions et ensoleillement.
 3. **Documents** : **Estimation FCFA**, **📋 APS Auto**, **🎨 Catalogue Premium** (3 styles), **✨ Sublimer avec l'IA** (photoréalisation des vues via OpenRouter, avec confirmation du coût), cahier de plans.
 4. **Partage** : portail privé avec invitations, retours et validation des versions par le client.
@@ -33,8 +33,10 @@ Projets d'exemple : `villa-serena` (plain-pied, plan de l'ingénieur Dollar), `r
 | [docs/architecture.md](docs/architecture.md) | Pages, données d'un projet, modules, routes du serveur |
 | [docs/api-modules.md](docs/api-modules.md) | API des modules d'analyse et d'export |
 | [docs/verification.md](docs/verification.md) | Tests et script de vérification |
-| [docs/reprise-assistant.md](docs/reprise-assistant.md) | Règles pour un assistant IA qui reprend le projet |
+| [docs/reprise-assistant.md](docs/reprise-assistant.md) | Règles pour un assistant IA qui reprend le projet, et prompt prêt à coller dans Google AI Studio |
 | [DESIGN.md](DESIGN.md) | Charte graphique |
+| [design.html](design.html) | Charte vivante : palette, typographie, composants, états, composition du dossier (`css/polish.css`, `css/designSystem.css`) |
+| [qa.html](qa.html) | Banc d’essai : une vue à 375 / 768 / 834 / 1024 px dans un cadre, audit de contraste des jetons (`js/contrast.js`) |
 
 Les anciens prompts, récapitulatifs et audits sont dans [docs/archive/](docs/archive/) (non tenus à jour).
 

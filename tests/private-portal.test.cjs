@@ -52,7 +52,7 @@ async function serve(root, variables = {}) {
 function fixture(root) {
   for (const file of ['serve.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'presentationStore.js', 'cabinetStore.js', 'portal.html', 'accueil.html', 'studio.html', 'index.html', 'editor.html']) fs.copyFileSync(path.join(source, file), path.join(root, file));
   fs.mkdirSync(path.join(root, 'js'));
-  for (const file of ['variantState.js', 'data.js', 'coverImage.js', 'workspace.js']) fs.copyFileSync(path.join(source, 'js', file), path.join(root, 'js', file));
+  for (const file of ['variantState.js', 'data.js', 'coverImage.js', 'workspace.js', 'devisPdf.js']) fs.copyFileSync(path.join(source, 'js', file), path.join(root, 'js', file));
   fs.mkdirSync(path.join(root, 'css'));
   fs.copyFileSync(path.join(source, 'css', 'workspace.css'), path.join(root, 'css', 'workspace.css'));
   for (const project of ['plan-a', 'plan-b']) {
@@ -60,7 +60,11 @@ function fixture(root) {
     fs.mkdirSync(path.join(dir, 'generated', 'renders'), { recursive: true });
     fs.mkdirSync(path.join(dir, 'generated', 'images'), { recursive: true });
     fs.mkdirSync(path.join(dir, 'generated', 'videos'), { recursive: true });
-    fs.writeFileSync(path.join(dir, 'project.json'), JSON.stringify({ meta: { name: project, client: 'Client confidentiel', clientVisible: false } }));
+    fs.writeFileSync(path.join(dir, 'project.json'), JSON.stringify({
+      meta: { name: project, client: 'Client confidentiel', clientVisible: false, budgetShared: false },
+      // Enveloppe chiffrée de l'agence : ne doit jamais sortir sans partage explicite.
+      estimate: { profile: 'lefisk', standing: 'moyen', total: { low: 12345678, mid: 13000000, high: 14000000 } }
+    }));
     fs.writeFileSync(path.join(dir, 'generated', 'renders', 'facade.jpg'), 'Média de ' + project);
     fs.writeFileSync(path.join(dir, 'generated', 'images', 'publiee.png'), 'Image publiée');
     fs.writeFileSync(path.join(dir, 'generated', 'images', 'brouillon.png'), 'Image brouillon');
@@ -193,11 +197,16 @@ test('Invitations : portée projet, rôles, accès direct, expiration et révoca
   assert.equal(cover.headers.get('cache-control'), 'private, no-store');
   assert.equal((await reader.request('/js/coverImage.js')).status, 200, 'le client invité reçoit le script de cadrage de couverture');
   assert.equal((await reader.request('/js/workspace.js')).status, 200, 'le client invité reçoit le contrôleur de navigation');
+  assert.equal((await reader.request('/js/devisPdf.js')).status, 200, 'le client invité reçoit le module du devis estimatif (portail)');
+  assert.equal((await guest.request('/js/devisPdf.js')).status, 401, 'sans invitation, le module du devis reste fermé');
   assert.equal((await reader.request('/css/workspace.css')).status, 200);
   assert.equal((await reader.request('/?project=plan-b')).status, 403, 'la racine ne contourne pas la portée de l’invitation');
   const projectResponse = await reader.request(a + '/project.json');
   assert.equal(projectResponse.status, 200);
-  assert.equal((await projectResponse.json()).meta.client, undefined, 'le client reste masqué dans le JSON invité');
+  const invitedProject = await projectResponse.json();
+  assert.equal(invitedProject.meta.client, undefined, 'le client reste masqué dans le JSON invité');
+  assert.equal(invitedProject.estimate, undefined, 'l’enveloppe budgétaire reste côté agence tant que le partage est désactivé');
+  assert.equal((await (await architect.request(a + '/project.json')).json()).estimate.total.low, 12345678, 'l’architecte conserve toujours l’enveloppe chiffrée');
   assert.match(projectResponse.headers.get('x-project-model-hash'), /^[a-f0-9]{64}$/, 'le hash signé correspond aux données complètes côté serveur');
   const publishedMedia = '/generated/images/publiee.png';
   const range = await reader.request(a + publishedMedia, { headers: { Range: 'bytes=0-4' } });
@@ -218,6 +227,13 @@ test('Invitations : portée projet, rôles, accès direct, expiration et révoca
   visibleProject.meta.clientVisible = true;
   fs.writeFileSync(projectFile, JSON.stringify(visibleProject));
   assert.equal((await (await reader.request(a + '/project.json')).json()).meta.client, 'Client confidentiel', 'le client ne devient visible qu’après consentement explicite');
+  // Partage du budget : booléen explicite, jamais déduit d'un rôle ni d'un montant.
+  const sharedProject = JSON.parse(fs.readFileSync(projectFile, 'utf8'));
+  sharedProject.meta.budgetShared = true;
+  fs.writeFileSync(projectFile, JSON.stringify(sharedProject));
+  const sharedPayload = await (await reader.request(a + '/project.json')).json();
+  assert.equal(sharedPayload.estimate?.total?.low, 12345678, 'le partage explicite restitue l’enveloppe au client invité');
+  assert.match((await reader.request('/accueil.html?project=plan-a')).headers.get('cache-control'), /private, no-store/);
   for (const route of protectedPaths) assert.equal((await reader.request(route)).status, 403, route);
   assert.equal((await reader.request(b + render, { headers: { Range: 'bytes=0-4' } })).status, 403);
   assert.equal((await reader.request(b + render, { method: 'HEAD' })).status, 403);

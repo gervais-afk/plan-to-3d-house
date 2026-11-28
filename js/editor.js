@@ -308,6 +308,7 @@
     p.meta = Object.assign(p.meta, src.meta || {});
     if (!p.meta.architect && cabinetProfile.architect) p.meta.architect = cabinetProfile.architect;
     if (typeof p.meta.clientVisible !== 'boolean') p.meta.clientVisible = false;
+    if (typeof p.meta.budgetShared !== 'boolean') p.meta.budgetShared = false;
     p.config = Object.assign(p.config, {
       wallHeight: (src.config && src.config.wallHeight) || 2.8,
       floorHeight: (src.config && src.config.floorHeight) || 3,
@@ -2830,6 +2831,7 @@
       { key: 'description', label: 'Description', type: 'textarea', rows: 3, set: (o, v) => { o.description = String(v).slice(0, 2000); } },
       { key: 'client', label: 'Client / maître d’ouvrage', pdf: true },
       { key: 'clientVisible', label: 'Afficher le client sur les couvertures partagées', type: 'checkbox' },
+      { key: 'budgetShared', label: 'Partager l’enveloppe budgétaire avec le client invité', type: 'checkbox' },
       { key: 'reference', label: 'Référence projet', set: (o, v) => { o.reference = String(v).slice(0, 80); } },
       // Cartouche du cahier de plans.
       { key: 'architect', label: 'Architecte responsable', pdf: true, set: (o, v) => { o.architect = String(v).slice(0, 120); } },

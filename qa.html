@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr" data-scheme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Banc d’essai d’ArchiCam Studio : une vue dans un cadre à 375, 768, 834 ou 1024 px, plus l’audit de contraste des jetons du système.">
+  <title>Banc d’essai — ArchiCam Studio</title>
+  <link rel="icon" type="image/svg+xml" href="assets/archicam-icon.svg">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/motion.css">
+  <link rel="stylesheet" href="css/ihm.css">
+  <link rel="stylesheet" href="css/polish.css">
+  <link rel="stylesheet" href="css/qa.css">
+  <script src="js/contrast.js" defer></script>
+  <script src="js/qa.js" defer></script>
+</head>
+<body class="qa">
+  <a class="qa-skip" href="#qa-stage">Aller au banc d’essai</a>
+
+  <header class="qa-head">
+    <div class="qa-head-id">
+      <a class="qa-brand" href="studio.html">
+        <img src="assets/archicam-icon.svg" alt="" width="30" height="30">
+        <span>ArchiCam <small>Studio</small></span>
+      </a>
+      <p class="qa-kicker">Banc d’essai</p>
+    </div>
+    <p class="qa-intro">Une vue réelle dans un cadre à la largeur voulue, plus l’audit de contraste des jetons. Rien n’est simulé : la page est chargée telle quelle.</p>
+    <div class="qa-head-actions">
+      <a class="btn btn--sm" href="design.html">Charte vivante</a>
+      <a class="btn btn--sm" id="qa-open" href="accueil.html" target="_blank" rel="noopener">Ouvrir dans un onglet</a>
+    </div>
+  </header>
+
+  <div class="qa-body">
+    <aside class="qa-rail" aria-label="Réglages du banc">
+      <form class="qa-controls" id="qa-controls">
+        <fieldset class="qa-group">
+          <legend>Vue</legend>
+          <label class="qa-field">Écran
+            <select id="qa-view">
+              <option value="accueil">Accueil — dossier client</option>
+              <option value="cockpit">Cockpit 3D</option>
+              <option value="studio">Atelier (entrée)</option>
+              <option value="editeur">Éditeur 2D</option>
+              <option value="portail">Portail privé</option>
+              <option value="charte">Charte vivante</option>
+            </select>
+          </label>
+          <label class="qa-field">Dossier
+            <select id="qa-project"><option value="">— Aucun —</option></select>
+          </label>
+        </fieldset>
+
+        <fieldset class="qa-group">
+          <legend>Largeur</legend>
+          <div class="qa-widths" role="group" aria-label="Largeurs préréglées">
+            <button type="button" class="qa-width" data-width="375">375</button>
+            <button type="button" class="qa-width" data-width="430">430</button>
+            <button type="button" class="qa-width" data-width="768">768</button>
+            <button type="button" class="qa-width" data-width="834">834</button>
+            <button type="button" class="qa-width" data-width="1024">1024</button>
+            <button type="button" class="qa-width" data-width="1280">1280</button>
+          </div>
+          <label class="qa-field">Sur mesure (px)
+            <input id="qa-width-custom" type="number" min="320" max="1920" step="1" value="768">
+          </label>
+          <label class="qa-field">Hauteur
+            <select id="qa-height">
+              <option value="fill">Remplir la fenêtre</option>
+              <option value="812">812 (téléphone)</option>
+              <option value="1024">1024 (tablette)</option>
+              <option value="1180">1180 (portable)</option>
+            </select>
+          </label>
+          <label class="qa-field">Zoom
+            <select id="qa-zoom">
+              <option value="1">100 %</option>
+              <option value="0.75">75 %</option>
+              <option value="0.5">50 %</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <div class="qa-actions">
+          <button type="button" class="btn btn--sm btn--primary" id="qa-reload">Recharger le cadre</button>
+          <button type="button" class="btn btn--sm" id="qa-copy">Copier le lien de ce réglage</button>
+        </div>
+        <p class="qa-live" id="qa-live" role="status" aria-live="polite"></p>
+      </form>
+
+      <section class="qa-audit" aria-labelledby="qa-audit-title">
+        <h2 id="qa-audit-title">Contraste des jetons</h2>
+        <p class="qa-note">Ratios calculés dans le navigateur depuis <code>css/tokens.css</code>. Seuil AA : 4,5 pour le texte courant, 3 pour le grand texte.</p>
+        <table class="qa-contrast">
+          <caption class="sr-only">Ratios de contraste des couples texte/fond du système</caption>
+          <thead>
+            <tr><th scope="col">Couple</th><th scope="col">Ratio</th><th scope="col">Verdict</th></tr>
+          </thead>
+          <tbody id="qa-contrast-body"></tbody>
+        </table>
+        <p class="qa-note" id="qa-tokens"></p>
+      </section>
+    </aside>
+
+    <main class="qa-stage" id="qa-stage">
+      <div class="qa-frame-head">
+        <p class="qa-url" id="qa-url">—</p>
+        <p class="qa-size" id="qa-size">—</p>
+      </div>
+      <div class="qa-frame-wrap">
+        <div class="qa-device" id="qa-device">
+          <iframe id="qa-frame" title="Aperçu de la vue sélectionnée" loading="eager" referrerpolicy="no-referrer"></iframe>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

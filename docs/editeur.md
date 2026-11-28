@@ -31,6 +31,21 @@ Ouvrez `http://127.0.0.1:8000/index.html?project=maison-croquis` pour voir le re
 
 Au chargement, l'image du plan est posée à plat sous la maison ; elle s'estompe à mesure que les murs se dressent. Le raccourci P permet de la réafficher/masquer.
 
+## 🤖 Chaîne complète — du brief au dossier livré
+
+Le copilote (`js/aiAssistant.js`, carte *Chaîne complète*, raccourci ⌘J / Ctrl+J) enchaîne six étapes, directement dans l'onglet **Conception** :
+
+1. **Conception 2D/3D** : un brief court (« Villa plain-pied 140 m² à Douala, 3 chambres, véranda ») est converti en plan par `/api/ai/generate-plan`, injecté sur le canevas avec conservation de la pile **Ctrl+Z**, puis affiché en vue partagée **2D + 3D**. Brief vide = plan actif conservé.
+2. **Meublage automatique** : `EditorAPI.autoFurnishRooms()` aménage séjour, cuisine, chambres et salle d'eau.
+3. **Conformité & notice** : `/compliance-autofix` (portes ≥ 0,90 m, HSP, vitrage 1/6) et `/editorial-brief` (sous-titre, parti architectural, description).
+4. **Enregistrement** : `/api/save-project` puis création d'une **révision datée** (`/revisions`).
+5. **Jalon cartouche** : `/document-safety` vérifie le profil cabinet et le verrou **Porte E**. Si le cartouche est incomplet (maître d'ouvrage, localisation, agence, phase, indice, date), un mini-formulaire s'ouvre dans le chat : l'architecte confirme, rien n'est inventé. Il y règle aussi le **partage de l'enveloppe budgétaire** (`meta.budgetShared`, même case disponible dans *Projet* de l'éditeur) : décoché par défaut, il conditionne l'accès du client invité au devis PDF.
+6. **Livrables** : chaque case cochée est produite et son statut réel est reporté dans la carte — **APS Auto PDF**, **Devis & Métré FCFA** (devis estimatif PDF cartouché **et** classeur `.xlsx`), **Cahier de plans A3 PDF** (page estimation incluse), **Catalogue Premium PDF** et **Dossier APD / Permis PDF** (décoché par défaut : il suppose les pièces PC-01 → PC-08 réunies).
+
+À tout moment : **■ Stopper** interrompt la chaîne, **↩ Annuler (Ctrl+Z)** restaure le plan tel qu'il était avant le lancement. L'ensemble est réservé à l'architecte : un invité du portail reçoit un **403** sur les routes de conception, de sécurisation et d'export.
+
+Depuis l'accueil, le studio ou la visite 3D, le bouton *Chaîne complète* bascule vers `editor.html` avec reprise automatique (`autoAction=run_studio_pipeline` + brouillon conservé en `sessionStorage`).
+
 ## Documents pour le client
 
 Ces boutons de la barre d'outils travaillent sur le projet **ouvert dans l'éditeur** (tous niveaux). Pour utiliser les images d'un projet, enregistrez-le d'abord : elles sont lues dans `projects/<dossier>/generated/`.

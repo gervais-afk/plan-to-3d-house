@@ -60,7 +60,11 @@
       || images.find(i => /plan-2d/i.test(i.id || ''))?.file || '';
     const galleryShots = [...images.filter(i => i.catalog && i.file), ...renders.filter(r => r.file)].slice(0, 4);
     const heroVideo = [...videos].reverse().find(v => /film-realiste/i.test(v.id || '') || /FFmpeg/i.test(v.generator || '')) || videos[videos.length - 1] || null;
-    const est = typeof CostEstimate !== 'undefined' && rooms.length ? CostEstimate.estimate(project, project.estimate || {}) : null;
+    // Enveloppe budgétaire : masquée à l'invité tant que meta.budgetShared n'est pas explicitement activé
+    const portalCtx = (typeof window !== 'undefined' && window.PORTAL_CONTEXT) || null;
+    const invited = Boolean(portalCtx && portalCtx.role && portalCtx.role !== 'architect');
+    const budgetVisible = !invited || meta.budgetShared === true;
+    const est = budgetVisible && typeof CostEstimate !== 'undefined' && rooms.length ? CostEstimate.estimate(project, project.estimate || {}) : null;
     const safeSlug = encodeURIComponent(slug || meta.slug || '');
 
     return [
@@ -145,9 +149,13 @@
         render: () => `
           <div class="meeting-center meeting-scroll">
             <p class="meeting-eyebrow">ENVELOPPE PRÉVISIONNELLE</p>
-            <h2>${est ? `${fmtXAF(est.total.low)} – ${fmtXAF(est.total.high)}` : 'Estimation non calculée'}</h2>
-            ${est ? `
+            <h2>${!budgetVisible ? 'Enveloppe non partagée' : est ? `${fmtXAF(est.total.low)} – ${fmtXAF(est.total.high)}` : 'Estimation non calculée'}</h2>
+            ${!budgetVisible ? '<p class="meeting-note">L’enveloppe budgétaire n’est pas partagée sur ce dossier.</p>' : est ? `
               <p class="meeting-note">${esc(est.rate?.label || '')} · ${nf.format(est.reference)} m² de référence · Indication non contractuelle.</p>
+              <div class="meeting-cta-row">
+                <button type="button" class="meeting-primary" id="meeting-export-devis">Télécharger le devis estimatif (PDF)</button>
+              </div>
+              <p class="meeting-note" id="meeting-devis-status" role="status"></p>
               <table class="meeting-table meeting-table-wide">
                 <thead><tr><th>Lot de travaux</th><th>Fourchette basse</th><th>Fourchette haute</th></tr></thead>
                 <tbody>
@@ -166,6 +174,7 @@
             <h2>Décision du maître d’ouvrage</h2>
             <p class="meeting-lead">À l’issue de cette présentation, téléchargez les livrables de l’agence ou passez à la validation formelle du dossier.</p>
             <div class="meeting-cta-row">
+              ${budgetVisible ? '<button type="button" class="meeting-secondary" id="meeting-export-devis-livrables">Télécharger le devis estimatif (PDF)</button>' : ''}
               <button type="button" class="meeting-primary" id="meeting-export-apd">Télécharger le dossier APD / Permis (PDF)</button>
               <a class="meeting-secondary" href="portal.html">Ouvrir le portail de validation client ↗</a>
               <a class="meeting-secondary" href="index.html?project=${safeSlug}">Poursuivre en visite 3D</a>
@@ -208,6 +217,32 @@
       prevBtn.disabled = idx === 0;
       nextBtn.disabled = idx === slides.length - 1;
       [...tabsEl.children].forEach((b, i) => b.setAttribute('aria-selected', String(i === idx)));
+      for (const devisBtn of [stageEl.querySelector('#meeting-export-devis'), stageEl.querySelector('#meeting-export-devis-livrables')]) {
+        if (!devisBtn) continue;
+        const devisStatus = () => stageEl.querySelector('#meeting-decision-status') || stageEl.querySelector('#meeting-devis-status');
+        devisBtn.onclick = async () => {
+          const lib = (typeof window !== 'undefined' && window.DevisPdf) || null;
+          if (!lib || typeof lib.exportPDF !== 'function') {
+            const st = devisStatus();
+            if (st) st.textContent = 'Module Devis PDF indisponible sur cette vue.';
+            return;
+          }
+          devisBtn.disabled = true;
+          const st = devisStatus();
+          if (st) st.textContent = 'Composition du devis estimatif…';
+          try {
+            const estimate = typeof CostEstimate !== 'undefined' && ctx.project
+              ? CostEstimate.estimate(ctx.project, ctx.project.estimate) : null;
+            const out = await lib.exportPDF(ctx.project, estimate, { cabinet: ctx.cabinet });
+            if (st) st.textContent = `Devis téléchargé : ${out.filename} (${out.pages} page${out.pages > 1 ? 's' : ''}) — montants indicatifs, non contractuels.`;
+          } catch (err) {
+            if (st) st.textContent = `Export du devis impossible : ${err.message}`;
+          } finally {
+            devisBtn.disabled = false;
+          }
+        };
+      }
+
       const apdBtn = stageEl.querySelector('#meeting-export-apd');
       if (apdBtn) {
         apdBtn.onclick = async () => {

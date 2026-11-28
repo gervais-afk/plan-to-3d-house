@@ -1275,7 +1275,20 @@ window.startProjectViewer = () => {
     atlas.querySelector('[data-atlas="renders"]').onclick = () => document.getElementById('btn-renders').click();
     const estimatePanel=document.getElementById('atlas-estimate'), estimateOutput=document.getElementById('atlas-estimate-data'), standing=document.getElementById('atlas-standing');
     atlas.querySelector('[data-atlas="estimate"]').onclick=()=>{estimatePanel.hidden=!estimatePanel.hidden;if(!estimatePanel.hidden)updateAtlasEstimate();};
+    function clientBudgetVisible(){
+      // Enveloppe budgétaire réservée à l'agence tant que meta.budgetShared !== true
+      const ctx=(typeof window!=='undefined'&&window.PORTAL_CONTEXT)||null;
+      const invited=Boolean(ctx&&ctx.role&&ctx.role!=='architect');
+      return !invited||Boolean(HOUSE_DATA&&HOUSE_DATA.meta&&HOUSE_DATA.meta.budgetShared===true);
+    }
     function updateAtlasEstimate(){
+      if(!clientBudgetVisible()){
+        estimateOutput.replaceChildren();
+        const note=document.createElement('p');note.textContent='L’enveloppe budgétaire n’est pas partagée sur ce dossier.';
+        estimateOutput.append(note);
+        for(const id of ['atlas-bqe','atlas-bqe-xlsx','atlas-bqe-pdf']){const btn=document.getElementById(id);if(btn)btn.hidden=true;}
+        return;
+      }
       HOUSE_DATA.estimate={...HOUSE_DATA.estimate,profile:'lefisk',standing:standing.value};
       const settings=CostEstimate.settings(HOUSE_DATA.estimate);
       const result=CostEstimate.estimate(HOUSE_DATA,settings),q=result.quantities,fmt=n=>new Intl.NumberFormat('fr-FR',{maximumFractionDigits:1}).format(n);
@@ -1285,6 +1298,20 @@ window.startProjectViewer = () => {
       document.getElementById('atlas-bqe').onclick=()=>{const csv=CostEstimate.bordereauCSV(result,HOUSE_DATA.meta.name),url=URL.createObjectURL(new Blob(['\ufeff',csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=`${PROJECT_SLUG}-bqe.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
       const bqeXlsxBtn=document.getElementById('atlas-bqe-xlsx');
       if(bqeXlsxBtn) bqeXlsxBtn.onclick=()=>{if(typeof XlsxExport!=='undefined') void XlsxExport.downloadXlsx(HOUSE_DATA,result,{slug:PROJECT_SLUG});};
+      const bqePdfBtn=document.getElementById('atlas-bqe-pdf');
+      if(bqePdfBtn) bqePdfBtn.onclick=async()=>{
+        // Devis estimatif PDF cartouché : même estimation que le BQE, aucune donnée envoyée au serveur.
+        const lib=window.DevisPdf||null;
+        if(!lib||typeof lib.exportPDF!=='function') return;
+        bqePdfBtn.disabled=true;
+        try{
+          const cabinet=typeof PdfIdentity!=='undefined'&&typeof PdfIdentity.loadCabinetProfile==='function'
+            ? await PdfIdentity.loadCabinetProfile().catch(()=>null) : null;
+          await lib.exportPDF({...HOUSE_DATA,meta:{...(HOUSE_DATA.meta||{}),slug:PROJECT_SLUG}},result,{cabinet});
+        }finally{
+          bqePdfBtn.disabled=false;
+        }
+      };
     }
     standing.addEventListener('change',updateAtlasEstimate);
     zone.querySelector('[data-zone="plan"]').onclick = () => browseEdition(zoneRoom.id === 'outside' ? 0 : zoneRoom.level ? 2 : 1);
