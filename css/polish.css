@@ -778,8 +778,16 @@ dialog::backdrop {
 /*
  * À cette largeur, le dock bas logait quatre blocs sur une seule ligne :
  * le nom de la pièce était tronqué et le bouton d'action comprimé.
- * Il passe sur deux lignes — lecture en haut, transport en bas — et les
- * raccourcis clavier s'effacent, puisqu'à cette taille on touche l'écran.
+ * Ce qui décide de la mise en page est une mesure, pas une impression :
+ * transport complet (deux flèches de 46 px, « Cinéma », bouton d'action)
+ * ≈ 490 px, les deux raccourcis ≈ 185 px, la lecture (pièce, surface, frise)
+ * ≈ 215 px, soit ≈ 795 px de dock une fois les gouttières comptées.
+ * Dans un cadre de 768 px il reste ≈ 724 px utiles : la rangée unique
+ * couperait le nom de la pièce d'une trentaine de pixels, c'est-à-dire
+ * exactement le défaut qu'on corrige. D'où deux lignes — lecture en haut,
+ * transport en bas — et des raccourcis clavier effacés, puisqu'à cette
+ * taille on touche l'écran. La rangée unique ne revient qu'à partir de
+ * 861 px, avec un dock élargi.
  */
 
 @media (min-width: 601px) and (max-width: 860px) {
@@ -818,6 +826,14 @@ dialog::backdrop {
 
   .tour-dock .dock-shortcuts {
     justify-content: flex-end;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  /* Niveau et escalier n'apparaissent que sur un dossier à étages :
+     ils passent à la ligne plutôt que de pousser le dock hors du cadre. */
+  .tour-dock .dock-shortcuts :is(#visit-level, #take-stairs) {
+    max-width: 100%;
   }
 
   .tour-dock .dock-shortcuts kbd,
@@ -847,11 +863,22 @@ dialog::backdrop {
   }
 }
 
-/* Petits portables (861 → 1080 px) : le dock tient sur une ligne, les
-   touches de raccourci s'effacent pour laisser respirer les libellés. */
+/* Petits portables (861 → 1080 px) : une seule rangée, mais large.
+ *
+ * Sans les touches, les mêmes blocs pèsent ≈ 755 px : la rangée unique tient
+ * dès 861 px (≈ 775 px utiles) et respire jusqu'à 1080 px avec un dock de 900 px.
+ * L'ancien plafond de 720 px était plus étroit que le dock de bureau (770 px) :
+ * il rognait le nom de la pièce, le défaut même corrigé sous 861 px. Les touches
+ * s'effacent ici, puisqu'on est encore sur écran tactile ou petit portable. */
 @media (min-width: 861px) and (max-width: 1080px) {
-  .tour-dock.guided-controls {
-    width: min(100%, 720px);
+  .tour-dock.guided-controls:not(.dock-free) {
+    width: min(100%, 900px);
+    max-width: 900px;
+  }
+
+  .tour-dock .dock-shortcuts {
+    flex-wrap: wrap;
+    min-width: 0;
   }
 
   .tour-dock .dock-shortcuts kbd,

@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-28T08:30:24.656Z",
+  "timestamp": "2026-11-28T08:37:16.324Z",
   "branch": "arena/1d9c67e2-plan-to-3d-house",
   "results": {
     "passed": 82,
@@ -79,7 +79,7 @@
     },
     {
       "status": "PASS",
-      "message": "DESIGN.md (115 lignes)"
+      "message": "DESIGN.md (116 lignes)"
     },
     {
       "status": "PASS",

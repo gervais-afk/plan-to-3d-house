@@ -239,9 +239,14 @@ test('Tablette (601–860 px) : dock sur deux lignes, raccourcis tactiles, pas d
   assert.match(tablet, /#visit-workspace \.approval-card \{[\s\S]{0,160}max-height/, 'la validation ne passe pas sous le dock');
   assert.match(tablet, /\.tool-cluster--end \{\s*margin-left: 0;/, 'pas de trou dans la barre quand les grappes se replient');
 
-  // Petits portables : une ligne, touches retirées.
-  assert.match(polish, /@media \(min-width: 861px\) and \(max-width: 1080px\)[\s\S]{0,220}min\(100%, 720px\)/,
-    'le dock reste sur une ligne en 861–1080 px');
+  // Petits portables : une ligne, touches retirées, et plus large que le dock de bureau.
+  const laptop = /@media \(min-width: 861px\) and \(max-width: 1080px\) \{([\s\S]*?)\n\}/.exec(polish)?.[1] || '';
+  assert.match(laptop, /width: min\(100%, 900px\)/, 'le dock reste sur une ligne en 861–1080 px');
+  assert.match(laptop, /\.tour-dock \.dock-shortcuts kbd[\s\S]{0,80}display: none/, 'touches retirées en 861–1080 px');
+  const baseWidth = Number(/^\.tour-dock\.guided-controls \{[\s\S]{0,400}?width: min\(100%, (\d+)px\)/m.exec(read('css/workspace.css'))?.[1]);
+  assert.ok(baseWidth > 0 && 900 > baseWidth, `la bande 861–1080 px doit être plus large que le dock de bureau (${baseWidth} px)`);
+  assert.match(polish, /une mesure, pas une impression[\s\S]{0,1200}@media \(min-width: 601px\) and \(max-width: 860px\)/,
+    'la mise en page tablette est justifiée par une mesure chiffrée');
 
   // La variante « dock libre » n'est pas écrasée par la mise en page tablette.
   assert.match(tablet, /\.tour-dock\.guided-controls:not\(\.dock-free\)/, 'le dock libre garde sa disposition');
