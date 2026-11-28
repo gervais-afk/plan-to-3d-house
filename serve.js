@@ -973,7 +973,8 @@ function projectProblem(project) {
     return 'Le projet doit avoir un nom et une configuration.';
   }
   if ((project.meta.clientVisible !== undefined && typeof project.meta.clientVisible !== 'boolean') ||
-      !cabinetStore.projectSheetsValid(project.meta.sheets)) return 'Vérifiez la visibilité client et les métadonnées des feuilles.';
+      (project.meta.budgetShared !== undefined && typeof project.meta.budgetShared !== 'boolean') ||
+      !cabinetStore.projectSheetsValid(project.meta.sheets)) return 'Vérifiez la visibilité client, le partage du budget et les métadonnées des feuilles.';
   const { elevationEnd, wallHeight, floorHeight } = project.config;
   if ((elevationEnd !== undefined && (!Number.isFinite(elevationEnd) || elevationEnd <= 0 || elevationEnd > 1)) ||
       [wallHeight, floorHeight].some(value => value !== undefined && (!Number.isFinite(value) || value <= 0))) {
@@ -1662,7 +1663,8 @@ function aiAssistant(req, res, access) {
       ? [
           'Tu es l’assistant architectural d’ArchiCam Studio en mode Portail Client (lecture seule).',
           'Tu réponds avec clarté, chaleur et précision en français aux questions du maître d’ouvrage sur son projet (pièces, surfaces, matériaux, confort, lumière, étapes).',
-          'Ne révèle aucune donnée interne confidentielle et précise toujours que les chiffres ou suggestions restent indicatifs et soumis à validation de l’architecte.'
+          'Ne révèle aucune donnée interne confidentielle et précise toujours que les chiffres ou suggestions restent indicatifs et soumis à validation de l’architecte.',
+          'Le budget n’est communiqué que si le partage est activé sur le dossier ; sinon, indique simplement que l’enveloppe est tenue par l’architecte et reste disponible sur demande.'
         ].join(' ')
       : [
           'Tu es l’assistant architectural expert d’ArchiCam Studio, copilote d’un cabinet d’architecture contemporaine.',
@@ -1672,7 +1674,7 @@ function aiAssistant(req, res, access) {
           'Sur une consigne de sécurité, conformité ou contrôle avant export PDF : propose immédiatement l’action resolve_document_safety qui sécurise tout ce que le dispositif autorise (synchronisation réelle du profil cabinet, assainissement des métadonnées et confidentialité client, mise en quarantaine automatique Porte E des rendus IA non conformes) SANS jamais inventer de champs légaux (client, localisation, phase, indice, date) ni contourner le verrou Porte E. Si l’architecte demande explicitement une phase, un indice, la date du jour ou le masquage client, propose set_cartouche avec les paramètres exacts (ex. [[ACTION:set_cartouche:phase=APD,revision=B,issueDate=today|Appliquer APD · Indice B]]). Signale clairement ce qui reste à valider par l’architecte.',
           'Quand une ou plusieurs actions directes dans l’application aident immédiatement l’architecte, propose 1 à 4 boutons en toute fin de réponse avec la syntaxe STRICTE [[ACTION:id|Libellé court]] ou [[ACTION:id:param|Libellé court]] uniquement parmi ces identifiants autorisés :',
           '- Conception générative & chaîne complète (sans plan importé) : run_studio_pipeline (orchestrateur complet : conception directe dans l’éditeur 2D/3D → meublage auto → conformité PMR/RE2020 & notice → enregistrement → contrôle sécurité & cartouche → APS Auto PDF + Devis estimatif FCFA (PDF cartouché + classeur Excel) + Cahier de plans A3 + Catalogue Premium PDF + Dossier APD/Permis ; param optionnel: brief court), generate_plan_brief (param: brief court, ex. Villa 140 m2 3 chambres veranda), apply_plan_patch (param: modification concrète, ex. Passe la hauteur sous plafond à 3.10 m ou Ajoute une pergola 4x3 m), autofix_compliance (correction automatique PMR 0.90m / HSP 2.50m / RE2020 1/6 vitrage), inject_editorial_brief (rédaction et injection du sous-titre, parti architectural et description dans le dossier), create_ab_variants (création automatique de Variantes A et B chiffrées en FCFA).',
-          '- Documents, BIM & conformité : resolve_document_safety, set_cartouche (param: phase=ESQ|APS|APD|PC|DCE|EXE, revision=A, issueDate=today|YYYY-MM-DD, clientVisible=true|false), generate_aps, generate_apd, generate_catalog, generate_tech_drawings, generate_estimate, export_ifc, export_gbxml, run_compliance, run_bioclimatic, run_structural, compose_planbook, print_planbook, export_json, open_project_info, open_deliverables.',
+          '- Documents, BIM & conformité : resolve_document_safety, set_cartouche (param: phase=ESQ|APS|APD|PC|DCE|EXE, revision=A, issueDate=today|YYYY-MM-DD, clientVisible=true|false, budgetShared=true|false), generate_aps, generate_apd, generate_catalog, generate_tech_drawings, generate_estimate, export_ifc, export_gbxml, run_compliance, run_bioclimatic, run_structural, compose_planbook, print_planbook, export_json, open_project_info, open_deliverables.',
           '- Dossier, variantes & collaboration : open_revisions, save_revision (param optionnel: libellé court), compare_versions, open_variants, generate_variants, open_annotations, open_cabinet, open_meeting, save_project, open_index.',
           '- Visite 3D, ambiances & cinéma : set_ambiance (param: origin|pierre-chaux|beton-bois|villa-tropicale), set_finish (param: floor=oak|tile|concrete, facade=plaster|timber|stone), set_solar_hour (param: 7..20 ex. 8, 13, 17, 20), toggle_solar_play, toggle_night, toggle_section_3d, toggle_explode_3d, toggle_timelapse_4d, toggle_clearances, toggle_plan_compare, toggle_present_mode, open_gallery, open_sublimate, export_video, export_ai_sequence, open_bioclimatic, view_3d.',
           '- Éditeur 2D/3D : set_floor (param: 0 ou 1), select_tool (param: select|calibrate|wall-ext|wall-int|door|window|open|room-auto|room|room-poly|column|slab|stairwell|pergola|furniture|camera|annotate|measure), editor_undo, editor_redo, load_template (param: villa-f4|studio|villa-serena), open_ai_read, open_vector_pdf, open_plan_cleanup, auto_furnish, view_split, view_2d.'
@@ -1867,6 +1869,13 @@ function evaluateAndResolveDocumentSafety(rawSlug, opts = {}) {
       resolved.push('Option d’exposition du client désactivée (aucun maître d’ouvrage renseigné).');
     }
 
+    // Partage du budget : jamais activé sans pièce à chiffrer (le client ne verrait qu’un écran vide)
+    if (proj.meta.budgetShared === true && !(Array.isArray(proj.rooms) && proj.rooms.length)) {
+      proj.meta.budgetShared = false;
+      projectDirty = true;
+      resolved.push('Partage du budget désactivé (aucune pièce à chiffrer dans le plan).');
+    }
+
     // Mises à jour explicites uniquement si transmises volontairement par l'architecte
     const explicit = opts.metaUpdates && typeof opts.metaUpdates === 'object' ? opts.metaUpdates : null;
     const isPlaceholderVal = (val) => /^[-—–._/]+$|^(?:n\/a|na|tbd|todo|inconnu|non\s*renseign[ée])$/i.test(String(val || '').trim());
@@ -1917,6 +1926,13 @@ function evaluateAndResolveDocumentSafety(rawSlug, opts = {}) {
         resolved.push(explicit.clientVisible
           ? 'Affichage du maître d’ouvrage activé sur les couvertures partagées.'
           : 'Confidentialité renforcée : maître d’ouvrage masqué sur les couvertures partagées.');
+      }
+      if (typeof explicit.budgetShared === 'boolean' && proj.meta.budgetShared !== explicit.budgetShared) {
+        proj.meta.budgetShared = explicit.budgetShared;
+        projectDirty = true;
+        resolved.push(explicit.budgetShared
+          ? 'Partage de l’enveloppe budgétaire activé pour le client invité.'
+          : 'Enveloppe budgétaire réservée à l’agence : masquée au client invité.');
       }
     }
 
@@ -2099,6 +2115,7 @@ function evaluateAndResolveDocumentSafety(rawSlug, opts = {}) {
       architect: String(proj.meta?.architect || ''),
       client: String(proj.meta?.client || ''),
       clientVisible: proj.meta?.clientVisible === true,
+      budgetShared: proj.meta?.budgetShared === true,
       location: String(proj.meta?.location || ''),
       phase: String(proj.meta?.phase || ''),
       revision: String(proj.meta?.revision || ''),
@@ -3064,6 +3081,8 @@ http.createServer((req, res) => {
         const raw = fs.readFileSync(file, 'utf8');
         const project = JSON.parse(raw);
         if (project.meta && project.meta.clientVisible !== true) delete project.meta.client;
+        // Budget : les réglages de prix de l'agence ne quittent le serveur que si le partage est explicitement activé.
+        if (project.meta && project.meta.budgetShared !== true) delete project.estimate;
         const body = Buffer.from(JSON.stringify(project));
         const headers = { 'Content-Type': 'application/json', 'Content-Length': body.length, 'Cache-Control': 'private, no-store' };
         if (access.session?.role) headers['X-Project-Model-Hash'] = createHash('sha256').update(raw).digest('hex');

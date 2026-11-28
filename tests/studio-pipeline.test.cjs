@@ -182,6 +182,14 @@ test('Chaîne complète (serveur) : save-project → compliance-autofix → edit
   assert.equal(saved.data.ok, true);
   assert.ok(fs.existsSync(path.join(sandbox.root, 'projects', 'chaine-complete', 'project.json')), 'Le dossier doit être écrit sur disque');
 
+  // Le partage du budget est un booléen strict : jamais déduit d'un montant ou d'un rôle.
+  const badShare = await post(srv.origin, '/api/save-project', {
+    slug: 'partage-invalide',
+    project: { ...PIPELINE_PROJECT, meta: { ...PIPELINE_PROJECT.meta, budgetShared: 'oui' } }
+  });
+  assert.equal(badShare.status, 422);
+  assert.match(badShare.data.error, /partage du budget/i);
+
   // Étape 3 : auto-fix PMR/RE2020 (porte 0,78 m → 0,90 m) sans écraser le plan tant que l'architecte n'a pas appliqué
   const fix = await post(srv.origin, '/api/projects/chaine-complete/compliance-autofix', { project: PIPELINE_PROJECT, apply: false });
   assert.equal(fix.status, 200);
@@ -220,6 +228,7 @@ test('Chaîne complète (serveur) : save-project → compliance-autofix → edit
   assert.ok(safety.data.porteE && typeof safety.data.porteE.totalAi === 'number', 'L’état de la Porte E doit être renvoyé');
   assert.ok(safety.data.checklist && typeof safety.data.checklist.ready === 'boolean', 'La checklist de livraison doit être renvoyée');
   assert.equal(safety.data.meta.client, '', 'Aucune mention légale ne doit être inventée par le serveur');
+  assert.equal(safety.data.meta.budgetShared, false, 'L’enveloppe budgétaire n’est pas partagée par défaut');
 
   // Étape 5bis : l'architecte valide les mentions dans le mini-formulaire du chat
   const resolved = await post(srv.origin, '/api/projects/chaine-complete/document-safety', {
@@ -233,7 +242,8 @@ test('Chaîne complète (serveur) : save-project → compliance-autofix → edit
       phase: 'APS',
       revision: 'A',
       issueDate: '2026-11-27',
-      clientVisible: false
+      clientVisible: false,
+      budgetShared: true
     }
   });
   assert.equal(resolved.status, 200);
@@ -242,6 +252,8 @@ test('Chaîne complète (serveur) : save-project → compliance-autofix → edit
   assert.equal(resolved.data.meta.phase, 'APS');
   assert.equal(resolved.data.meta.revision, 'A');
   assert.equal(resolved.data.meta.issueDate, '2026-11-27');
+  assert.equal(resolved.data.meta.budgetShared, true, 'Le partage du budget validé dans le chat doit être enregistré');
+  assert.ok((resolved.data.resolved || []).some(m => /Partage de l’enveloppe budgétaire activé/i.test(m)), 'La décision de partage doit être tracée dans l’audit');
   assert.ok(!resolved.data.missingCartouche.includes("Maître d'ouvrage"), 'Le maître d’ouvrage ne doit plus manquer après validation');
   assert.ok(!resolved.data.missingCartouche.includes('Phase'), 'La phase ne doit plus manquer après validation');
 
@@ -384,4 +396,49 @@ test('Devis FCFA de la chaîne : enveloppe chiffrée calculée et classeur .xlsx
   assert.ok(summary?.lotCount > 0, 'Le récapitulatif doit dénombrer les lots chiffrés');
   assert.ok(summary?.roomCount > 0, 'Le métré doit dénombrer les pièces du plan');
   assert.ok(low.length > 0);
+});
+
+// ============================================================================
+// 8. PARTAGE DU BUDGET : VERROU SERVEUR ET MASQUAGE DES SURFACES CLIENT
+// ============================================================================
+test('Partage du budget : booléen explicite, rédaction serveur et masquage des surfaces invité', () => {
+  const read = file => fs.readFileSync(path.join(ROOT, file), 'utf8');
+  const serve = read('serve.js');
+
+  // (1) Seul le serveur décide : sans partage explicite, l'enveloppe ne quitte jamais le dossier.
+  assert.match(serve, /budgetShared !== true\) delete project\.estimate/,
+    'Le routage statique doit supprimer project.estimate tant que le partage n’est pas activé');
+  assert.match(serve, /budgetShared !== undefined && typeof project\.meta\.budgetShared !== 'boolean'/,
+    'projectProblem doit refuser un partage non booléen');
+  assert.match(serve, /Partage du budget désactivé \(aucune pièce à chiffrer/,
+    'Un partage sans pièce à chiffrer doit être annulé et tracé');
+
+  // (2) L'architecte pilote le drapeau depuis l'éditeur et le mini-formulaire du chat.
+  const editor = read('js/editor.js');
+  assert.match(editor, /key: 'budgetShared'[^\n]*Partager l’enveloppe budgétaire avec le client invité/,
+    'L’éditeur doit proposer la case « Partager l’enveloppe budgétaire »');
+  assert.match(editor, /if \(typeof p\.meta\.budgetShared !== 'boolean'\) p\.meta\.budgetShared = false;/,
+    'Le partage doit être normalisé à false au chargement du dossier');
+  const assistant = read('js/aiAssistant.js');
+  assert.match(assistant, /k === 'budgetShared'/, 'L’assistant doit savoir écrire le drapeau');
+  assert.match(assistant, /Partager l’enveloppe budgétaire \(devis PDF\) avec le client invité/,
+    'Le jalon cartouche du chat doit exposer la case de partage');
+
+  // (3) Côté invité, les surfaces qui recalculent des montants sont retirées, pas seulement leurs boutons.
+  const app = read('js/app.js');
+  assert.match(app, /L’enveloppe budgétaire n’est pas partagée sur ce dossier\./);
+  assert.match(app, /for\(const id of \['atlas-bqe','atlas-bqe-xlsx','atlas-bqe-pdf'\]\)/,
+    'Les trois exports du panneau Estimation doivent disparaître ensemble');
+  const home = read('js/home.js');
+  assert.match(home, /devisBtn\.hidden = invited && meta\.budgetShared !== true;/,
+    'La fiche projet doit masquer l’export devis pour un invité sans partage');
+  const meeting = read('js/meetingMode.js');
+  assert.match(meeting, /const budgetVisible = !invited \|\| meta\.budgetShared === true;/);
+  assert.match(meeting, /const est = budgetVisible && typeof CostEstimate !== 'undefined'/,
+    'Sans partage, le livret de réunion ne doit pas même calculer l’enveloppe');
+  assert.match(meeting, /\$\{budgetVisible \? '<button[^']*meeting-export-devis-livrables/,
+    'Le second CTA devis du chapitre validation doit suivre le même verrou');
+
+  // (4) L'assistant ne divulgue pas l'enveloppe à un invité : consigne explicite côté serveur.
+  assert.match(serve, /Le budget n’est communiqué que si le partage est activé sur le dossier/);
 });

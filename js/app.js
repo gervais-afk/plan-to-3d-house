@@ -1275,7 +1275,20 @@ window.startProjectViewer = () => {
     atlas.querySelector('[data-atlas="renders"]').onclick = () => document.getElementById('btn-renders').click();
     const estimatePanel=document.getElementById('atlas-estimate'), estimateOutput=document.getElementById('atlas-estimate-data'), standing=document.getElementById('atlas-standing');
     atlas.querySelector('[data-atlas="estimate"]').onclick=()=>{estimatePanel.hidden=!estimatePanel.hidden;if(!estimatePanel.hidden)updateAtlasEstimate();};
+    function clientBudgetVisible(){
+      // Enveloppe budgétaire réservée à l'agence tant que meta.budgetShared !== true
+      const ctx=(typeof window!=='undefined'&&window.PORTAL_CONTEXT)||null;
+      const invited=Boolean(ctx&&ctx.role&&ctx.role!=='architect');
+      return !invited||Boolean(HOUSE_DATA&&HOUSE_DATA.meta&&HOUSE_DATA.meta.budgetShared===true);
+    }
     function updateAtlasEstimate(){
+      if(!clientBudgetVisible()){
+        estimateOutput.replaceChildren();
+        const note=document.createElement('p');note.textContent='L’enveloppe budgétaire n’est pas partagée sur ce dossier.';
+        estimateOutput.append(note);
+        for(const id of ['atlas-bqe','atlas-bqe-xlsx','atlas-bqe-pdf']){const btn=document.getElementById(id);if(btn)btn.hidden=true;}
+        return;
+      }
       HOUSE_DATA.estimate={...HOUSE_DATA.estimate,profile:'lefisk',standing:standing.value};
       const settings=CostEstimate.settings(HOUSE_DATA.estimate);
       const result=CostEstimate.estimate(HOUSE_DATA,settings),q=result.quantities,fmt=n=>new Intl.NumberFormat('fr-FR',{maximumFractionDigits:1}).format(n);

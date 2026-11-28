@@ -431,6 +431,13 @@ window.ProjectCoverReady = (() => {
   function projectSheet(project, data) {
     const section = el('project-sheet');
     const meta = project?.meta || {};
+    // Enveloppe budgétaire : le devis n'est proposé à l'invité que si le partage est explicitement activé
+    const devisBtn = el('sheet-export-devis');
+    if (devisBtn) {
+      const ctx = (typeof window !== 'undefined' && window.PORTAL_CONTEXT) || null;
+      const invited = Boolean(ctx && ctx.role && ctx.role !== 'architect');
+      devisBtn.hidden = invited && meta.budgetShared !== true;
+    }
     const concept = String(meta.concept || '').trim();
     const rooms = data?.rooms || [];
     const levels = new Set(rooms.map(r => r.level)).size;

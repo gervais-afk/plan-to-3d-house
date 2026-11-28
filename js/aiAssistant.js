@@ -309,6 +309,8 @@
         else if (/^\d{4}-\d{2}-\d{2}$/.test(v)) out.issueDate = v;
       } else if (k === 'clientVisible' && (v === 'true' || v === 'false')) {
         out.clientVisible = v === 'true';
+      } else if (k === 'budgetShared' && (v === 'true' || v === 'false')) {
+        out.budgetShared = v === 'true';
       }
     }
     return out;
@@ -1229,6 +1231,16 @@
       dateWrap.append(dateIn, todayBtn);
       addField('Date d’émission', dateWrap);
 
+      const budgetLbl = document.createElement('label');
+      budgetLbl.className = 'ai-pipeline-check ai-pipeline-check--full';
+      const budgetCb = document.createElement('input');
+      budgetCb.type = 'checkbox';
+      budgetCb.checked = curMeta.budgetShared === true;
+      const budgetTxt = document.createElement('span');
+      budgetTxt.textContent = 'Partager l’enveloppe budgétaire (devis PDF) avec le client invité';
+      budgetLbl.append(budgetCb, budgetTxt);
+      form.append(budgetLbl);
+
       const visLbl = document.createElement('label');
       visLbl.className = 'ai-pipeline-check ai-pipeline-check--full';
       const visCb = document.createElement('input');
@@ -1263,7 +1275,7 @@
         confirmBtn.disabled = true;
         confirmBtn.textContent = 'Validation…';
         try {
-          const metaUpdates = { clientVisible: visCb.checked };
+          const metaUpdates = { clientVisible: visCb.checked, budgetShared: budgetCb.checked };
           if (clientIn.value.trim()) metaUpdates.client = clientIn.value.trim();
           if (locIn.value.trim()) metaUpdates.location = locIn.value.trim();
           if (phaseSel.value) metaUpdates.phase = phaseSel.value;

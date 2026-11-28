@@ -60,7 +60,11 @@
       || images.find(i => /plan-2d/i.test(i.id || ''))?.file || '';
     const galleryShots = [...images.filter(i => i.catalog && i.file), ...renders.filter(r => r.file)].slice(0, 4);
     const heroVideo = [...videos].reverse().find(v => /film-realiste/i.test(v.id || '') || /FFmpeg/i.test(v.generator || '')) || videos[videos.length - 1] || null;
-    const est = typeof CostEstimate !== 'undefined' && rooms.length ? CostEstimate.estimate(project, project.estimate || {}) : null;
+    // Enveloppe budgétaire : masquée à l'invité tant que meta.budgetShared n'est pas explicitement activé
+    const portalCtx = (typeof window !== 'undefined' && window.PORTAL_CONTEXT) || null;
+    const invited = Boolean(portalCtx && portalCtx.role && portalCtx.role !== 'architect');
+    const budgetVisible = !invited || meta.budgetShared === true;
+    const est = budgetVisible && typeof CostEstimate !== 'undefined' && rooms.length ? CostEstimate.estimate(project, project.estimate || {}) : null;
     const safeSlug = encodeURIComponent(slug || meta.slug || '');
 
     return [
@@ -145,8 +149,8 @@
         render: () => `
           <div class="meeting-center meeting-scroll">
             <p class="meeting-eyebrow">ENVELOPPE PRÉVISIONNELLE</p>
-            <h2>${est ? `${fmtXAF(est.total.low)} – ${fmtXAF(est.total.high)}` : 'Estimation non calculée'}</h2>
-            ${est ? `
+            <h2>${!budgetVisible ? 'Enveloppe non partagée' : est ? `${fmtXAF(est.total.low)} – ${fmtXAF(est.total.high)}` : 'Estimation non calculée'}</h2>
+            ${!budgetVisible ? '<p class="meeting-note">L’enveloppe budgétaire n’est pas partagée sur ce dossier.</p>' : est ? `
               <p class="meeting-note">${esc(est.rate?.label || '')} · ${nf.format(est.reference)} m² de référence · Indication non contractuelle.</p>
               <div class="meeting-cta-row">
                 <button type="button" class="meeting-primary" id="meeting-export-devis">Télécharger le devis estimatif (PDF)</button>
@@ -170,7 +174,7 @@
             <h2>Décision du maître d’ouvrage</h2>
             <p class="meeting-lead">À l’issue de cette présentation, téléchargez les livrables de l’agence ou passez à la validation formelle du dossier.</p>
             <div class="meeting-cta-row">
-              <button type="button" class="meeting-secondary" id="meeting-export-devis-livrables">Télécharger le devis estimatif (PDF)</button>
+              ${budgetVisible ? '<button type="button" class="meeting-secondary" id="meeting-export-devis-livrables">Télécharger le devis estimatif (PDF)</button>' : ''}
               <button type="button" class="meeting-primary" id="meeting-export-apd">Télécharger le dossier APD / Permis (PDF)</button>
               <a class="meeting-secondary" href="portal.html">Ouvrir le portail de validation client ↗</a>
               <a class="meeting-secondary" href="index.html?project=${safeSlug}">Poursuivre en visite 3D</a>
