@@ -52,7 +52,7 @@ async function serve(root, variables = {}) {
 function fixture(root) {
   for (const file of ['serve.js', 'privatePortal.js', 'feedbackStore.js', 'decisionStore.js', 'presentationStore.js', 'cabinetStore.js', 'portal.html', 'accueil.html', 'studio.html', 'index.html', 'editor.html']) fs.copyFileSync(path.join(source, file), path.join(root, file));
   fs.mkdirSync(path.join(root, 'js'));
-  for (const file of ['variantState.js', 'data.js', 'coverImage.js', 'workspace.js']) fs.copyFileSync(path.join(source, 'js', file), path.join(root, 'js', file));
+  for (const file of ['variantState.js', 'data.js', 'coverImage.js', 'workspace.js', 'devisPdf.js']) fs.copyFileSync(path.join(source, 'js', file), path.join(root, 'js', file));
   fs.mkdirSync(path.join(root, 'css'));
   fs.copyFileSync(path.join(source, 'css', 'workspace.css'), path.join(root, 'css', 'workspace.css'));
   for (const project of ['plan-a', 'plan-b']) {
@@ -193,6 +193,8 @@ test('Invitations : portée projet, rôles, accès direct, expiration et révoca
   assert.equal(cover.headers.get('cache-control'), 'private, no-store');
   assert.equal((await reader.request('/js/coverImage.js')).status, 200, 'le client invité reçoit le script de cadrage de couverture');
   assert.equal((await reader.request('/js/workspace.js')).status, 200, 'le client invité reçoit le contrôleur de navigation');
+  assert.equal((await reader.request('/js/devisPdf.js')).status, 200, 'le client invité reçoit le module du devis estimatif (portail)');
+  assert.equal((await guest.request('/js/devisPdf.js')).status, 401, 'sans invitation, le module du devis reste fermé');
   assert.equal((await reader.request('/css/workspace.css')).status, 200);
   assert.equal((await reader.request('/?project=plan-b')).status, 403, 'la racine ne contourne pas la portée de l’invitation');
   const projectResponse = await reader.request(a + '/project.json');

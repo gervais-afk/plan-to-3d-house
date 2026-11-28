@@ -7,6 +7,9 @@ Estimation indicative en FCFA (`js/costEstimate.js`) et lot béton armé / HA. L
 Complément « papier » du panneau Estimation et du classeur Excel :
 
 - **bouton** `Devis estimatif PDF` dans la fenêtre *Estimation FCFA* de l'éditeur ;
+- **cockpit 3D** (`index.html`) : *Outils → Estimation & devis → Télécharger le devis estimatif · PDF*, à côté du BQE Excel ;
+- **livret de réunion** (`js/meetingMode.js`) : chapitre *Estimation* et chapitre *Validation* ;
+- **fiche projet / portail client** (`accueil.html`) : bouton `Devis estimatif (PDF)`, module autorisé aux invités ;
 - **chaîne complète** du copilote (livrable *Devis & Métré*, produit en PDF cartouché **et** en `.xlsx`).
 
 Document A4 relié, produit localement (jsPDF local, aucun envoi du projet) :

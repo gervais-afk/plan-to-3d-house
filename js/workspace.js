@@ -12,7 +12,7 @@
     ['wp', 'variant', 'retours'].some(key => fragment.has(key));
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
   const knownViews = ['cover', 'visit', 'dossier', 'estimate', 'gallery'];
-  const common = ['motion', 'houseDataCore', 'viewOrder', 'deliverableGate', 'costEstimate', 'xlsxExport', 'technicalDrawings', 'variantComparator', 'pdfIdentity', 'deliverableChecklist', 'apdDossier', 'meetingMode', 'bioclimaticAudit'];
+  const common = ['motion', 'houseDataCore', 'viewOrder', 'deliverableGate', 'costEstimate', 'xlsxExport', 'devisPdf', 'technicalDrawings', 'variantComparator', 'pdfIdentity', 'deliverableChecklist', 'apdDossier', 'meetingMode', 'bioclimaticAudit'];
   const viewer = ['icons', 'data', 'projectLoader', 'scene', 'variantState', 'solarStudy', 'realism', 'assets', 'presentationPlan',
     'renderStudio', 'aiSequence', 'scrollTour', 'walkController', 'minimap', 'clientFinishes', 'solarOptions', 'clientTools', 'clientVariants',
     'clientDecisions', 'clientFeedback', 'woodGrain', 'clientBrochure', 'sheetClassifier', 'planBook', 'aiPrompt', 'fidelityCheck', 'gateReviewUI', 'aiStudioSuite', 'app', 'presentMode'];

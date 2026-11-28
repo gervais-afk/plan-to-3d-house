@@ -85,7 +85,7 @@ La visite guidée et les médias sont navigables sans souris ; la manipulation g
 
 ## Accueil du dossier
 
-Avec `node serve.js`, `/?project=<dossier>` ouvre la couverture du projet. **Découvrir en 3D** ou le défilement sous la couverture initialise la maquette sans recharger la page. La navigation **Visite 3D · Dossier & Plans · Estimation · Galerie** ne change pas l’URL du projet. Le dock regroupe les étapes et les commandes de coupe (**C**) et de vue éclatée (**X**). Le bouton **Plan** déplie le radar et **Outils** ouvre les commandes secondaires.
+Avec `node serve.js`, `/?project=<dossier>` ouvre la couverture du projet. **Découvrir en 3D** ou le défilement sous la couverture initialise la maquette sans recharger la page. Dans le cockpit, **Outils → Estimation & devis** propose le BQE en CSV, en Excel (`.xlsx`) et en **devis estimatif PDF** cartouché (même estimation `CostEstimate`, montants indicatifs). La navigation **Visite 3D · Dossier & Plans · Estimation · Galerie** ne change pas l’URL du projet. Le dock regroupe les étapes et les commandes de coupe (**C**) et de vue éclatée (**X**). Le bouton **Plan** déplie le radar et **Outils** ouvre les commandes secondaires.
 
 Les liens directs `index.html?project=<dossier>` et les liens d’étape, de variante ou de validation existants ouvrent toujours la visite. En mode privé, le projet et les médias restent limités au périmètre de la session.
 

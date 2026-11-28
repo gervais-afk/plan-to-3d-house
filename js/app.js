@@ -1285,6 +1285,20 @@ window.startProjectViewer = () => {
       document.getElementById('atlas-bqe').onclick=()=>{const csv=CostEstimate.bordereauCSV(result,HOUSE_DATA.meta.name),url=URL.createObjectURL(new Blob(['\ufeff',csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=`${PROJECT_SLUG}-bqe.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
       const bqeXlsxBtn=document.getElementById('atlas-bqe-xlsx');
       if(bqeXlsxBtn) bqeXlsxBtn.onclick=()=>{if(typeof XlsxExport!=='undefined') void XlsxExport.downloadXlsx(HOUSE_DATA,result,{slug:PROJECT_SLUG});};
+      const bqePdfBtn=document.getElementById('atlas-bqe-pdf');
+      if(bqePdfBtn) bqePdfBtn.onclick=async()=>{
+        // Devis estimatif PDF cartouché : même estimation que le BQE, aucune donnée envoyée au serveur.
+        const lib=window.DevisPdf||null;
+        if(!lib||typeof lib.exportPDF!=='function') return;
+        bqePdfBtn.disabled=true;
+        try{
+          const cabinet=typeof PdfIdentity!=='undefined'&&typeof PdfIdentity.loadCabinetProfile==='function'
+            ? await PdfIdentity.loadCabinetProfile().catch(()=>null) : null;
+          await lib.exportPDF({...HOUSE_DATA,meta:{...(HOUSE_DATA.meta||{}),slug:PROJECT_SLUG}},result,{cabinet});
+        }finally{
+          bqePdfBtn.disabled=false;
+        }
+      };
     }
     standing.addEventListener('change',updateAtlasEstimate);
     zone.querySelector('[data-zone="plan"]').onclick = () => browseEdition(zoneRoom.id === 'outside' ? 0 : zoneRoom.level ? 2 : 1);

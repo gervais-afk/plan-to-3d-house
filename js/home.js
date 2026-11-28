@@ -1109,6 +1109,21 @@ window.ProjectCoverReady = (() => {
       cabinet: currentCabinet
     });
   });
+  el('sheet-export-devis')?.addEventListener('click', async () => {
+    const btn = el('sheet-export-devis');
+    const lib = (typeof window !== 'undefined' && window.DevisPdf) || null;
+    if (!lib || typeof lib.exportPDF !== 'function' || !loadedProjectRecord) return;
+    btn.disabled = true;
+    try {
+      const estimate = typeof CostEstimate !== 'undefined' ? CostEstimate.estimate(loadedProjectRecord, loadedProjectRecord.estimate) : null;
+      const out = await lib.exportPDF(loadedProjectRecord, estimate, { cabinet: currentCabinet });
+      status.textContent = `Devis estimatif téléchargé (${out.pages} page${out.pages > 1 ? 's' : ''}) — montants indicatifs, non contractuels.`;
+    } catch (err) {
+      status.textContent = `Export du devis impossible : ${err.message}`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
   el('sheet-export-apd')?.addEventListener('click', async () => {
     const btn = el('sheet-export-apd');
     if (typeof ApdDossier === 'undefined' || !loadedProjectRecord) return;

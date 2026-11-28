@@ -332,7 +332,43 @@ test('Devis PDF : document A4 multi-pages, texte réel (titre, lots, montants, r
 });
 
 // ============================================================================
-// 5. LE DEVIS FCFA ALIMENTE LA CHAÎNE (CALCUL LOCAL + EXPORT .XLSX)
+// 5. DEVIS PDF DISPONIBLE DANS LES QUATRE SURFACES (ÉDITEUR, COCKPIT 3D,
+//    LIVRET DE RÉUNION, PORTAIL CLIENT)
+// ============================================================================
+test('Devis PDF : exposé dans l’éditeur, le cockpit 3D, le livret de réunion et le portail client', () => {
+  const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+
+  // Éditeur : bouton dans la fenêtre Estimation + API de la chaîne complète
+  const editor = read('editor.html');
+  assert.ok(editor.includes('id="est-devis-pdf"'), 'l’éditeur propose « Devis estimatif PDF » dans Estimation FCFA');
+  assert.ok(editor.includes('js/devisPdf.js'), 'l’éditeur charge le module du devis');
+  assert.ok(read('js/editorEstimate.js').includes('window.DevisPdf'), 'le bouton de l’éditeur appelle DevisPdf');
+  assert.ok(read('js/editorPremium.js').includes('exportDevisPdf'), 'la chaîne complète expose exportDevisPdf');
+
+  // Cockpit 3D (visite) : à côté du BQE Excel
+  const cockpit = read('index.html');
+  assert.ok(cockpit.includes('id="atlas-bqe-pdf"'), 'le cockpit 3D propose le devis PDF à côté du BQE Excel');
+  const app = read('js/app.js');
+  assert.ok(app.includes("getElementById('atlas-bqe-pdf')"), 'js/app.js branche le bouton du cockpit');
+  assert.ok(app.includes('lib.exportPDF('), 'le cockpit génère le PDF avec la même estimation que le BQE');
+
+  // Livret de réunion : chapitre Estimation + Validation
+  const meeting = read('js/meetingMode.js');
+  assert.ok(meeting.includes('id="meeting-export-devis"'), 'le livret propose le devis dans le chapitre Estimation');
+  assert.ok(meeting.includes('id="meeting-export-devis-livrables"'), 'le livret propose le devis dans le chapitre Validation');
+  assert.ok(meeting.includes('lib.exportPDF(ctx.project, estimate'), 'le livret produit le PDF depuis le projet présenté');
+
+  // Couverture / portail client : export depuis la fiche projet
+  assert.ok(read('accueil.html').includes('id="sheet-export-devis"'), 'la fiche projet propose le devis PDF');
+  assert.ok(read('js/home.js').includes("el('sheet-export-devis')"), 'js/home.js branche l’export de la fiche projet');
+
+  // Chargement et autorisation côté portail privé
+  assert.match(read('js/workspace.js'), /'costEstimate', 'xlsxExport', 'devisPdf'/, 'le shell charge le devis sur toutes les vues');
+  assert.match(read('privatePortal.js'), /'js\/devisPdf\.js'/, 'le portail autorise le module du devis pour les invités');
+});
+
+// ============================================================================
+// 6. LE DEVIS FCFA ALIMENTE LA CHAÎNE (CALCUL LOCAL + EXPORT .XLSX)
 // ============================================================================
 test('Devis FCFA de la chaîne : enveloppe chiffrée calculée et classeur .xlsx signé du slug', () => {
   const CostEstimate = require('../js/costEstimate.js');
