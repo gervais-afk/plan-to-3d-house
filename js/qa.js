@@ -2,7 +2,7 @@
  * ARCHICAM STUDIO — BANC D'ESSAI (js/qa.js)
  * ---------------------------------------------------------------------------
  * Charge une vraie vue de l'application dans un cadre à largeur choisie et
- * audit les contrastes du système à partir des jetons calculés.
+ * audite les contrastes du système (clair et sombre) depuis css/tokens.css.
  * Aucun accès réseau hors des pages de l'atelier ; aucun réglage n'est envoyé
  * au serveur : tout vit dans l'URL de la page de banc d'essai.
  */
@@ -25,6 +25,8 @@
     ['--ink', '--paper', 'Texte courant sur papier', false],
     ['--ink-2', '--paper', 'Texte secondaire sur papier', false],
     ['--muted', '--paper', 'Légendes sur papier', false],
+    ['--ink-2', '--surface', 'Secondaire sur surface', false],
+    ['--muted', '--surface', 'Légendes sur surface', false],
     ['--accent-ink', '--paper', 'Accent sur papier', false],
     ['--accent-ink', '--accent-wash', 'Accent sur lavé sable', false],
     ['--paper', '--ink', 'Bouton primaire', false],
@@ -32,7 +34,7 @@
     ['--on-night-2', '--night', 'Secondaire sur nuit', false],
     ['--on-night-muted', '--night', 'Légende sur nuit', false],
     ['--accent-soft', '--night', 'Accent doux sur nuit', true],
-    ['--ink', '--accent', 'Badge accent (mode FPS)', false],
+    ['--night', '--accent', 'Badge accent (mode FPS)', false],
     ['--danger', '--paper', 'Alerte sur papier', false],
     ['--success', '--paper', 'Succès sur papier', false],
     ['--warning', '--paper', 'Vigilance sur papier', false]
@@ -40,7 +42,8 @@
 
   const REQUIRED_TOKENS = ['--paper', '--ink', '--accent', '--surface-2', '--ring', '--shadow-3', '--text-3xl', '--measure'];
 
-  const state = { view: 'accueil', project: '', width: 768, height: 'fill', zoom: 1 };
+  const state = { view: 'accueil', project: '', width: 768, height: 'fill', zoom: 1, scheme: 'light' };
+  let schemes = { light: null, dark: null };
 
   /* ------------------------------------------------------------------ */
   /* Couleur et contraste — calcul dans js/contrast.js                  */
@@ -48,8 +51,37 @@
 
   const Contrast = (typeof window !== 'undefined' && window.Contrast) || null;
 
-  function token(name) {
-    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  function token(scheme, name) {
+    const map = schemes[scheme];
+    if (map && Object.prototype.hasOwnProperty.call(map, name)) return map[name];
+    if (scheme === 'light') {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+    return '';
+  }
+
+  function evaluateScheme(scheme) {
+    const results = PAIRS.map(([fgName, bgName, label, large]) => {
+      const fg = Contrast.parseColor(token(scheme, fgName));
+      const bg = Contrast.parseColor(token(scheme, bgName));
+      if (!fg || !bg) {
+        return { fgName, bgName, label, value: null, code: 'jeton illisible', tone: 'is-bad', ok: false };
+      }
+      const value = Contrast.ratio(fg, bg);
+      const { code, tone } = Contrast.verdict(value, large);
+      const min = large ? Contrast.AA_LARGE : Contrast.AA_TEXT;
+      return { fgName, bgName, label, value, code, tone, ok: value >= min };
+    });
+    const passed = results.filter(item => item.ok).length;
+    return { results, passed, total: results.length, failed: results.length - passed };
+  }
+
+  function syncSchemeButtons() {
+    document.querySelectorAll('.qa-scheme').forEach(button => {
+      const active = button.dataset.auditScheme === state.scheme;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
   }
 
   function renderContrast() {
@@ -59,25 +91,56 @@
       body.innerHTML = '<tr><td colspan="3">Module js/contrast.js indisponible : audit impossible.</td></tr>';
       return;
     }
-    const rows = PAIRS.map(([fgName, bgName, label, large]) => {
-      const fg = Contrast.parseColor(token(fgName));
-      const bg = Contrast.parseColor(token(bgName));
-      if (!fg || !bg) return `<tr><td>${label}<br><span class="qa-token-pair">${fgName} / ${bgName}</span></td><td>—</td><td class="qa-verdict">jeton illisible</td></tr>`;
-      const value = Contrast.ratio(fg, bg);
-      const { code, tone } = Contrast.verdict(value, large);
-      return `<tr><td>${label}<br><span class="qa-token-pair">${fgName} / ${bgName}</span></td>` +
-        `<td class="qa-ratio">${value.toFixed(2)}</td>` +
-        `<td><span class="qa-verdict ${tone}">${code}</span></td></tr>`;
+
+    syncSchemeButtons();
+    const active = evaluateScheme(state.scheme);
+    const rows = active.results.map(item => {
+      if (item.value === null) {
+        return `<tr><td>${item.label}<br><span class="qa-token-pair">${item.fgName} / ${item.bgName}</span></td><td>—</td><td class="qa-verdict is-bad">${item.code}</td></tr>`;
+      }
+      return `<tr><td>${item.label}<br><span class="qa-token-pair">${item.fgName} / ${item.bgName}</span></td>` +
+        `<td class="qa-ratio">${item.value.toFixed(2)}</td>` +
+        `<td><span class="qa-verdict ${item.tone}">${item.code}</span></td></tr>`;
     });
     body.innerHTML = rows.join('');
 
-    const missing = REQUIRED_TOKENS.filter(name => !token(name));
+    const summary = el('qa-scheme-summary');
+    if (summary) {
+      const lightEval = evaluateScheme('light');
+      const darkEval = schemes.dark ? evaluateScheme('dark') : null;
+      if (darkEval) {
+        summary.textContent = `Clair : ${lightEval.passed}/${lightEval.total} AA · Sombre : ${darkEval.passed}/${darkEval.total} AA`;
+        summary.classList.toggle('is-bad', lightEval.failed > 0 || darkEval.failed > 0);
+      } else {
+        summary.textContent = `Clair : ${lightEval.passed}/${lightEval.total} AA · Sombre : lecture de tokens.css requise`;
+        summary.classList.toggle('is-bad', lightEval.failed > 0);
+      }
+    }
+
+    const missing = REQUIRED_TOKENS.filter(name => !token(state.scheme, name));
     const note = el('qa-tokens');
     if (note) {
+      const label = state.scheme === 'dark' ? 'mode sombre' : 'mode clair';
       note.textContent = missing.length
-        ? `Jetons attendus mais vides : ${missing.join(', ')}.`
-        : `Les ${REQUIRED_TOKENS.length} jetons critiques sont définis ; ${PAIRS.length} couples audités.`;
+        ? `Jetons attendus mais vides (${label}) : ${missing.join(', ')}.`
+        : `Les ${REQUIRED_TOKENS.length} jetons critiques sont définis en ${label} ; ${PAIRS.length} couples audités.`;
       note.classList.toggle('is-bad', missing.length > 0);
+    }
+  }
+
+  async function loadSchemes() {
+    if (!Contrast || typeof Contrast.extractSchemes !== 'function') return;
+    try {
+      const response = await fetch('css/tokens.css', { cache: 'no-store' });
+      if (!response.ok) return;
+      const cssText = await response.text();
+      const extracted = Contrast.extractSchemes(cssText);
+      if (extracted && Object.keys(extracted.light || {}).length) {
+        schemes = extracted;
+        renderContrast();
+      }
+    } catch {
+      /* Sans serveur (fichier ouvert directement), le mode clair reste lu via getComputedStyle. */
     }
   }
 
@@ -88,6 +151,15 @@
   function frameUrl() {
     const view = VIEWS[state.view] || VIEWS.accueil;
     return view.url(state.project);
+  }
+
+  function syncUrl() {
+    const params = new URLSearchParams({ view: state.view, w: String(state.width) });
+    if (state.project) params.set('project', state.project);
+    if (state.height !== 'fill') params.set('h', state.height);
+    if (state.zoom !== 1) params.set('z', String(state.zoom));
+    if (state.scheme !== 'light') params.set('scheme', state.scheme);
+    history.replaceState(null, '', `qa.html?${params.toString()}`);
   }
 
   function apply() {
@@ -120,11 +192,7 @@
     el('qa-height').value = state.height;
     el('qa-zoom').value = String(state.zoom);
 
-    const params = new URLSearchParams({ view: state.view, w: String(state.width) });
-    if (state.project) params.set('project', state.project);
-    if (state.height !== 'fill') params.set('h', state.height);
-    if (state.zoom !== 1) params.set('z', String(state.zoom));
-    history.replaceState(null, '', `qa.html?${params.toString()}`);
+    syncUrl();
 
     const live = el('qa-live');
     if (live) live.textContent = `${VIEWS[state.view].label} · ${state.width} px`;
@@ -140,6 +208,8 @@
     if (['812', '1024', '1180'].includes(height)) state.height = height;
     const zoom = Number(params.get('z'));
     if ([0.5, 0.75, 1].includes(zoom)) state.zoom = zoom;
+    const scheme = params.get('scheme');
+    if (scheme === 'light' || scheme === 'dark') state.scheme = scheme;
     state.project = params.get('project') || '';
   }
 
@@ -181,6 +251,15 @@
     document.querySelectorAll('.qa-width').forEach(button => {
       button.addEventListener('click', () => { state.width = Number(button.dataset.width); apply(); });
     });
+    document.querySelectorAll('.qa-scheme').forEach(button => {
+      button.addEventListener('click', () => {
+        const next = button.dataset.auditScheme;
+        if (next !== 'light' && next !== 'dark') return;
+        state.scheme = next;
+        syncUrl();
+        renderContrast();
+      });
+    });
     el('qa-reload').addEventListener('click', () => {
       const frame = el('qa-frame');
       frame.src = 'about:blank';
@@ -203,6 +282,7 @@
     restore();
     renderContrast();
     wire();
+    void loadSchemes();
     void loadProjects().then(apply);
     apply();
   }

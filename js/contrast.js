@@ -55,5 +55,29 @@
     return { code: 'Échec', tone: 'is-bad' };
   }
 
-  return { AA_TEXT, AA_LARGE, AAA_TEXT, parseColor, luminance, ratio, verdict };
+  /**
+   * Extrait les jetons CSS (--nom: valeur) des schémas clair (:root) et sombre
+   * (@media (prefers-color-scheme: dark) { :root[data-scheme="auto"] { ... } })
+   * directement depuis le texte de css/tokens.css.
+   */
+  function extractSchemes(cssText) {
+    const text = String(cssText || '');
+    const parseVars = block => {
+      const map = {};
+      if (!block) return map;
+      for (const match of block.matchAll(/(--[a-zA-Z0-9_-]+)\s*:\s*([^;]+);/g)) {
+        map[match[1]] = match[2].trim();
+      }
+      return map;
+    };
+    const light = {};
+    for (const match of text.matchAll(/(?:^|\n):root\s*\{([\s\S]*?)\n\}/g)) {
+      Object.assign(light, parseVars(match[1]));
+    }
+    const darkMatch = /@media\s*\(prefers-color-scheme:\s*dark\)[\s\S]*?:root\[data-scheme="auto"\]\s*\{([\s\S]*?)\n\s*\}/.exec(text);
+    const dark = { ...light, ...parseVars(darkMatch ? darkMatch[1] : '') };
+    return { light, dark };
+  }
+
+  return { AA_TEXT, AA_LARGE, AAA_TEXT, parseColor, luminance, ratio, verdict, extractSchemes };
 });

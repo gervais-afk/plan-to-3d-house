@@ -257,7 +257,7 @@ select {
 .mode-badge.is-fps {
   border-color: var(--accent-ink);
   background: var(--accent);
-  color: color-mix(in srgb, var(--ink) 92%, transparent);
+  color: var(--night);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
@@ -774,23 +774,29 @@ dialog::backdrop {
   }
 }
 
-/* 16. DENSITÉ TABLETTE (601 → 860 px) ---------------------------------- */
+/* 16. DENSITÉ TABLETTE (601 → 879 px) ---------------------------------- */
 /*
  * À cette largeur, le dock bas logait quatre blocs sur une seule ligne :
  * le nom de la pièce était tronqué et le bouton d'action comprimé.
  * Ce qui décide de la mise en page est une mesure, pas une impression :
- * transport complet (deux flèches de 46 px, « Cinéma », bouton d'action)
- * ≈ 490 px, les deux raccourcis ≈ 185 px, la lecture (pièce, surface, frise)
- * ≈ 215 px, soit ≈ 795 px de dock une fois les gouttières comptées.
- * Dans un cadre de 768 px il reste ≈ 724 px utiles : la rangée unique
- * couperait le nom de la pièce d'une trentaine de pixels, c'est-à-dire
- * exactement le défaut qu'on corrige. D'où deux lignes — lecture en haut,
- * transport en bas — et des raccourcis clavier effacés, puisqu'à cette
- * taille on touche l'écran. La rangée unique ne revient qu'à partir de
- * 861 px, avec un dock élargi.
+ * dans .bottom-bar (24 px de marge) et .tour-dock (22 px de bord/marge),
+ * il reste 788 px utiles à 834 px, 814 px à 860 px et 834 px à 880 px.
+ * Sans touches clavier, les commandes fixes pèsent :
+ *   - flèches + « Cinéma » : 182 px ;
+ *   - bouton d'action (« Démarrer la visite ») : 150 px ;
+ *   - raccourcis plain-pied (« Coupe » + « Éclaté ») : 132 px,
+ *     ou 274 px sur un dossier R+1 avec sélecteur de niveau ;
+ *   - 3 gouttières de grille : 39 px.
+ * Total hors lecture : 503 px en plain-pied, 645 px en R+1.
+ * À 834 px, un projet R+1 ne laisse que 143 px à la lecture (sous le plancher
+ * de 180 px, et 215–250 px pour « Salle d'eau parents · 7,2 m² »). À 861 px,
+ * il ne reste encore que 170 px en R+1. C'est à 880 px que la lecture passe
+ * au-dessus du plancher en R+1 (189 px) et respire en plain-pied (331 px).
+ * D'où deux lignes jusqu'à 879 px — lecture en haut, transport en bas — et
+ * retour de la rangée unique élargie à partir de 880 px.
  */
 
-@media (min-width: 601px) and (max-width: 860px) {
+@media (min-width: 601px) and (max-width: 879px) {
   /* La variante « dock libre » garde sa disposition : elle n'a que lecture et raccourcis. */
   .tour-dock.guided-controls:not(.dock-free) {
     width: min(100%, 660px);
@@ -863,17 +869,23 @@ dialog::backdrop {
   }
 }
 
-/* Petits portables (861 → 1080 px) : une seule rangée, mais large.
+/* Petits portables (880 → 1080 px) : une seule rangée, mais large.
  *
- * Sans les touches, les mêmes blocs pèsent ≈ 755 px : la rangée unique tient
- * dès 861 px (≈ 775 px utiles) et respire jusqu'à 1080 px avec un dock de 900 px.
- * L'ancien plafond de 720 px était plus étroit que le dock de bureau (770 px) :
- * il rognait le nom de la pièce, le défaut même corrigé sous 861 px. Les touches
- * s'effacent ici, puisqu'on est encore sur écran tactile ou petit portable. */
-@media (min-width: 861px) and (max-width: 1080px) {
+ * Dès 880 px (834 px utiles), la rangée unique tient sans les touches (189 px
+ * minimum pour la lecture en R+1, 331 px en plain-pied) et respire jusqu'à
+ * 1080 px dans un dock de 900 px. La grille en une ligne est posée ici
+ * explicitement pour qu'aucune feuille précédente ne maintienne deux lignes. */
+@media (min-width: 880px) and (max-width: 1080px) {
   .tour-dock.guided-controls:not(.dock-free) {
     width: min(100%, 900px);
     max-width: 900px;
+    grid-template-columns: auto minmax(180px, 1fr) auto auto;
+    grid-template-areas: 'arrows reading action keys';
+  }
+
+  .tour-dock .dock-context {
+    padding-bottom: 0;
+    border-bottom: 0;
   }
 
   .tour-dock .dock-shortcuts {
@@ -900,4 +912,177 @@ dialog::backdrop {
     animation: none;
     transform: none;
   }
+}
+
+/* 18. ACCUEIL DU DOSSIER : LARGEURS INTERMÉDIAIRES (741 → 1024 px) ------ */
+/*
+ * Mesures vérifiées sur accueil.html entre 768 et 1024 px :
+ *  - .welcome-stats en 4 colonnes nowrap pèse ≈ 682 px (SURFACE HABITABLE 165 +
+ *    EXTÉRIEURS COUVERTS 182 + PIÈCES DE VIE 125 + NIVEAUX 72 + marges 138),
+ *    alors que .cover-copy offre 483 px utiles à 768 px et 545 px à 1024 px.
+ *    En grille 2×2 (max 407 px), zéro débordement sur toute la bande.
+ *  - .welcome-presentation en 2 colonnes ne laisse que 270–301 px aux repères
+ *    entre 768 et 900 px, alors que « Architecte responsable » / « Espaces
+ *    extérieurs couverts » + valeur serif demandent 335–345 px : passage sur
+ *    une colonne jusqu'à 920 px, puis rééquilibrage 1,05fr / minmax(320px, 0,95fr)
+ *    de 921 à 1080 px.
+ *  - .sheet-subnav pèse ≈ 820 px (liens 346 + 3 boutons 452 + gouttière) :
+ *    sous 960 px, retirer margin-left: auto évite d'isoler le 1er bouton à droite.
+ *  - .welcome-gallery-heading en ligne pèse ≈ 706 px (> 643 px à 768 px) :
+ *    en pile sous 920 px, il retrouve le filet de conduite des sections I, II et IV.
+ */
+
+.sheet-rev-phase:empty {
+  display: none;
+}
+
+.sheet-rev-note {
+  max-width: var(--measure);
+}
+
+@media (min-width: 601px) and (max-width: 850px) {
+  /* Sur la couverture, .workspace-nav est masquée : une ligne d'en-tête suffit (≈ 528 px ≤ 768 px). */
+  body[data-workspace-view="cover"] {
+    --workspace-bar: 68px;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1024px) {
+  .welcome-stats {
+    grid-template-columns: repeat(2, minmax(0, max-content));
+    row-gap: var(--space-4);
+  }
+
+  .welcome-stats div:nth-child(3) {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+@media (min-width: 741px) and (max-width: 960px) {
+  .sheet-subnav {
+    gap: 10px 14px;
+  }
+
+  .sheet-subnav button:first-of-type {
+    margin-left: 0;
+  }
+}
+
+@media (min-width: 741px) and (max-width: 920px) {
+  .welcome-presentation {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-6);
+  }
+
+  .welcome-gallery-heading {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .welcome-gallery-heading .welcome-section-label::after {
+    display: block;
+  }
+}
+
+@media (min-width: 921px) and (max-width: 1080px) {
+  .welcome-presentation {
+    grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+    gap: var(--space-6) var(--space-8);
+  }
+}
+
+/* 19. COCKPIT 3D : DENSITÉ DES VOLETS ET BARRE D'OUTILS ---------------- */
+/*
+ * Sans retirer aucune commande ni aucun identifiant :
+ *  - #viewer-commands devient une surface unique (plus de carte dans une carte) :
+ *    les 4 grappes principales au-dessus, les 4 volets en dessous, séparés par
+ *    un seul filet --hairline (gain : 18 px en hauteur, 16 px en largeur).
+ *  - Sur écran ≥ 721 px, le volet ouvert s'ancre directement sous les onglets
+ *    (position: absolute sur .client-panel-tabs) pour ne jamais masquer la barre
+ *    malgré le backdrop-filter de #viewer-commands.
+ *  - Les rangées d'actions denses des volets (notamment les 8 boutons d'Options)
+ *    passent en grille régulière à deux colonnes.
+ */
+
+#visit-workspace .technical-stamp {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-lg);
+}
+
+#visit-workspace .technical-stamp :is(.viewer-primary, .client-panel-tabs) {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#visit-workspace .technical-stamp .client-panel-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+
+#visit-workspace .client-panel-tabs > details > summary {
+  width: 100%;
+  justify-content: center;
+}
+
+@media (min-width: 721px) {
+  #visit-workspace .client-tool-fields {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    left: auto;
+    width: min(396px, calc(100vw - 32px));
+    max-height: min(56dvh, calc(100dvh - var(--workspace-bar) - 240px));
+    padding: var(--space-4);
+    gap: var(--space-3);
+  }
+}
+
+#visit-workspace :is(#variant-fields, #feedback-fields, .viewer-options-fields) .client-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+#visit-workspace :is(#variant-fields, #feedback-fields, .viewer-options-fields) .client-actions .btn-toggle {
+  justify-content: center;
+  text-align: center;
+}
+
+#visit-workspace #client-tool-fields .client-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: var(--space-2);
+}
+
+#visit-workspace #client-tool-fields .client-actions .client-check {
+  grid-column: 1 / -1;
+}
+
+#visit-workspace #client-tool-fields .book-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-top: 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--rule-soft);
+}
+
+#visit-workspace #client-tool-fields .book-tools .btn-toggle {
+  justify-content: center;
+  text-align: center;
+}
+
+#visit-workspace #client-tool-fields #book-status {
+  grid-column: 1 / -1;
 }

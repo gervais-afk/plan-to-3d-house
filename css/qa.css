@@ -246,10 +246,51 @@
 
 /* Audit */
 
+.qa-audit-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
 .qa-audit h2 {
   margin: 0;
   font: 550 var(--text-lg)/1.2 var(--serif);
   letter-spacing: -0.01em;
+}
+
+.qa-schemes {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.qa-scheme {
+  min-height: 32px;
+  padding: 0 0.6rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--ink-2);
+  font: 700 var(--text-xs)/1 var(--sans);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.qa-scheme:hover {
+  color: var(--ink);
+}
+
+.qa-scheme.is-active {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .qa-note {
@@ -257,6 +298,15 @@
   color: var(--ink-2);
   font-size: var(--text-xs);
   line-height: 1.5;
+}
+
+.qa-summary {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 .qa-note code {

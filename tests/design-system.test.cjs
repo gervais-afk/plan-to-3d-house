@@ -220,10 +220,11 @@ test('Portail : carte de connexion explicite et invitations en quatre colonnes',
 // ============================================================================
 // 9. TABLETTE : LE DOCK PASSE SUR DEUX LIGNES, SANS COLLISION
 // ============================================================================
-test('Tablette (601–860 px) : dock sur deux lignes, raccourcis tactiles, pas de collision', () => {
+test('Tablette (601–879 px) et petits portables (880–1080 px) : seuils mesurés, sans conflit', () => {
   const polish = read('css/polish.css');
-  const tablet = /@media \(min-width: 601px\) and \(max-width: 860px\) \{([\s\S]*?)\n\}\n/.exec(polish)?.[1] || '';
-  assert.ok(tablet, 'la plage tablette doit exister');
+  const calm = read('css/calmCockpit.css');
+  const tablet = /@media \(min-width: 601px\) and \(max-width: 879px\) \{([\s\S]*?)\n\}\n/.exec(polish)?.[1] || '';
+  assert.ok(tablet, 'la plage tablette 601–879 px doit exister');
 
   // Lecture pleine largeur au-dessus, transport en dessous.
   assert.match(tablet, /'reading reading reading'/, 'la lecture occupe la première ligne');
@@ -239,14 +240,19 @@ test('Tablette (601–860 px) : dock sur deux lignes, raccourcis tactiles, pas d
   assert.match(tablet, /#visit-workspace \.approval-card \{[\s\S]{0,160}max-height/, 'la validation ne passe pas sous le dock');
   assert.match(tablet, /\.tool-cluster--end \{\s*margin-left: 0;/, 'pas de trou dans la barre quand les grappes se replient');
 
-  // Petits portables : une ligne, touches retirées, et plus large que le dock de bureau.
-  const laptop = /@media \(min-width: 861px\) and \(max-width: 1080px\) \{([\s\S]*?)\n\}/.exec(polish)?.[1] || '';
-  assert.match(laptop, /width: min\(100%, 900px\)/, 'le dock reste sur une ligne en 861–1080 px');
-  assert.match(laptop, /\.tour-dock \.dock-shortcuts kbd[\s\S]{0,80}display: none/, 'touches retirées en 861–1080 px');
+  // Petits portables (880–1080 px) : une ligne restaurée explicitement, plus large que le dock de bureau.
+  const laptop = /@media \(min-width: 880px\) and \(max-width: 1080px\) \{([\s\S]*?)\n\}/.exec(polish)?.[1] || '';
+  assert.match(laptop, /width: min\(100%, 900px\)/, 'le dock reste sur une ligne en 880–1080 px');
+  assert.match(laptop, /grid-template-areas: 'arrows reading action keys';/, 'la rangée unique est posée explicitement dès 880 px');
+  assert.match(laptop, /\.tour-dock \.dock-shortcuts kbd[\s\S]{0,80}display: none/, 'touches retirées en 880–1080 px');
   const baseWidth = Number(/^\.tour-dock\.guided-controls \{[\s\S]{0,400}?width: min\(100%, (\d+)px\)/m.exec(read('css/workspace.css'))?.[1]);
-  assert.ok(baseWidth > 0 && 900 > baseWidth, `la bande 861–1080 px doit être plus large que le dock de bureau (${baseWidth} px)`);
-  assert.match(polish, /une mesure, pas une impression[\s\S]{0,1200}@media \(min-width: 601px\) and \(max-width: 860px\)/,
+  assert.ok(baseWidth > 0 && 900 > baseWidth, `la bande 880–1080 px doit être plus large que le dock de bureau (${baseWidth} px)`);
+  assert.match(polish, /une mesure, pas une impression[\s\S]{0,1400}@media \(min-width: 601px\) and \(max-width: 879px\)/,
     'la mise en page tablette est justifiée par une mesure chiffrée');
+
+  // calmCockpit.css est aligné sur 879 px (aucune zone morte 880–920 px).
+  assert.match(calm, /@media \(max-width: 879px\)/, 'calmCockpit.css bascule exactement au même seuil 879 px');
+  assert.doesNotMatch(calm, /@media \(max-width: 920px\)/, 'plus de palier 920 px en conflit avec la rangée unique');
 
   // La variante « dock libre » n'est pas écrasée par la mise en page tablette.
   assert.match(tablet, /\.tour-dock\.guided-controls:not\(\.dock-free\)/, 'le dock libre garde sa disposition');
@@ -254,9 +260,9 @@ test('Tablette (601–860 px) : dock sur deux lignes, raccourcis tactiles, pas d
 });
 
 // ============================================================================
-// 10. BANC D'ESSAI ET CONTRASTE RÉEL DE LA PALETTE
+// 10. BANC D'ESSAI ET CONTRASTE RÉEL DE LA PALETTE (CLAIR + SOMBRE)
 // ============================================================================
-test('Banc d’essai : cadre à largeur choisie et contrastes WCAG calculés', () => {
+test('Banc d’essai : cadre à largeur choisie et contrastes WCAG calculés en clair et en sombre', () => {
   const Contrast = require('../js/contrast.js');
 
   // Module de calcul : valeurs de référence connues.
@@ -272,12 +278,16 @@ test('Banc d’essai : cadre à largeur choisie et contrastes WCAG calculés', (
   assert.equal(Contrast.verdict(3.2, true).code, 'AA', 'un grand texte se contente de 3:1');
   assert.equal(Contrast.verdict(2.1).code, 'Échec');
 
-  // La palette réelle tient les seuils annoncés dans DESIGN.md, en clair comme en sombre.
+  // Extraction directe des deux schémas depuis css/tokens.css.
   const tokens = read('css/tokens.css');
+  const extracted = Contrast.extractSchemes(tokens);
+  assert.equal(extracted.light['--paper'], '#F7F5F0', 'schéma clair lu depuis tokens.css');
+  assert.equal(extracted.dark['--paper'], '#141a16', 'schéma sombre lu depuis tokens.css');
+  assert.equal(extracted.dark['--accent'], '#B38646', 'un jeton non surchargé hérite du schéma clair');
+
+  // La palette réelle tient les seuils annoncés dans DESIGN.md, en clair comme en sombre.
   const darkBlock = /@media \(prefers-color-scheme: dark\)[\s\S]*?:root\[data-scheme="auto"\] \{([\s\S]*?)\n  \}/.exec(tokens)?.[1] || '';
-  const hex = (block, name) => Contrast.parseColor(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`).exec(block)?.[1] || '');
-  /** Couleur claire, ou surcharge sombre si elle existe. */
-  const inScheme = (name, dark) => (dark ? hex(darkBlock, name) || hex(tokens, name) : hex(tokens, name));
+  const inScheme = (name, dark) => Contrast.parseColor((dark ? extracted.dark : extracted.light)[`--${name}`]);
 
   const lightPairs = [
     ['ink', 'paper', 7, false],
@@ -286,6 +296,7 @@ test('Banc d’essai : cadre à largeur choisie et contrastes WCAG calculés', (
     ['accent-ink', 'paper', 4.5, false],
     ['accent-ink', 'accent-wash', 4.5, false],
     ['paper', 'ink', 7, false],
+    ['night', 'accent', 4.5, false],
     ['danger', 'paper', 4.5, false],
     ['success', 'paper', 4.5, false],
     ['warning', 'paper', 4.5, false],
@@ -297,12 +308,15 @@ test('Banc d’essai : cadre à largeur choisie et contrastes WCAG calculés', (
     ['ink', 'paper', 7, false],
     ['ink-2', 'paper', 4.5, false],
     ['muted', 'paper', 4.5, false],
+    ['ink-2', 'surface', 4.5, false],
+    ['muted', 'surface', 4.5, false],
     ['accent-ink', 'paper', 4.5, false],
     ['accent-ink', 'accent-wash', 4.5, false],
     ['on-night', 'night', 7, false],
     ['on-night-2', 'night', 4.5, false],
     ['on-night-muted', 'night', 4.5, false],
     ['accent-soft', 'night', 3, true],
+    ['night', 'accent', 4.5, false],
     ['danger', 'paper', 4.5, false],
     ['success', 'paper', 4.5, false],
     ['warning', 'paper', 4.5, false]
@@ -316,6 +330,10 @@ test('Banc d’essai : cadre à largeur choisie et contrastes WCAG calculés', (
     }
   }
 
+  // Le badge FPS utilise --night sur --accent pour tenir AA même en mode sombre.
+  assert.match(read('css/polish.css'), /\.mode-badge\.is-fps \{[\s\S]{0,160}color: var\(--night\);/,
+    'le badge FPS reste contrasté en mode sombre (--night sur --accent)');
+
   // Les états sont explicitement éclaircis, faute de quoi le verdict d’alerte serait illisible.
   assert.ok(darkBlock, 'le mode sombre doit être isolable pour l’audit');
   for (const [name, value] of [['success', '#7fc096'], ['warning', '#e0a45e'], ['danger', '#ef9a8e']]) {
@@ -323,18 +341,71 @@ test('Banc d’essai : cadre à largeur choisie et contrastes WCAG calculés', (
     assert.ok(Contrast.ratio(Contrast.parseColor(value), Contrast.parseColor('#1f2822')) >= 4.5, `${name} lisible sur la surface sombre`);
   }
 
-  // La page elle-même.
+  // La page elle-même : sélecteur Clair / Sombre et bilan des deux schémas.
   const html = read('qa.html');
   assert.match(html, /js\/contrast\.js[\s\S]{0,80}js\/qa\.js/, 'le module de contraste précède le banc');
   assert.match(html, /<iframe id="qa-frame" title="[^"]+"/, 'le cadre porte un titre accessible');
   for (const width of ['375', '430', '768', '834', '1024', '1280']) {
     assert.ok(html.includes(`data-width="${width}"`), `préréglage de largeur manquant : ${width}`);
   }
+  assert.ok(html.includes('data-audit-scheme="light"'), 'sélecteur schéma clair dans qa.html');
+  assert.ok(html.includes('data-audit-scheme="dark"'), 'sélecteur schéma sombre dans qa.html');
+  assert.match(html, /id="qa-scheme-summary"/, 'bilan permanent des deux schémas');
   assert.match(html, /id="qa-contrast-body"/, 'le tableau d’audit a son corps de lignes');
   assert.doesNotMatch(read('css/qa.css'), /#[0-9a-fA-F]{3,8}\b/, 'qa.css sans couleur en dur');
+  assert.match(read('js/qa.js'), /Contrast\.extractSchemes/, 'js/qa.js lit les deux schémas depuis css/tokens.css');
 
   // Réservé à l'atelier : ni invité, ni page publique du portail.
   const portal = read('privatePortal.js');
   assert.doesNotMatch(portal, /'qa\.html'/, 'le banc d’essai n’est pas servi aux invités');
   assert.match(read('design.html'), /href="qa\.html"/, 'la charte mène au banc d’essai');
+});
+
+// ============================================================================
+// 11. ACCUEIL DU DOSSIER : LARGEURS INTERMÉDIAIRES (741 → 1024 PX)
+// ============================================================================
+test('Accueil (741–1024 px) : chiffres clés 2×2, fiche sur une colonne sous 920 px et journal borné', () => {
+  const polish = read('css/polish.css');
+
+  // Numérotation de sections strictement unique dans polish.css.
+  const sectionNums = [...polish.matchAll(/^\/\* (\d+)\. /gm)].map(m => Number(m[1]));
+  assert.equal(new Set(sectionNums).size, sectionNums.length, 'aucun numéro de section réutilisé dans polish.css');
+
+  assert.match(polish, /@media \(min-width: 721px\) and \(max-width: 1024px\) \{[\s\S]{0,220}\.welcome-stats \{[\s\S]{0,120}repeat\(2, minmax\(0, max-content\)\)/,
+    'les chiffres clés passent en grille 2×2 entre 721 et 1024 px');
+  assert.match(polish, /@media \(min-width: 741px\) and \(max-width: 920px\) \{[\s\S]{0,360}\.welcome-presentation \{[\s\S]{0,100}grid-template-columns: minmax\(0, 1fr\);/,
+    'la fiche passe en une colonne sous 920 px pour éviter d’écraser les repères');
+  assert.match(polish, /@media \(min-width: 741px\) and \(max-width: 920px\) \{[\s\S]{0,420}\.welcome-gallery-heading \.welcome-section-label::after \{\s*display: block;/,
+    'le filet de conduite de la section III revient en pile sous 920 px');
+  assert.match(polish, /@media \(min-width: 741px\) and \(max-width: 960px\) \{[\s\S]{0,200}\.sheet-subnav button:first-of-type \{\s*margin-left: 0;/,
+    'les actions de la sous-navigation restent groupées sous 960 px');
+  assert.match(polish, /\.sheet-rev-phase:empty \{\s*display: none;/, 'pas de filet orphelin si la phase est vide');
+  assert.match(polish, /\.sheet-rev-note \{\s*max-width: var\(--measure\);/, 'la note du journal respecte la mesure de lecture');
+});
+
+// ============================================================================
+// 12. COCKPIT 3D : DENSITÉ DES VOLETS SANS PERTE DE FONCTIONS
+// ============================================================================
+test('Cockpit : panneau Outils sans carte imbriquée, volets ancrés et actions en grille', () => {
+  const polish = read('css/polish.css');
+  const html = read('index.html');
+
+  // Panneau unifié : les deux rangées partagent un seul cadre sans bordure doublée.
+  assert.match(polish, /#visit-workspace \.technical-stamp \{[\s\S]{0,160}flex-direction: column;/, 'barre Outils empilée sur deux rangées propres');
+  assert.match(polish, /#visit-workspace \.technical-stamp :is\(\.viewer-primary, \.client-panel-tabs\) \{[\s\S]{0,140}border: 0;/, 'plus de carte dans une carte dans #viewer-commands');
+  assert.match(polish, /@media \(min-width: 721px\) \{[\s\S]{0,220}#visit-workspace \.client-tool-fields \{[\s\S]{0,120}position: absolute;/,
+    'les volets s’ancrent sous les onglets dès 721 px');
+  assert.match(polish, /#visit-workspace :is\(#variant-fields, #feedback-fields, \.viewer-options-fields\) \.client-actions \{[\s\S]{0,120}grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/,
+    'les actions denses des volets sont rangées en grille régulière à deux colonnes');
+
+  // Aucune commande des quatre volets n'a été retirée.
+  for (const id of [
+    'client-floor', 'client-facade', 'client-hour', 'client-measure', 'client-pdf', 'book-open', 'catalog-pdf',
+    'variant-save', 'variant-link', 'variant-compare', 'variant-pdf',
+    'feedback-create', 'feedback-share', 'feedback-start', 'feedback-refresh',
+    'btn-night', 'btn-quality', 'btn-plan-style', 'btn-timelapse', 'btn-photo-mode',
+    'btn-export-video', 'btn-ai-sequence', 'btn-shortcuts-help'
+  ]) {
+    assert.ok(html.includes(`id="${id}"`), `commande conservée dans les volets : #${id}`);
+  }
 });

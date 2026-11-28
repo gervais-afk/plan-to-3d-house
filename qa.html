@@ -92,8 +92,15 @@
       </form>
 
       <section class="qa-audit" aria-labelledby="qa-audit-title">
-        <h2 id="qa-audit-title">Contraste des jetons</h2>
-        <p class="qa-note">Ratios calculés dans le navigateur depuis <code>css/tokens.css</code>. Seuil AA : 4,5 pour le texte courant, 3 pour le grand texte.</p>
+        <div class="qa-audit-head">
+          <h2 id="qa-audit-title">Contraste des jetons</h2>
+          <div class="qa-schemes" role="group" aria-label="Schéma audité">
+            <button type="button" class="qa-scheme is-active" data-audit-scheme="light" aria-pressed="true">Clair</button>
+            <button type="button" class="qa-scheme" data-audit-scheme="dark" aria-pressed="false">Sombre</button>
+          </div>
+        </div>
+        <p class="qa-note">Ratios calculés depuis <code>css/tokens.css</code> (clair et sombre). Seuil AA : 4,5 pour le texte courant, 3 pour le grand texte.</p>
+        <p class="qa-note qa-summary" id="qa-scheme-summary" role="status" aria-live="polite"></p>
         <table class="qa-contrast">
           <caption class="sr-only">Ratios de contraste des couples texte/fond du système</caption>
           <thead>

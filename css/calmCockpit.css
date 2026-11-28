@@ -119,7 +119,7 @@ body.is-presenting #visit-workspace .brand-tag, body.is-presenting #visit-worksp
   grid-column: 1 / -1;
   margin-top: 4px;
 }
-@media (max-width: 920px) {
+@media (max-width: 879px) {
   .tour-dock.guided-controls,
   body.is-presenting .tour-dock.guided-controls {
     grid-template-columns: auto auto 1fr;
