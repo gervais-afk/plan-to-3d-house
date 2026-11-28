@@ -167,3 +167,52 @@ test('Dossier : sections indicées I→IV, repères en deux familles et journal 
   assert.match(design, /class="sheet-revisions-list"/, 'aperçu du journal des révisions');
   assert.match(design, /class="sheet-index" aria-hidden="true">II</, 'aperçu de l’en-tête indicé');
 });
+
+// ============================================================================
+// 7. COCKPIT : COMMANDES GROUPÉES PAR TÂCHES, HUD BAS APAISÉ
+// ============================================================================
+test('Cockpit : quatre grappes de commandes nommées, aucun identifiant perdu', () => {
+  const html = read('index.html');
+  const primary = /<div class="btn-row viewer-primary">([\s\S]*?)\n        <\/div>\n        <div class="btn-row client-panel-tabs">/.exec(html);
+  assert.ok(primary, 'la rangée de commandes principales doit être isolable');
+
+  const clusters = [...primary[1].matchAll(/<div class="tool-cluster[^"]*" role="group" aria-label="([^"]+)">/g)].map(m => m[1]);
+  assert.deepEqual(clusters, ['Mode de visite', 'Explorer la maquette', 'Produire les documents', 'Présenter et partager']);
+
+  // Regrouper ne doit rien perdre : chaque commande reste accessible par son identifiant.
+  const ids = ['mode-badge', 'btn-renders', 'btn-plan-compare', 'btn-clearance-guides', 'btn-ai-studio',
+    'btn-deliverables', 'btn-present', 'portal-account', 'clearance-note'];
+  for (const id of ids) {
+    assert.ok(primary[1].includes(`id="${id}"`), `commande perdue au regroupement : #${id}`);
+  }
+  assert.ok(primary[1].includes('aria-describedby="clearance-note"'), 'la note de repères reste liée au bouton');
+
+  const polish = read('css/polish.css');
+  assert.match(polish, /\.tool-cluster \{[\s\S]{0,200}border-left: 1px solid var\(--hairline\)/, 'séparateur de grappe');
+  assert.match(polish, /\.tool-cluster--end \{\s*margin-left: auto;/, 'le partage est poussé à droite');
+  assert.match(polish, /\.guided-controls \.dock-shortcuts \.btn-toggle \{[\s\S]{0,160}background: transparent/, 'les raccourcis du HUD passent au second plan');
+  assert.match(polish, /@media \(max-width: 430px\)/, 'passe de densité tactile');
+  assert.match(read('design.html'), /class="tool-cluster tool-cluster--state"/, 'la charte montre la barre groupée');
+});
+
+// ============================================================================
+// 8. PORTAIL : CONNEXION SOIGNÉE ET INVITATIONS EN TABLEAU
+// ============================================================================
+test('Portail : carte de connexion explicite et invitations en quatre colonnes', () => {
+  const html = read('portal.html');
+  assert.match(html, /class="panel portal-login"/, 'la connexion a sa propre carte');
+  assert.match(html, /class="eyebrow-label">Accès réservé</, 'l’accès est annoncé sans ambiguïté');
+  assert.match(html, /class="btn btn--primary btn--block">Se connecter/, 'un seul bouton, pleine largeur');
+  assert.match(html, /class="invite-table-head"[\s\S]{0,220}Invité \/ dossier[\s\S]{0,60}Accès[\s\S]{0,60}Validité[\s\S]{0,40}État/,
+    'en-tête de colonnes des invitations : qui, accès, validité, état');
+
+  const js = read('js/portal.js');
+  assert.match(js, /row\.className = 'invite-row'/, 'chaque invitation est une ligne de tableau');
+  assert.match(js, /row\.append\(details, access, date, actions\)/, 'quatre cellules : qui, accès, validité, état');
+  assert.match(js, /row\.className = 'invite-empty'/, 'l’état vide reste lisible hors grille');
+  assert.match(js, /invite-status/, 'le badge d’état est conservé');
+
+  const css = read('css/portal.css');
+  assert.match(css, /@media \(min-width: 760px\)[\s\S]{0,400}grid-template-columns: minmax\(0, 1\.5fr\)/, 'la grille du tableau des invitations');
+  assert.match(css, /\.portal-login-help/, 'la carte de connexion garde son aide');
+});

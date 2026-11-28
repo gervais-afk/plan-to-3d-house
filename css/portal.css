@@ -63,3 +63,59 @@ li { border-top: 1px solid var(--rule-soft); padding: .75rem 0; display: flex; f
 }
 .portal-role-banner[data-role="guest"] .portal-role-tag { color: var(--ink-2); }
 @media (max-width: 540px) { .fields { grid-template-columns: 1fr; } }
+
+/* ---------------------------------------------------------------------------
+   Connexion architecte et tableau des invitations (finitions 2026)
+   --------------------------------------------------------------------------- */
+
+.portal-login { display: grid; gap: var(--space-4); }
+.portal-login-head { display: grid; gap: .2rem; }
+.portal-login-head h2 { margin: 0; }
+.portal-login-head .muted { margin: 0; }
+.portal-field { display: grid; gap: var(--space-1); margin: 0; }
+.portal-field input { min-height: 44px; font-size: var(--text-md); }
+.portal-login-help { margin: 0; padding-top: var(--space-3); border-top: 1px solid var(--rule-soft); color: var(--muted); font-size: var(--text-sm); }
+
+/* En-tête de colonnes : visible seulement quand les lignes passent en grille. */
+.invite-table-head { display: none; }
+
+.invite-who { display: grid; gap: 2px; min-width: 0; }
+.invite-who strong { font-size: var(--text-md); }
+.invite-row .invite-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.invite-empty { display: block; color: var(--muted); }
+
+@media (min-width: 760px) {
+  .invite-table-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, .9fr) minmax(0, 1fr) minmax(0, auto);
+    gap: 1rem;
+    padding: 0 .2rem .5rem;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font: 800 var(--text-xs)/1.2 var(--sans);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+  }
+
+  #portal-list li.invite-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, .9fr) minmax(0, 1fr) minmax(0, auto);
+    align-items: center;
+    gap: 1rem;
+    padding: .85rem .2rem;
+  }
+
+  #portal-list li.invite-row:first-child { border-top: 0; }
+
+  #portal-list li.invite-row .invite-actions {
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+  }
+
+  .invite-row .invite-validity { font-variant-numeric: tabular-nums; }
+}
+
+@media (max-width: 759px) {
+  #portal-list li.invite-row { display: grid; gap: .3rem; }
+  .invite-row .invite-actions { margin-top: .3rem; }
+}

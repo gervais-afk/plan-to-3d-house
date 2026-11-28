@@ -342,6 +342,13 @@
   width: 58%;
 }
 
+.ds-page .btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
 /* Aperçu des composants du dossier.
    La fiche projet réelle les habille depuis accueil.css, welcome.css et polish.css ;
    ici, le strict nécessaire pour les juger hors contexte. */

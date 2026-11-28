@@ -26,11 +26,17 @@
       <p>L’invitation remplace la session de ce navigateur. Utilisez une fenêtre privée pour tester un lien sans fermer votre session architecte.</p>
       <button id="portal-accept" type="button">Ouvrir la visite invitée</button>
     </section>
-    <form id="portal-login" class="panel" method="post" hidden>
-      <h2>Connexion architecte</h2>
-      <label>Mot de passe <input id="portal-password" type="password" autocomplete="current-password" maxlength="1024" required></label>
-      <button type="submit">Se connecter</button>
-      <p>Client ? Ouvrez le lien d’invitation reçu de votre architecte.</p>
+    <form id="portal-login" class="panel portal-login" method="post" hidden>
+      <div class="portal-login-head">
+        <p class="eyebrow-label">Accès réservé</p>
+        <h2>Connexion architecte</h2>
+        <p class="muted">Session limitée à ce navigateur. Les invités passent par le lien qu’ils ont reçu.</p>
+      </div>
+      <label class="portal-field">Mot de passe
+        <input id="portal-password" type="password" autocomplete="current-password" maxlength="1024" required>
+      </label>
+      <button type="submit" class="btn btn--primary btn--block">Se connecter</button>
+      <p class="portal-login-help">Client ? Ouvrez le lien d’invitation reçu de votre architecte.</p>
     </form>
     <section id="portal-active" class="panel" hidden>
       <div id="portal-role-banner" class="portal-role-banner">
@@ -58,7 +64,12 @@
       </form>
       <section class="panel">
         <div class="section-heading"><div><h2>Invitations créées</h2><p id="portal-count" class="muted"></p></div><button type="button" id="portal-refresh" class="secondary">Actualiser</button></div>
-        <ul id="portal-list"></ul>
+        <div class="invite-table">
+          <div class="invite-table-head" aria-hidden="true">
+            <span>Invité / dossier</span><span>Accès</span><span>Validité</span><span>État</span>
+          </div>
+          <ul id="portal-list"></ul>
+        </div>
       </section>
     </section>
     <a id="portal-demo" href="index.html" hidden>Retour à la démo locale</a>

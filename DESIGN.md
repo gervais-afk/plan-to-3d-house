@@ -64,6 +64,9 @@ Elle ne touche ni la direction ni la structure : elle règle l'exécution pour q
 - **Champs** : filet `--rule`, fond `--surface`, survol sable, cases et curseurs à `accent-color: var(--accent)`.
 - **Surfaces** : le verre (flou) reste réservé à ce qui flotte au-dessus de la 3D ; les cartes claires prennent `--shadow-1`, le survol `--shadow-lift`.
 - **Fiche projet** : dans `.sheet-subnav`, la navigation reste éditoriale (filet sous le libellé) mais les **actions** deviennent des puces à filet, poussées à droite.
+- **Cockpit 3D** : les commandes de *Outils* sont groupées en quatre grappes (`.tool-cluster`, `role="group"` nommé) séparées par un filet — état, explorer, produire, présenter/partager. Le dock bas s'allège : filet au lieu d'ombre, raccourcis en style discret révélés au survol.
+- **Densité ≤ 430 px** : sous 430 px, le sous-menu du dossier défile horizontalement (puces comprises), les repères se resserrent, le livret de réunion réduit ses marges, empile ses actions en pleine largeur et laisse les tableaux défiler. On retire de la marge, jamais du contenu.
+- **Portail** : la connexion est une carte dédiée (accès réservé, aide en pied) et les invitations s'affichent en **tableau à quatre colonnes** (invité/dossier, accès, validité, état) au-dessus de 760 px, en cartes empilées en dessous.
 - **Composition du dossier** : chaque section de la fiche porte un **indice romain** (I à IV) et un filet de conduite jusqu'au titre ; les repères se lisent en deux familles — *Le dossier* (identité) puis *Les chiffres* (mesures) ; dans le journal des révisions, l'indice (V1, V2…) devient une figure serif et la note passe en serif. Ces règles valent aussi pour la charte, qui en montre les composants.
 - **Données** : en-têtes de tableaux en capitales espacées, chiffres tabulaires, survol de ligne tiède.
 - **Chargement** : `.skeleton` anime une bande claire (1,4 s) plutôt qu'une case grise figée.

@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-28T07:55:14.300Z",
+  "timestamp": "2026-11-28T08:21:46.419Z",
   "branch": "arena/1d9c67e2-plan-to-3d-house",
   "results": {
     "passed": 82,
@@ -79,7 +79,7 @@
     },
     {
       "status": "PASS",
-      "message": "DESIGN.md (100 lignes)"
+      "message": "DESIGN.md (104 lignes)"
     },
     {
       "status": "PASS",
@@ -119,7 +119,7 @@
     },
     {
       "status": "PASS",
-      "message": "index.html (552 lignes)"
+      "message": "index.html (560 lignes)"
     },
     {
       "status": "PASS",
@@ -191,7 +191,7 @@
     },
     {
       "status": "PASS",
-      "message": "Tous les tests passent (608/612)"
+      "message": "Tous les tests passent (610/614)"
     },
     {
       "status": "PASS",

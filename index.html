@@ -86,15 +86,23 @@
       </div>
       <nav id="viewer-commands" class="technical-stamp interactive" aria-label="Commandes de la visite" hidden>
         <div class="btn-row viewer-primary">
-          <span id="mode-badge" class="mode-badge">Visite guidée</span>
-          <button id="btn-renders" type="button" class="btn-toggle btn-small" aria-haspopup="dialog"><svg class="i" aria-hidden="true"><use href="#i-gallery"></use></svg> Galerie</button>
-          <button id="btn-ai-studio" type="button" class="btn-toggle btn-small" aria-haspopup="dialog" title="Insertion terrain, retouche ciblée, vidéo Début→Fin, voix off IA, 360° et audit bioclimatique/CCTP">Studio IA</button>
-          <button id="btn-plan-compare" type="button" class="btn-toggle btn-small" aria-pressed="false">Comparer plan / 3D</button>
-          <button id="btn-clearance-guides" type="button" class="btn-toggle btn-small" aria-pressed="false" aria-describedby="clearance-note" title="Repères indicatifs — gabarits d’encombrement visuels et non normatifs">Gabarits indicatifs</button>
-          <span id="clearance-note" class="sr-only">Repères indicatifs : bandes théoriques de 90 centimètres autour de certains meubles et arcs simplifiés de portes. Ils ne valident pas la conformité des circulations.</span>
-          <button id="btn-deliverables" type="button" class="btn-toggle btn-small" aria-haspopup="dialog">Livrables</button>
-          <button id="btn-present" type="button" class="btn-toggle btn-small" aria-pressed="false" title="Plein écran sans outils ; flèches pour avancer, Échap pour quitter"><svg class="i" aria-hidden="true"><use href="#i-present"></use></svg> <span>Présenter</span></button>
-          <a id="portal-account" href="portal.html" class="btn-toggle btn-small" hidden>Espace privé</a>
+          <div class="tool-cluster tool-cluster--state" role="group" aria-label="Mode de visite">
+            <span id="mode-badge" class="mode-badge">Visite guidée</span>
+          </div>
+          <div class="tool-cluster" role="group" aria-label="Explorer la maquette">
+            <button id="btn-renders" type="button" class="btn-toggle btn-small" aria-haspopup="dialog"><svg class="i" aria-hidden="true"><use href="#i-gallery"></use></svg> Galerie</button>
+            <button id="btn-plan-compare" type="button" class="btn-toggle btn-small" aria-pressed="false">Comparer plan / 3D</button>
+            <button id="btn-clearance-guides" type="button" class="btn-toggle btn-small" aria-pressed="false" aria-describedby="clearance-note" title="Repères indicatifs — gabarits d’encombrement visuels et non normatifs">Gabarits indicatifs</button>
+            <span id="clearance-note" class="sr-only">Repères indicatifs : bandes théoriques de 90 centimètres autour de certains meubles et arcs simplifiés de portes. Ils ne valident pas la conformité des circulations.</span>
+          </div>
+          <div class="tool-cluster" role="group" aria-label="Produire les documents">
+            <button id="btn-ai-studio" type="button" class="btn-toggle btn-small" aria-haspopup="dialog" title="Insertion terrain, retouche ciblée, vidéo Début→Fin, voix off IA, 360° et audit bioclimatique/CCTP">Studio IA</button>
+            <button id="btn-deliverables" type="button" class="btn-toggle btn-small" aria-haspopup="dialog">Livrables</button>
+          </div>
+          <div class="tool-cluster tool-cluster--end" role="group" aria-label="Présenter et partager">
+            <button id="btn-present" type="button" class="btn-toggle btn-small" aria-pressed="false" title="Plein écran sans outils ; flèches pour avancer, Échap pour quitter"><svg class="i" aria-hidden="true"><use href="#i-present"></use></svg> <span>Présenter</span></button>
+            <a id="portal-account" href="portal.html" class="btn-toggle btn-small" hidden>Espace privé</a>
+          </div>
         </div>
         <div class="btn-row client-panel-tabs">
           <details id="client-tools" class="client-tools" name="viewer-panels">

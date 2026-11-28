@@ -54,22 +54,32 @@
       list.replaceChildren();
       if (!invitations.length) {
         const row = document.createElement('li');
+        row.className = 'invite-empty';
         row.textContent = 'Aucune invitation créée. Créez votre premier lien pour partager une visite.';
         list.append(row);
       }
       for (const item of invitations) {
+        // Une ligne par invitation, en quatre colonnes : qui, accès, validité, état.
         const row = document.createElement('li');
+        row.className = 'invite-row';
         const details = document.createElement('div');
+        details.className = 'invite-who';
         const title = document.createElement('strong');
         title.textContent = item.label || item.project;
-        const project = document.createElement('div');
-        project.className = 'muted';
-        project.textContent = [item.label && item.project, item.kind === 'decision' ? 'Lien de validation · proposition ciblée' : roleLabel(item.role)].filter(Boolean).join(' · ');
-        const date = document.createElement('span');
-        date.className = 'muted';
+        details.append(title);
+        if (item.label) {
+          const project = document.createElement('div');
+          project.className = 'muted';
+          project.textContent = item.project;
+          details.append(project);
+        }
+        const access = document.createElement('div');
+        access.className = 'muted invite-access';
+        access.textContent = item.kind === 'decision' ? 'Validation · proposition ciblée' : roleLabel(item.role);
         const format = timestamp => new Date(timestamp).toLocaleString('fr-FR');
+        const date = document.createElement('div');
+        date.className = 'muted invite-validity';
         date.textContent = item.revokedAt ? `Révoquée le ${format(item.revokedAt)}` : `Expire le ${format(item.expiresAt)}`;
-        details.append(title, project, date);
         const actions = document.createElement('div');
         actions.className = 'invite-actions';
         const badge = document.createElement('span');
@@ -97,7 +107,7 @@
           });
           actions.append(button);
         }
-        row.append(details, actions);
+        row.append(details, access, date, actions);
         list.append(row);
       }
     } finally { if (requestId === listRequest) list.removeAttribute('aria-busy'); }

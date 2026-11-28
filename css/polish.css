@@ -589,7 +589,192 @@ dialog::backdrop {
   font-variant-numeric: tabular-nums;
 }
 
-/* 14. PRÉFÉRENCES DE MOUVEMENT ----------------------------------------- */
+/* 14. COCKPIT 3D : BARRE D'OUTILS PAR TÂCHES ---------------------------- */
+/*
+ * Les commandes de visite se lisent par intention — état, explorer, produire,
+ * présenter — séparées par un filet ; le HUD bas redevient un instrument,
+ * pas un tableau de bord.
+ */
+
+.viewer-primary {
+  gap: 8px 10px;
+  align-items: center;
+}
+
+.tool-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-left: 10px;
+  border-left: 1px solid var(--hairline);
+}
+
+.viewer-primary > .tool-cluster:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.tool-cluster--end {
+  margin-left: auto;
+}
+
+/* HUD bas : filet discret, hiérarchie calme, raccourcis au second plan. */
+.guided-controls.tour-dock {
+  border: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  box-shadow: var(--shadow-1);
+}
+
+.guided-controls .guided-kicker {
+  letter-spacing: 0.14em;
+}
+
+.guided-controls .room-name {
+  letter-spacing: -0.02em;
+}
+
+.guided-controls .dock-shortcuts .btn-toggle {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-2);
+  font-weight: 650;
+}
+
+.guided-controls .dock-shortcuts .btn-toggle:hover {
+  border-color: var(--rule);
+  background: var(--surface);
+  box-shadow: none;
+  color: var(--ink);
+}
+
+.guided-controls .dock-shortcuts kbd,
+.guided-actions kbd {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.guided-controls .guided-actions .dock-arrow {
+  min-width: 40px;
+  justify-content: center;
+}
+
+/* 15. DENSITÉ TACTILE (≤ 430 px) --------------------------------------- */
+/*
+ * À 375 px, la fiche projet et le livret de réunion gardent leur hiérarchie :
+ * on retire de la marge, pas du contenu.
+ */
+
+@media (max-width: 430px) {
+  .sheet-subnav {
+    flex-wrap: nowrap;
+    gap: 10px 16px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+    scrollbar-width: none;
+  }
+
+  .sheet-subnav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sheet-subnav a,
+  .sheet-subnav button {
+    white-space: nowrap;
+  }
+
+  .sheet-subnav button:first-of-type {
+    margin-left: 0;
+  }
+
+  .welcome-presentation .sheet-facts div {
+    gap: 0.5rem;
+    padding-block: 0.55rem;
+  }
+
+  .welcome-presentation .sheet-facts dd {
+    font-size: 1rem;
+  }
+
+  .welcome-presentation .sheet-facts dt.sheet-facts-title {
+    padding-top: 0.7rem;
+  }
+
+  .sheet-rev-item {
+    padding: 0.7rem 0.8rem;
+  }
+
+  .sheet-rev-date {
+    margin-left: 0;
+  }
+
+  /* Livret de réunion : barre compacte, chapitres lisibles, actions pleine largeur. */
+  .meeting-bar {
+    gap: 0.5rem 0.75rem;
+    padding: 0.6rem 0.85rem;
+  }
+
+  .meeting-tabs {
+    gap: 4px;
+  }
+
+  .meeting-stage {
+    padding: 0.85rem;
+  }
+
+  .meeting-eyebrow {
+    font-size: 0.6rem;
+    letter-spacing: 0.14em;
+  }
+
+  .meeting-center h2,
+  .meeting-copy h2 {
+    font-size: clamp(1.35rem, 7vw, 1.9rem);
+    line-height: 1.12;
+  }
+
+  .meeting-lead,
+  .meeting-note {
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+
+  .meeting-cta-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .meeting-cta-row > * {
+    width: 100%;
+    text-align: center;
+  }
+
+  .meeting-table-wide {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .meeting-foot {
+    padding: 0.6rem 0.85rem;
+  }
+
+  /* Fiche : la barre d'outils du cockpit respire, le radar reste accessible. */
+  .viewer-primary {
+    gap: 6px;
+  }
+
+  .tool-cluster {
+    padding-left: 8px;
+  }
+
+  .tour-dock.guided-controls {
+    gap: 8px;
+  }
+}
+
+/* 16. PRÉFÉRENCES DE MOUVEMENT ----------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
   html {
