@@ -5,6 +5,9 @@ openrouter.key
 .env.*
 *.env
 
+# Contexte assemblé pour un assistant IA (généré par node tools/ai-context.js)
+ai-studio-contexte.md
+
 # Dépendances et caches
 node_modules/
 .npm/

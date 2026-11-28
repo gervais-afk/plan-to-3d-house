@@ -99,7 +99,9 @@ Tu reprends le développement d'ArchiCam Studio, une application web d'architect
 - Si une information te manque, demande le fichier au lieu de deviner. Si tu estimes qu'une demande casserait une règle ci-dessus, dis-le au lieu de l'exécuter.
 ~~~
 
-Fichiers à joindre d'abord, dans cet ordre : `docs/architecture.md`, `DESIGN.md`, `css/tokens.css`, puis le fichier concerné par la tâche (`css/polish.css` pour une question de mise en page, `js/app.js` pour le cockpit, `privatePortal.js` pour le portail). Pour une question de rendu, ajoutez une capture de `qa.html?view=<vue>&w=<largeur>`.
+Pour éviter de coller six fichiers à la main : `node tools/ai-context.js` écrit **`ai-studio-contexte.md`** — le prompt et le texte intégral des fichiers de référence, ~40 Ko, à joindre d'un seul bloc (le fichier est généré, donc ignoré par Git ; il ne duplique pas la documentation). Le dépôt est public : les fichiers peuvent aussi être lus à l'adresse `https://raw.githubusercontent.com/gervais-afk/plan-to-3d-house/main/<fichier>`.
+
+Fichiers à joindre si l'on préfère le faire un par un, dans cet ordre : `docs/architecture.md`, `DESIGN.md`, `css/tokens.css`, puis le fichier concerné par la tâche (`css/polish.css` pour une question de mise en page, `js/app.js` pour le cockpit, `privatePortal.js` pour le portail). Pour une question de rendu, ajoutez une capture de `qa.html?view=<vue>&w=<largeur>`.
 
 ## Limites connues
 
