@@ -504,7 +504,92 @@ dialog::backdrop {
   box-shadow: var(--shadow-1);
 }
 
-/* 13. PRÉFÉRENCES DE MOUVEMENT ----------------------------------------- */
+/* 13. COMPOSITION DU DOSSIER (fiche projet) ----------------------------- */
+/*
+ * La fiche projet est une planche : chaque section porte un indice romain,
+ * un filet court jusqu'au titre, et les repères se lisent en deux familles.
+ */
+
+.welcome-section-label:has(.sheet-index) {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+}
+
+.welcome-section-label .sheet-index {
+  color: var(--accent);
+  font: 600 var(--text-sm)/1 var(--serif);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.12em;
+}
+
+/* Le filet relie l'indice au titre, sauf dans les en-têtes déjà en deux colonnes. */
+.welcome-section-label:has(.sheet-index)::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  align-self: center;
+  background: var(--rule);
+}
+
+.welcome-gallery-heading .welcome-section-label::after {
+  display: none;
+}
+
+/* Repères : « Le dossier » puis « Les chiffres ». */
+.welcome-presentation .sheet-facts dt.sheet-facts-title {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0.9rem 0 0.55rem;
+  border-top: 1px solid var(--rule);
+  color: var(--accent-ink);
+  font: 800 var(--text-xs)/1.3 var(--sans);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.welcome-presentation .sheet-facts dt.sheet-facts-title:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* Journal des révisions : l'indice devient une figure, la note passe en serif. */
+.sheet-rev-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.42rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--rule));
+  border-radius: var(--radius-xs);
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  font: 700 var(--text-sm)/1.2 var(--serif);
+  letter-spacing: 0.04em;
+}
+
+.sheet-rev-item {
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--surface);
+  transition: border-color var(--dur-2) var(--ease-out),
+              background-color var(--dur-2) var(--ease-out);
+}
+
+.sheet-rev-item:hover {
+  border-left-color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+
+.sheet-rev-note {
+  font-family: var(--serif);
+  font-size: var(--text-md);
+  line-height: var(--leading-body);
+}
+
+.sheet-rev-date,
+.sheet-rev-meta {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 14. PRÉFÉRENCES DE MOUVEMENT ----------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
   html {

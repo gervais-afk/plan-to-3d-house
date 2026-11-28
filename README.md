@@ -35,7 +35,7 @@ Projets d'exemple : `villa-serena` (plain-pied, plan de l'ingénieur Dollar), `r
 | [docs/verification.md](docs/verification.md) | Tests et script de vérification |
 | [docs/reprise-assistant.md](docs/reprise-assistant.md) | Règles pour un assistant IA qui reprend le projet |
 | [DESIGN.md](DESIGN.md) | Charte graphique |
-| [design.html](design.html) | Charte vivante : palette, typographie, composants, états (`css/polish.css`, `css/designSystem.css`) |
+| [design.html](design.html) | Charte vivante : palette, typographie, composants, états, composition du dossier (`css/polish.css`, `css/designSystem.css`) |
 
 Les anciens prompts, récapitulatifs et audits sont dans [docs/archive/](docs/archive/) (non tenus à jour).
 

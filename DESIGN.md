@@ -64,6 +64,7 @@ Elle ne touche ni la direction ni la structure : elle règle l'exécution pour q
 - **Champs** : filet `--rule`, fond `--surface`, survol sable, cases et curseurs à `accent-color: var(--accent)`.
 - **Surfaces** : le verre (flou) reste réservé à ce qui flotte au-dessus de la 3D ; les cartes claires prennent `--shadow-1`, le survol `--shadow-lift`.
 - **Fiche projet** : dans `.sheet-subnav`, la navigation reste éditoriale (filet sous le libellé) mais les **actions** deviennent des puces à filet, poussées à droite.
+- **Composition du dossier** : chaque section de la fiche porte un **indice romain** (I à IV) et un filet de conduite jusqu'au titre ; les repères se lisent en deux familles — *Le dossier* (identité) puis *Les chiffres* (mesures) ; dans le journal des révisions, l'indice (V1, V2…) devient une figure serif et la note passe en serif. Ces règles valent aussi pour la charte, qui en montre les composants.
 - **Données** : en-têtes de tableaux en capitales espacées, chiffres tabulaires, survol de ligne tiède.
 - **Chargement** : `.skeleton` anime une bande claire (1,4 s) plutôt qu'une case grise figée.
 - **États vides** : `.empty-state` / `[data-empty]` disent ce qui manque et proposent l'action suivante.

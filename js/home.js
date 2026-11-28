@@ -460,27 +460,38 @@ window.ProjectCoverReady = (() => {
       const xs = ground.flatMap(w => [w.from[0], w.to[0]]), zs = ground.flatMap(w => [w.from[1], w.to[1]]);
       if (xs.length) footprint = `${number.format(Math.max(...xs) - Math.min(...xs))} × ${number.format(Math.max(...zs) - Math.min(...zs))} m`;
     } catch { /* emprise facultative */ }
-    const rows = [
-      ['Lieu', meta.location], ['Référence projet', meta.reference],
-      ['Maître d’ouvrage', meta.clientVisible === true ? meta.client : ''],
-      ['Architecte responsable', meta.architect || currentCabinet.architect], ['Phase', PHASES[meta.phase] || meta.phase],
-      ['Surface habitable', data?.totals?.habitable ? `${number.format(data.totals.habitable)} m²` : ''],
-      ['Espaces extérieurs couverts', annex ? `${number.format(annex)} m²` : ''],
-      ['Pièces de vie', String(habitableRooms.length || '')],
-      ['Chambres', bedrooms ? String(bedrooms) : ''],
-      ['Salles d’eau et WC', baths ? String(baths) : ''],
-      ['Niveaux', levelsLabel],
-      ['Emprise du bâti', footprint],
-      ['Hauteur sous plafond', data?.config?.wallHeight ? `${number.format(data.config.wallHeight)} m` : ''],
-      ['Mise à jour', Number.isFinite(updated) ? new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(updated) : '']
-    ].filter(([, value]) => value && String(value).trim());
+    // Deux familles de repères : ce qui identifie le dossier, puis ce qui le mesure.
+    const groups = [
+      ['Le dossier', [
+        ['Lieu', meta.location], ['Référence projet', meta.reference],
+        ['Maître d’ouvrage', meta.clientVisible === true ? meta.client : ''],
+        ['Architecte responsable', meta.architect || currentCabinet.architect], ['Phase', PHASES[meta.phase] || meta.phase],
+        ['Mise à jour', Number.isFinite(updated) ? new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(updated) : '']
+      ]],
+      ['Les chiffres', [
+        ['Surface habitable', data?.totals?.habitable ? `${number.format(data.totals.habitable)} m²` : ''],
+        ['Espaces extérieurs couverts', annex ? `${number.format(annex)} m²` : ''],
+        ['Pièces de vie', String(habitableRooms.length || '')],
+        ['Chambres', bedrooms ? String(bedrooms) : ''],
+        ['Salles d’eau et WC', baths ? String(baths) : ''],
+        ['Niveaux', levelsLabel],
+        ['Emprise du bâti', footprint],
+        ['Hauteur sous plafond', data?.config?.wallHeight ? `${number.format(data.config.wallHeight)} m` : '']
+      ]]
+    ].map(([title, rows]) => [title, rows.filter(([, value]) => value && String(value).trim())])
+      .filter(([, rows]) => rows.length);
     scheduleTable(rooms);
-    el('sheet-facts').replaceChildren(...rows.map(([label, value]) => {
-      const row = document.createElement('div');
-      const dt = document.createElement('dt'); dt.textContent = label;
-      const dd = document.createElement('dd'); dd.textContent = value;
-      row.append(dt, dd);
-      return row;
+    el('sheet-facts').replaceChildren(...groups.flatMap(([title, rows]) => {
+      const heading = document.createElement('dt');
+      heading.className = 'sheet-facts-title';
+      heading.textContent = title;
+      return [heading, ...rows.map(([label, value]) => {
+        const row = document.createElement('div');
+        const dt = document.createElement('dt'); dt.textContent = label;
+        const dd = document.createElement('dd'); dd.textContent = value;
+        row.append(dt, dd);
+        return row;
+      })];
     }));
     // Couverture : quatre chiffres clés de même rang (la surface n'est plus isolée dans une pastille).
     const highlights = [

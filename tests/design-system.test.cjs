@@ -133,3 +133,37 @@ test('Design : design.html présente la charte et se relie au reste de l’ateli
     assert.doesNotMatch(read(page), /href="design\.html"/, `${page} reste une vue client`);
   }
 });
+
+// ============================================================================
+// 6. COMPOSITION DU DOSSIER : INDICES ROMAINS, REPÈRES GROUPÉS, JOURNAL
+// ============================================================================
+test('Dossier : sections indicées I→IV, repères en deux familles et journal typé', () => {
+  const accueil = read('accueil.html');
+  const indices = [...accueil.matchAll(/<span class="sheet-index" aria-hidden="true">([IVX]+)<\/span>/g)].map(m => m[1]);
+  assert.deepEqual(indices, ['I', 'II', 'III', 'IV'], 'les quatre sections de la fiche portent leur indice, dans l’ordre');
+
+  const labels = [...accueil.matchAll(/<p class="welcome-section-label">[\s\S]*?<\/p>/g)].map(m => m[0]);
+  assert.equal(labels.length, 4, 'une seule forme d’en-tête pour les quatre sections');
+  for (const [label, text] of [['I', 'PRÉSENTATION DU PROJET'], ['II', 'TABLEAU DES SURFACES'], ['III', 'LE PROJET EN IMAGES'], ['IV', 'JOURNAL DES RÉVISIONS']]) {
+    assert.ok(labels.some(block => block.includes(`>${label}</span>`) && block.includes(text)), `en-tête ${label} / ${text}`);
+  }
+
+  // Les repères se lisent en deux familles, construites par js/home.js.
+  const home = read('js/home.js');
+  assert.match(home, /\['Le dossier', \[/, 'première famille de repères : le dossier');
+  assert.match(home, /\['Les chiffres', \[/, 'seconde famille : les chiffres');
+  assert.match(home, /heading\.className = 'sheet-facts-title'/, 'les familles sont séparées par un vrai intertitre');
+  assert.match(home, /\.filter\(\(\[, rows\]\) => rows\.length\)/, 'une famille vide ne laisse pas d’intertitre orphelin');
+
+  // Styles de la composition, dans la couche de finitions (donc aussi sur la charte).
+  const polish = read('css/polish.css');
+  assert.match(polish, /\.welcome-section-label:has\(\.sheet-index\)::after/, 'filet de conduite de l’en-tête');
+  assert.match(polish, /\.sheet-facts dt\.sheet-facts-title/, 'intertitre de famille de repères');
+  assert.match(polish, /\.sheet-rev-tag \{[\s\S]{0,320}var\(--serif\)/, 'l’indice de révision devient une figure serif');
+
+  // La charte montre ces composants, et son sommaire pointe la section.
+  const design = read('design.html');
+  assert.match(design, /id="dossier"/, 'la charte présente la composition du dossier');
+  assert.match(design, /class="sheet-revisions-list"/, 'aperçu du journal des révisions');
+  assert.match(design, /class="sheet-index" aria-hidden="true">II</, 'aperçu de l’en-tête indicé');
+});
