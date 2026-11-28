@@ -216,3 +216,34 @@ test('Portail : carte de connexion explicite et invitations en quatre colonnes',
   assert.match(css, /@media \(min-width: 760px\)[\s\S]{0,400}grid-template-columns: minmax\(0, 1\.5fr\)/, 'la grille du tableau des invitations');
   assert.match(css, /\.portal-login-help/, 'la carte de connexion garde son aide');
 });
+
+// ============================================================================
+// 9. TABLETTE : LE DOCK PASSE SUR DEUX LIGNES, SANS COLLISION
+// ============================================================================
+test('Tablette (601–860 px) : dock sur deux lignes, raccourcis tactiles, pas de collision', () => {
+  const polish = read('css/polish.css');
+  const tablet = /@media \(min-width: 601px\) and \(max-width: 860px\) \{([\s\S]*?)\n\}\n/.exec(polish)?.[1] || '';
+  assert.ok(tablet, 'la plage tablette doit exister');
+
+  // Lecture pleine largeur au-dessus, transport en dessous.
+  assert.match(tablet, /'reading reading reading'/, 'la lecture occupe la première ligne');
+  assert.match(tablet, /'arrows action keys'/, 'le transport reste groupé sous la lecture');
+  assert.match(tablet, /grid-template-columns: auto minmax\(0, 1fr\) auto;/, 'trois colonnes pour les commandes');
+  assert.match(tablet, /width: min\(100%, 660px\)/, 'largeur bornée du dock tablette');
+
+  // Sur tablette on touche l'écran : les touches clavier s'effacent.
+  assert.match(tablet, /\.dock-shortcuts kbd,[\s\S]{0,80}display: none;/, 'les raccourcis clavier sont masqués');
+
+  // Rien ne se superpose : le radar et la carte de validation sont bornés.
+  assert.match(tablet, /#visit-workspace \.minimap-card \{[\s\S]{0,160}max-height/, 'le radar reste dans la fenêtre');
+  assert.match(tablet, /#visit-workspace \.approval-card \{[\s\S]{0,160}max-height/, 'la validation ne passe pas sous le dock');
+  assert.match(tablet, /\.tool-cluster--end \{\s*margin-left: 0;/, 'pas de trou dans la barre quand les grappes se replient');
+
+  // Petits portables : une ligne, touches retirées.
+  assert.match(polish, /@media \(min-width: 861px\) and \(max-width: 1080px\)[\s\S]{0,220}min\(100%, 720px\)/,
+    'le dock reste sur une ligne en 861–1080 px');
+
+  // La variante « dock libre » n'est pas écrasée par la mise en page tablette.
+  assert.match(tablet, /\.tour-dock\.guided-controls:not\(\.dock-free\)/, 'le dock libre garde sa disposition');
+  assert.match(tablet, /max-width: 660px/, 'largeur maximale du dock tablette');
+});

@@ -774,7 +774,93 @@ dialog::backdrop {
   }
 }
 
-/* 16. PRÉFÉRENCES DE MOUVEMENT ----------------------------------------- */
+/* 16. DENSITÉ TABLETTE (601 → 860 px) ---------------------------------- */
+/*
+ * À cette largeur, le dock bas logait quatre blocs sur une seule ligne :
+ * le nom de la pièce était tronqué et le bouton d'action comprimé.
+ * Il passe sur deux lignes — lecture en haut, transport en bas — et les
+ * raccourcis clavier s'effacent, puisqu'à cette taille on touche l'écran.
+ */
+
+@media (min-width: 601px) and (max-width: 860px) {
+  /* La variante « dock libre » garde sa disposition : elle n'a que lecture et raccourcis. */
+  .tour-dock.guided-controls:not(.dock-free) {
+    width: min(100%, 660px);
+    max-width: 660px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'reading reading reading'
+      'arrows action keys';
+    gap: 8px 10px;
+    padding: 10px 12px;
+  }
+
+  .tour-dock .dock-context {
+    padding-bottom: 2px;
+  }
+
+  .tour-dock .room-name {
+    font-size: clamp(1.18rem, 2.4vw, 1.38rem);
+  }
+
+  .tour-dock .guided-timeline {
+    margin-top: 8px;
+  }
+
+  .tour-dock .guided-actions .dock-arrow {
+    width: 46px;
+  }
+
+  .tour-dock #guided-action {
+    min-height: var(--target);
+    padding-inline: 1rem;
+  }
+
+  .tour-dock .dock-shortcuts {
+    justify-content: flex-end;
+  }
+
+  .tour-dock .dock-shortcuts kbd,
+  .tour-dock .guided-actions kbd {
+    display: none;
+  }
+
+  /* Le radar garde sa place sans jamais passer sous le dock. */
+  #visit-workspace .minimap-card {
+    max-height: min(52dvh, calc(100dvh - var(--workspace-bar) - 190px));
+    overflow-y: auto;
+  }
+
+  /* Une demande de validation ne descend jamais dans le dock. */
+  #visit-workspace .approval-card {
+    max-height: calc(100dvh - var(--workspace-bar) - 220px);
+    overflow: auto;
+  }
+
+  /* Barre d'outils : pas de trou au milieu quand les grappes passent à la ligne. */
+  .viewer-primary {
+    justify-content: flex-start;
+  }
+
+  .tool-cluster--end {
+    margin-left: 0;
+  }
+}
+
+/* Petits portables (861 → 1080 px) : le dock tient sur une ligne, les
+   touches de raccourci s'effacent pour laisser respirer les libellés. */
+@media (min-width: 861px) and (max-width: 1080px) {
+  .tour-dock.guided-controls {
+    width: min(100%, 720px);
+  }
+
+  .tour-dock .dock-shortcuts kbd,
+  .tour-dock .guided-actions kbd {
+    display: none;
+  }
+}
+
+/* 17. PRÉFÉRENCES DE MOUVEMENT ----------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
   html {
